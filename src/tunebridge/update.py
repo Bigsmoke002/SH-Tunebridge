@@ -600,12 +600,16 @@ def restart(mode: str = "app") -> None:
         if _prepared.get("swap"):
             return _swap_and_restart()
         raise RuntimeError("Bitte die neue Version aus „Downloads“ installieren und starten.")
+    import shlex
+    import sys
+    # gleiche Argumente wie beim Start (z. B. „ui --port 8800“), sonst nur der Modus
+    args = shlex.join(sys.argv[1:]) if sys.argv[1:2] == [mode] else mode
     if is_appimage():
         exe = _prepared.get("new_path") or os.environ["APPIMAGE"]
-        cmd = f'sleep 1.5; exec "{exe}"' + ("" if mode == "app" else f" {mode}")
+        cmd = f'sleep 1.5; exec "{exe}"' + ("" if mode == "app" else f" {args}")
     else:
         exe = shutil.which("tunebridge") or str(Path.home() / ".local/bin/tunebridge")
-        cmd = f'sleep 1.5; exec "{exe}" {mode}'
+        cmd = f'sleep 1.5; exec "{exe}" {args}'
     env = {k: v for k, v in os.environ.items() if k not in ("APPIMAGE", "APPDIR", "ARGV0", "OWD")}
     subprocess.Popen(["sh", "-c", cmd], start_new_session=True, env=env,
                      stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

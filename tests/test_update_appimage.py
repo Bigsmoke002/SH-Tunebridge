@@ -167,3 +167,14 @@ def test_heal_old_launchers(tmp_path, monkeypatch):
                                                    "SH-Tunebridge-0.5.0-x86_64.AppImage"]
     assert (binp / "SH-Tunebridge-0.5.0-x86_64.AppImage").read_text() == "neu"
     assert update.heal_old_paths(cur) == []                                  # nur einmal
+
+
+def test_restart_keeps_ui_port(monkeypatch):
+    seen = []
+    monkeypatch.setattr(update, "is_frozen", lambda: False)
+    monkeypatch.setattr(update, "is_appimage", lambda: False)
+    monkeypatch.setattr(update.subprocess, "Popen", lambda cmd, **k: seen.append(cmd))
+    monkeypatch.setattr(update.threading, "Timer", lambda *a, **k: type("T", (), {"start": lambda self: None})())
+    monkeypatch.setattr(sys, "argv", ["tunebridge", "ui", "--port", "8800", "--no-browser"])
+    update.restart("ui")
+    assert seen[0][-1].endswith("ui --port 8800 --no-browser")
