@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SH-Tunebridge</title>
+<link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+<link rel="stylesheet" href="/static/app.css">
+<script>/* Darstellung vor dem ersten Bild anwenden (kein Aufblitzen); gleiche Logik wie Look.apply in app.js */
+(function () { try {
+  var c = JSON.parse(localStorage.getItem("tb:look") || "{}"), r = document.documentElement;
+  var m = c.mode === "system" ? (matchMedia("(prefers-color-scheme: light)").matches ? "hell" : "dunkel") : (c.mode || "dunkel");
+  r.dataset.theme = m; if (c.palette) r.dataset.palette = c.palette; if (c.radius) r.dataset.radius = c.radius;
+  if (c.density) r.dataset.density = c.density; if (c.motion === false) r.dataset.motion = "aus";
+  if (c.accent) r.style.setProperty("--accent-base", c.accent); if (c.font && c.font !== 100) r.style.zoom = c.font / 100;
+  if (c.bg) { r.dataset.bg = ""; r.style.setProperty("--bg-url", "url(/api/appearance/bg?v=" + (c.bg_v || 0) + ")");
+    r.style.setProperty("--bg-dim", (c.bg_dim ?? 55) + "%");
+    r.style.setProperty("--panel", (c.panel ?? 82) + "%"); }
+} catch (e) {} })();
+</script>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <img class="brand-logo" src="/static/icon.svg" width="28" height="28" alt="SH-Tunebridge-Logo">
+      <span>SH-Tunebridge</span>
+      <button class="icon-btn side-toggle" id="sideToggle" aria-label="Leiste einklappen" title="Leiste ein-/ausklappen"><i data-icon="panel"></i></button>
+    </div>
+
+    <nav class="nav" id="nav">
+      <div class="nav-label">Bibliothek</div>
+      <a href="#/listen" data-view="listen"><i data-icon="wave"></i><span>Erkennen</span><b class="live-dot" id="liveDot"></b></a>
+      <a href="#/history" data-view="history"><i data-icon="clock"></i><span>Verlauf</span><em id="cntHistory"></em></a>
+      <a href="#/playlists" data-view="playlists"><i data-icon="stack"></i><span>Playlists</span><em id="cntPlaylists"></em></a>
+      <div class="nav-label">Werkzeuge</div>
+      <a href="#/services" data-view="services"><i data-icon="grid"></i><span>Dienste</span></a>
+      <a href="#/inbox" data-view="inbox"><i data-icon="inbox"></i><span>Neu für dich</span><em id="cntInbox"></em></a>
+      <a href="#/links" data-view="links"><i data-icon="external"></i><span>Link einfügen</span></a>
+      <a href="#/discover" data-view="discover"><i data-icon="compass"></i><span>Entdecken</span></a>
+      <a href="#/split" data-view="split"><i data-icon="split"></i><span>Aufteilen</span></a>
+      <a href="#/transfer" data-view="transfer"><i data-icon="transfer"></i><span>Übertragen</span></a>
+    </nav>
+
+    <div class="nav-label nav-label--svc hidden" id="sideSvcLabel">Deine Dienste</div>
+    <div class="side-services" id="sideServices"></div>
+
+    <div class="nav-label nav-label--pl">Deine Playlists</div>
+    <div class="side-playlists" id="sidePlaylists"></div>
+
+    <div class="sidebar-foot">
+      <a href="#/settings?update=1" class="update-pill hidden" id="updatePill"><i data-icon="download"></i><span>Update verfügbar</span><em id="updateVer"></em></a>
+      <a href="#/backup" data-view="backup" class="foot-link"><i data-icon="archive"></i><span>Sicherung</span></a>
+      <a href="#/settings" data-view="settings" class="foot-link"><i data-icon="sliders"></i><span>Einstellungen</span></a>
+      <a href="#/settings?tab=traffic" class="traffic-pill" id="trafficPill" title="Datenverbrauch – gerade und heute"></a>
+      <div class="machine" id="machine"></div>
+    </div>
+  </aside>
+
+  <main class="main" id="main"></main>
+
+  <footer class="player" id="player">
+    <div class="player-track">
+      <div class="player-cover" id="pCover"></div>
+      <div class="player-meta">
+        <div class="player-title" id="pTitle">Nichts in der Wiedergabe</div>
+        <div class="player-artist" id="pArtist">Hörproben erscheinen hier</div>
+        <a class="player-src hidden" id="pSrc" target="_blank" rel="noopener noreferrer"></a>
+      </div>
+    </div>
+    <div class="player-center">
+      <button class="icon-btn play-btn" id="pPlay" aria-label="Abspielen" disabled><i data-icon="play"></i></button>
+      <div class="player-progress">
+        <span id="pCur">0:00</span>
+        <div class="bar" id="pBar"><div class="bar-fill" id="pFill"></div></div>
+        <span id="pDur">0:30</span>
+      </div>
+    </div>
+    <div class="player-right">
+      <i data-icon="volume" class="muted"></i>
+      <input type="range" id="pVol" min="0" max="1" step="0.01" value="0.8" aria-label="Lautstärke">
+    </div>
+    <audio id="audio" preload="none"></audio>
+  </footer>
+</div>
+
+<div class="drawer-backdrop" id="drawerBackdrop"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <span class="drawer-kicker">Song</span>
+    <button class="icon-btn" id="drawerClose" aria-label="Schließen"><i data-icon="x"></i></button>
+  </div>
+  <div class="drawer-body" id="drawerBody"></div>
+</aside>
+
+<div class="modal-backdrop" id="modal"><div class="modal" role="dialog" aria-modal="true" id="modalBox"></div></div>
+<input type="file" id="fileInput" accept=".tbbackup,application/zip" hidden>
+<div class="toasts" id="toasts"></div>
+<datalist id="plnames"></datalist>
+<script src="/static/app.js"></script>
+</body>
+</html>

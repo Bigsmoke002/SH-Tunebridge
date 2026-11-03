@@ -1,0 +1,44 @@
+[project]
+name = "tunebridge"
+version = "0.4.1"
+description = "SH-Tunebridge – Songs erkennen, Playlists zwischen Diensten übertragen, nach (Sub-)Genre sortieren"
+readme = "README.md"
+license = "LicenseRef-SH-Tunebridge"
+license-files = ["LICENSE", "THIRD_PARTY.md"]
+authors = [
+    { name = "Bigsmoke002", email = "73600807+Bigsmoke002@users.noreply.github.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "cryptography>=46",
+    "fastapi>=0.162.0",
+    "httpx>=0.28.1",
+    "anthropic>=1.0",
+    "numpy>=2.5.4",
+    "rapidfuzz>=3.14.6",
+    "rich>=15.0.0",
+    "shazamio>=0.9.0",
+    "soundcard>=0.4.3; sys_platform != 'linux'",
+    "tidalapi>=0.8.11",
+    "typer>=0.27.3",
+    "uvicorn[standard]>=0.54.0",
+    "miniaudio>=1.71",
+]
+
+[project.scripts]
+tunebridge = "tunebridge.cli:app"
+
+[project.optional-dependencies]
+desktop = [
+    "pywebview[pyside6]>=6.2.1; sys_platform == 'linux'",
+    "pywebview>=6.2.1; sys_platform != 'linux'",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.6,<0.14.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

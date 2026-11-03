@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SH-Tunebridge
+Comment=Songs erkennen, nach Genre sortieren, Playlists übertragen
+Exec=AppRun
+Icon=sh-tunebridge
+Categories=AudioVideo;Audio;
+StartupWMClass=tunebridge
+Terminal=false

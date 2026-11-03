@@ -1,0 +1,71 @@
+SH-Tunebridge – Lizenzbedingungen
+Copyright (c) 2026 Bigsmoke002. Alle Rechte vorbehalten.
+
+1. Nutzung erlaubt
+   Du darfst SH-Tunebridge aus der offiziellen Quelle
+   (https://github.com/Bigsmoke002/SH-Tunebridge und deren Releases) herunterladen,
+   auf deinen eigenen Geräten installieren und für private, nicht-kommerzielle Zwecke
+   kostenlos nutzen. Updates über den eingebauten Updater sind davon umfasst.
+
+2. Nicht erlaubt (ohne vorherige schriftliche Erlaubnis des Rechteinhabers)
+   a) die Software oder Teile davon zu kopieren – ausgenommen Kopien, die für
+      Installation, Betrieb und Datensicherung auf deinen eigenen Geräten nötig sind;
+   b) die Software zu verändern, zu bearbeiten, zu übersetzen oder Teile davon in
+      andere Software zu übernehmen;
+   c) die Software oder veränderte Fassungen weiterzugeben, zu veröffentlichen,
+      zu verkaufen, zu vermieten oder anderweitig zugänglich zu machen;
+   d) die Software kommerziell zu nutzen.
+   Dass der Quellcode öffentlich einsehbar ist, räumt keine weiteren Rechte ein.
+   Forks auf GitHub sind nur im Rahmen der GitHub-Nutzungsbedingungen zulässig
+   (Ansehen auf GitHub); jede darüber hinausgehende Nutzung bleibt untersagt.
+
+3. Gesetzliche Rechte
+   Zwingende gesetzliche Rechte, insbesondere nach §§ 69d und 69e UrhG, bleiben unberührt.
+
+4. Fremde Bestandteile
+   SH-Tunebridge nutzt Bibliotheken, Schriften und optionale Modelle Dritter. Für sie
+   gelten ausschließlich deren eigene Lizenzen (siehe THIRD_PARTY.md). Diese Bedingungen
+   schränken die Rechte aus jenen Lizenzen nicht ein.
+
+5. Dienste Dritter und rechtmäßige Nutzung
+   Für angebundene Dienste (z. B. Shazam, AudD, ACRCloud, Deezer, Last.fm, TIDAL) gelten
+   deren Nutzungsbedingungen. Du bist dafür verantwortlich, die Software rechtmäßig zu
+   nutzen – insbesondere keine Gespräche anderer ohne deren Einverständnis aufzunehmen
+   (§ 201 StGB). Hinweise dazu: DATENSCHUTZ.md.
+   Einige Dienste (derzeit Shazam und TIDAL) werden über inoffizielle Schnittstellen
+   angebunden. Ob deren Nutzung mit deinem Konto zulässig ist, prüfst du selbst; Dienste
+   können solche Zugänge jederzeit sperren und Konten einschränken, sperren oder löschen.
+   SH-Tunebridge ist ein Community-Projekt und steht in keiner Verbindung zu diesen Diensten.
+
+6. Gewährleistung und Haftung
+   Die Software wird unentgeltlich und ohne Zusicherung bestimmter Eigenschaften
+   überlassen. Der Rechteinhaber haftet nur für Vorsatz und grobe Fahrlässigkeit, bei
+   arglistig verschwiegenen Mängeln, bei Verletzung von Leben, Körper oder Gesundheit
+   sowie nach dem Produkthaftungsgesetz. Im Übrigen ist die Haftung ausgeschlossen –
+   das gilt insbesondere für Datenverlust, fehlerhafte Übertragungen sowie Einschränkungen,
+   Sperren oder Löschungen von Konten bei Drittanbietern.
+
+7. Beendigung
+   Bei einem Verstoß gegen diese Bedingungen erlischt das Nutzungsrecht automatisch.
+
+8. Logo und Name
+   Das SH-Tunebridge-Logo (Dateien unter assets/logo/ sowie das Programmsymbol) und der
+   Name „SH-Tunebridge“ sind Eigentum von Bigsmoke002; alle Rechte vorbehalten. Sie sind
+   von der Nutzungserlaubnis in Abschnitt 1 nicht umfasst. Ohne vorherige schriftliche
+   Erlaubnis ist es untersagt, sie zu verwenden, zu verändern, nachzuahmen, als eigene
+   auszugeben oder als Marke, Domain, Profil- oder Produktname anzumelden oder zu
+   beanspruchen. Zulässig bleibt die unveränderte Darstellung, um auf dieses Projekt
+   hinzuweisen, sowie jede gesetzlich erlaubte Nutzung (z. B. Zitat, Berichterstattung).
+
+9. Anwendbares Recht
+   Es gilt das Recht der Bundesrepublik Deutschland. Zwingende Verbraucherschutz-
+   vorschriften des Staates, in dem du deinen gewöhnlichen Aufenthalt hast, bleiben unberührt.
+
+---
+Short English summary (the German text above is binding): All rights reserved. You may
+download, install and use SH-Tunebridge from the official source for private,
+non-commercial purposes. Copying (beyond installation/backup), modifying and
+redistributing are not permitted without written permission. Third-party components
+are governed by their own licenses (THIRD_PARTY.md). The SH-Tunebridge logo and name
+belong to Bigsmoke002 and are not licensed for any other use. Community project, provided
+free of charge and at your own risk; some services are connected via unofficial interfaces.

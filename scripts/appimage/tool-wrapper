@@ -1,0 +1,4 @@
+#!/bin/sh
+# Ersatz-Werkzeug aus dem AppImage, mit eigenen Bibliotheken (nur für dieses Programm).
+HERE="$(dirname "$(readlink -f "$0")")"
+LD_LIBRARY_PATH="$HERE/../lib" exec "$HERE/../libexec/$(basename "$0")" "$@"

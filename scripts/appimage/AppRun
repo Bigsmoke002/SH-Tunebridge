@@ -1,0 +1,15 @@
+#!/bin/bash
+# Startpunkt im AppImage. Ohne Argumente: Desktop-Fenster; mit Argumenten: Kommandozeile (z. B. „listen“).
+HERE="$(dirname "$(readlink -f "$0")")"
+# Systemwerkzeuge (parecord, pactl, ssh-keygen) haben Vorrang, die mitgelieferten sind nur Ersatz.
+export PATH="${PATH:-/usr/bin:/bin}:$HERE/usr/fallback/bin"
+export QT_API=pyside6
+# Manche Distributionen (z. B. Ubuntu ≥ 23.10) sperren unprivilegierte User-Namespaces – dann kann die
+# Chromium-Sandbox von Qt WebEngine nicht starten. Nur in diesem Fall abschalten.
+if [ "$(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null)" = "1" ] \
+   || [ "$(cat /proc/sys/kernel/unprivileged_userns_clone 2>/dev/null)" = "0" ]; then
+  export QTWEBENGINE_DISABLE_SANDBOX=1
+fi
+unset PYTHONPATH PYTHONHOME
+[ $# -eq 0 ] && set -- app
+exec "$HERE/usr/python/bin/python3" -I -m tunebridge.cli "$@"

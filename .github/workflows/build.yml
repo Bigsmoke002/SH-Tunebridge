@@ -1,0 +1,70 @@
+# Tests + fertige Programme für Windows und macOS (auf echten GitHub-Rechnern, kein macOS-Nachbau).
+# Läuft nur von Hand („Run workflow“) oder bei einem Versions-Tag vX.Y.Z.
+# Die Dateien landen als „Artifacts“ am Lauf; signiert und veröffentlicht wird lokal mit scripts/release.sh.
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen
+      - run: uv run pytest -q
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows
+          - os: macos-latest      # Apple Silicon
+            target: macos
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.14"
+      - run: uv sync --frozen --extra desktop
+      - name: Programm bauen (PyInstaller)
+        run: uv run --with "pyinstaller>=6.16" --with pillow pyinstaller --noconfirm packaging/pyinstaller/sh-tunebridge.spec
+      - name: Rauchtest
+        shell: bash
+        run: |
+          if [ "${{ matrix.target }}" = windows ]; then EXE=dist/SH-Tunebridge/SH-Tunebridge.exe
+          else EXE=dist/SH-Tunebridge.app/Contents/MacOS/SH-Tunebridge; fi
+          uv run python scripts/smoke_frozen.py "$EXE"
+      - name: Paket schnüren
+        shell: bash
+        run: |
+          VER=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)
+          mkdir -p out
+          if [ "${{ matrix.target }}" = windows ]; then
+            pwsh -c "Compress-Archive -Path dist/SH-Tunebridge -DestinationPath out/SH-Tunebridge-$VER-windows-x64.zip"
+          else
+            hdiutil create -volname "SH-Tunebridge" -srcfolder dist/SH-Tunebridge.app -ov -format UDZO "out/SH-Tunebridge-$VER-macos-arm64.dmg"
+          fi
+          uv run python -c "import hashlib,pathlib,sys; t=sys.argv[1]; fs=sorted(p for p in pathlib.Path('out').iterdir() if p.is_file()); pathlib.Path(f'out/SHA256SUMS-{t}.txt').write_text(''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\\n' for p in fs))" ${{ matrix.target }}
+          cat out/SHA256SUMS-*.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SH-Tunebridge-${{ matrix.target }}
+          path: out/*
+          retention-days: 14

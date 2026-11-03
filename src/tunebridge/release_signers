@@ -1,0 +1,4 @@
+# Öffentliche Schlüssel, die Releases signieren dürfen (Format: git allowed_signers).
+# Der Updater installiert nur Versionen, deren Tag (uv-Installation) bzw. Release-Manifest (AppImage)
+# mit einem dieser Schlüssel signiert ist.
+* namespaces="git,sh-tunebridge-release" ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKx2FjEctApphNdudGZwoTdINiRcKJPgrU//2Y+neGXH
