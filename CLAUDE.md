@@ -22,3 +22,18 @@ Höchstens Grauzone, nie klar rechtswidrig – niemand darf zu Schaden kommen. S
 - Fenstersymbol je System: Linux `icon.svg`, Windows nur `icon.ico` (sonst Absturz), macOS aus dem Bundle.
 - AppImage-Update: alte Datei nie löschen, sondern durch Verweis auf die neue ersetzen (`update._keep_old_path`).
 - Der Code des Annahme-Servers ist privat – keine Server-Interna und keine lokalen Pfade in dieses öffentliche Repo.
+
+## Release-Regeln (vereinbart 2026-11-03)
+1. **Kein Release ohne grünen Probelauf:** vorher `gh workflow run build --ref main` – Linux, Windows und macOS
+   inkl. Rauchtest (Server und App-Fenster) grün. Rot = nichts veröffentlichen.
+2. **Windows-VM-Pflicht:** Änderungen an Fenster, Updater, Begleiter oder Paketbau vor dem Release zusätzlich in der
+   lokalen Windows-VM testen.
+3. **Updater-Echttest:** jede Updater-Änderung mit einem echten Update von der vorigen veröffentlichten Version
+   prüfen (abgeschottetes HOME/Datenverzeichnis). Dateien, die der Nutzer starten könnte, nie löschen.
+4. **Kaputtes Release:** sofort Hinweis im GitHub-Release setzen und schnellstmöglich eine reparierte Version
+   nachschieben. Release-Dateien oder Tags nur nach ausdrücklicher Zustimmung entfernen.
+5. **Server ausrollen** nur auf Ansage; vorher Sicherung auf dem Server, danach Health-Check, alles protokollieren.
+6. **Gemeinschafts-Genre-Datenbank** nur auf Ansage („Genre-DB aktualisieren“) holen, bauen, veröffentlichen.
+7. **Pushen und Releases** nur auf Ansage („pushe und baue zu github“) – auch reine Doku-Änderungen.
+8. **Versionen:** Fehlerkorrektur = letzte Stelle (0.6.x), neue Funktion = mittlere (0.x.0).
+   Jedes Release bekommt einen Eintrag in `CHANGELOG.md`.
