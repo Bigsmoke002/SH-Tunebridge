@@ -3816,5 +3816,5 @@ window.addEventListener("hashchange", route);
 setTimeout(() => Update.check(), 4000);
 Limits.refresh();   // Limit-Hinweis auf allen Seiten
 $("#updatePill").addEventListener("click", e => { if (Update.info?.available && !Update.info.dev) { e.preventDefault(); Update.dialog(); } });
-setInterval(() => Update.check(), 6 * 3600 * 1000);
+setInterval(() => Update.check(), 3600 * 1000);
 Promise.all([refreshMeta(), loadPrefs()]).then(() => { SideSvc.load(); }).then(route).then(() => Consent.checkFirstStart()).catch(e => { $("#main").innerHTML = `<div class="page"><div class="empty"><h3>Backend nicht erreichbar</h3><p>${esc(e.message)}</p></div></div>`; });

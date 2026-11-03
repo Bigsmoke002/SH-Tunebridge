@@ -38,3 +38,30 @@ finally:
         p.wait(10)
     except subprocess.TimeoutExpired:
         p.kill()
+
+# Zweiter Teil: so starten wie per Doppelklick (App-Fenster). Der Server-Test oben fängt Abstürze im
+# Fenster-Teil nicht ab (v0.6.0: Windows-Fenster stürzte wegen .svg-Symbol sofort ab).
+app_port = "8797"
+env2 = {**os.environ, "TUNEBRIDGE_DATA": tempfile.mkdtemp(prefix="tb-smoke-app-"), "TUNEBRIDGE_APP_PORT": app_port,
+        "TUNEBRIDGE_NO_AUTOSYNC": "1"}
+q = subprocess.Popen([exe], env=env2, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+try:
+    for _ in range(120):
+        try:
+            urllib.request.urlopen(f"http://127.0.0.1:{app_port}/", timeout=2)
+            break
+        except OSError:
+            if q.poll() is not None:
+                break
+            time.sleep(0.5)
+    time.sleep(20)                     # Fenster aufbauen lassen
+    if q.poll() is not None:
+        out = q.stdout.read().decode("utf-8", "replace")[-4000:]
+        sys.exit(f"App-Fenster beendet sich sofort (Code {q.returncode}):\n{out}")
+    print("App-Fenster läuft – Rauchtest Fenster OK")
+finally:
+    q.kill()
+    try:
+        q.wait(10)
+    except subprocess.TimeoutExpired:
+        pass

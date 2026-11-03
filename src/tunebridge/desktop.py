@@ -66,18 +66,23 @@ def run() -> None:
         store = osutil.data_dir() / "webview"
         if osutil.LINUX and not store.exists() and os.path.isdir(os.path.expanduser("~/.local/share/tunebridge-webview")):
             store = os.path.expanduser("~/.local/share/tunebridge-webview")  # bisheriger Ort (Linux)
-        icon = Path(__file__).parent / "web" / "static" / "icon.svg"
+        icon = _window_icon()
         if osutil.LINUX:
             try:   # Wayland: Fenster dem Startmenü-Eintrag „tunebridge.desktop“ zuordnen (Symbol in Taskleiste)
                 from PySide6.QtGui import QGuiApplication
                 QGuiApplication.setDesktopFileName("tunebridge")
             except Exception:  # noqa: BLE001
                 pass
-        webview.start(gui="qt" if osutil.LINUX else None, private_mode=False, storage_path=str(store),
-                      icon=str(icon) if icon.exists() else None)
-        # Fenster zu = App zu: offene Hintergrundarbeiten (Login-Warten, Downloads) nicht abwarten.
-        # Der LLM-Server endet mit (Linux: PDEATHSIG, sonst atexit), Datenbank-Schreibvorgänge sind Transaktionen.
-        _quit()
+        try:
+            webview.start(gui="qt" if osutil.LINUX else None, private_mode=False, storage_path=str(store),
+                          icon=str(icon) if icon else None)
+        except Exception as e:  # noqa: BLE001 – kein Fenster möglich: im Browser weitermachen statt still zu enden
+            from . import debuglog
+            debuglog.error("desktop", "App-Fenster konnte nicht starten – öffne im Browser", e)
+        else:
+            # Fenster zu = App zu: offene Hintergrundarbeiten (Login-Warten, Downloads) nicht abwarten.
+            # Der LLM-Server endet mit (Linux: PDEATHSIG, sonst atexit), Datenbank-Schreibvorgänge sind Transaktionen.
+            _quit()
 
     for b in ("chromium", "brave", "google-chrome-stable", "vivaldi"):
         if osutil.LINUX and shutil.which(b):
@@ -91,6 +96,14 @@ def run() -> None:
             time.sleep(3600)
     except KeyboardInterrupt:
         pass
+
+
+def _window_icon() -> Path | None:
+    """Fenstersymbol je System: Windows (WinForms) braucht .ico – eine .svg lässt das Fenster sofort abstürzen.
+    macOS nimmt das Symbol aus dem Programm-Bundle."""
+    static = Path(__file__).parent / "web" / "static"
+    icon = static / "icon.svg" if osutil.LINUX else static / "icon.ico" if osutil.WINDOWS else None
+    return icon if icon and icon.exists() else None
 
 
 def _quit() -> None:

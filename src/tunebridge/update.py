@@ -31,7 +31,8 @@ from . import config, store
 
 # Wird beim Einrichten des GitHub-Repos gesetzt; per UPDATE_REPO in der config überschreibbar.
 DEFAULT_REPO = "https://github.com/Bigsmoke002/SH-Tunebridge.git"
-CHECK_EVERY = 6 * 3600
+CHECK_EVERY = 3600          # neue Versionen spätestens nach 1 h bemerken
+RETRY_ERROR = 15 * 60       # offline/GitHub gestört: bald erneut versuchen
 _TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 _prepared: dict = {}
 _lock = threading.Lock()
@@ -57,6 +58,10 @@ def current() -> str:
 
 class Incompatible(RuntimeError):
     """Release vorhanden, aber nicht für diesen Prozessor gebaut."""
+
+
+class NotReady(RuntimeError):
+    """Release angelegt, aber die Dateien für dieses System werden noch hochgeladen – kein Fehler, später erneut."""
 
 
 def machine() -> str:
@@ -151,15 +156,17 @@ def _prepare_appimage(rel: dict) -> dict:
     assets = {a["name"]: a["browser_download_url"] for a in rel.get("assets", [])}
     base = _release_base(tag)
     if f"{base}.manifest" not in assets or f"{base}.manifest.sig" not in assets:
-        raise RuntimeError("Release ohne signiertes Manifest")
+        raise NotReady(f"{tag}: Dateien für dieses System noch nicht hochgeladen")
     with _http() as c:
         man = c.get(assets[f"{base}.manifest"]).content
         sig = c.get(assets[f"{base}.manifest.sig"]).content
     f = _verify_manifest(man, sig)
     if f"v{f['version']}" != tag:
         raise RuntimeError("Version im Manifest passt nicht zum Release – Update abgebrochen.")
-    if f["file"] not in assets or "/" in f["file"]:
-        raise RuntimeError("Programmdatei fehlt im Release")
+    if "/" in f["file"] or "\\" in f["file"]:
+        raise RuntimeError("Ungültiger Dateiname im Manifest")
+    if f["file"] not in assets:
+        raise NotReady(f"{tag}: Programmdatei noch nicht hochgeladen")
     if not arch_ok(f["file"]):
         raise Incompatible(f"{tag} gibt es nicht für deinen Prozessor ({machine()}) – nur als {f['file']}.")
     info = {"tag": tag, "file": f["file"], "url": assets[f["file"]], "size": int(f["size"]), "sha256": f["sha256"],
@@ -232,12 +239,28 @@ def _install_appimage() -> dict:
         tmp.unlink(missing_ok=True)
         raise
     if target != cur:
-        cur.unlink(missing_ok=True)   # alte Version (läuft weiter, bis neu gestartet wird)
+        target = _keep_old_path(cur, target)
     with _lock:
         _prepared["new_path"] = str(target)
     integrate_desktop(target)
     store.cache_set("update", "latest", {"tag": info["tag"], "checked": time.time(), "error": None})
     return {"installed": info["tag"], "safety_backup": safety.name}
+
+
+def _keep_old_path(cur: Path, target: Path) -> Path:
+    """Die alte Datei durch einen Verweis auf die neue ersetzen. Starter, Panel-Pins und Autostart-Einträge, die
+    noch den alten Dateinamen kennen, starten so weiter – statt „Programm … ist nicht auffindbar“.
+    Gibt den Pfad zurück, unter dem die neue Version jetzt liegt."""
+    link = cur.with_name(f".{cur.name}.link")
+    try:
+        link.unlink(missing_ok=True)
+        link.symlink_to(target.name)          # relativ: funktioniert auch, wenn der Ordner verschoben wird
+        os.replace(link, cur)                 # alte Version läuft weiter (Datei bleibt geöffnet), bis neu gestartet
+        return target
+    except OSError:                           # Dateisystem ohne Verweise (z. B. exFAT): neue Version unter altem Namen
+        link.unlink(missing_ok=True)
+        os.replace(target, cur)
+        return cur
 
 
 def integrate_desktop(path: Path | None = None) -> None:
@@ -299,6 +322,8 @@ def _latest_valid_appimage() -> tuple[str | None, list[str]]:
             return rel["tag_name"], skipped
         except Incompatible:
             raise
+        except NotReady:
+            continue
         except Exception as e:
             from . import debuglog as dbg
             dbg.error("update", f"Release {rel['tag_name']} übersprungen (ungültig/unsigniert?)", e)
@@ -331,6 +356,10 @@ def check(force: bool = False) -> dict:
     if not repo():
         return {**info, "available": False, "latest": None, "error": None}
     cached = store.cache_get("update", "latest", max_age=None if force else CHECK_EVERY)
+    if cached and cached.get("error") and time.time() - cached.get("checked", 0) > RETRY_ERROR:
+        cached = None
+    if cached and cached.get("for") not in (None, current()):
+        cached = None      # nach einem Update: Ergebnis der alten Version zählt nicht mehr
     if cached and not force:
         tag, checked, err, skipped = cached["tag"], cached["checked"], cached.get("error"), cached.get("skipped", [])
     else:
@@ -343,7 +372,8 @@ def check(force: bool = False) -> dict:
             dbg.error("update", "Update-Prüfung fehlgeschlagen", e)
             tag, skipped, err = None, [], str(e)
         checked = time.time()
-        store.cache_set("update", "latest", {"tag": tag, "checked": checked, "error": err, "skipped": skipped})
+        store.cache_set("update", "latest", {"tag": tag, "checked": checked, "error": err, "skipped": skipped,
+                                             "for": current()})
     available = bool(tag) and _v(tag) > _v(current())
     return {**info, "latest": tag, "available": available, "checked": checked, "error": err,
             "skipped": skipped}
