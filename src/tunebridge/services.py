@@ -185,6 +185,9 @@ def _use_import(sid: str) -> bool:
 
 
 def playlists(sid: str) -> list[dict]:
+    if sid.startswith("friend-"):                  # geteilte Playlists eines Freundes (öffentlicher Schlüssel)
+        from . import share
+        return share.friend_lists(sid[7:])["playlists"]
     if _use_import(sid):
         return dataexport.playlists(sid)
     p = profiles().get(sid) or {}
@@ -234,6 +237,9 @@ def playlists(sid: str) -> list[dict]:
 
 def load(sid: str, pid: str) -> tuple[str, list[Track]]:
     from . import linkimport
+    if sid.startswith("friend-"):
+        from . import share
+        return share.friend_playlist(sid[7:], pid)
     if _use_import(sid):
         return dataexport.load(sid, pid)
     p = profiles().get(sid) or {}

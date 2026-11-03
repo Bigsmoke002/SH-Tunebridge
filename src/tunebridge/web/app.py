@@ -1773,9 +1773,10 @@ def _svc_call(fn, *a, **kw):
     from .. import services
     from ..dataexport import ExportError
     from ..linkimport import LinkError
+    from ..share import ShareError
     try:
         return fn(*a, **kw)
-    except (services.ServiceError, LinkError, NotImplementedError, ExportError) as e:
+    except (services.ServiceError, LinkError, NotImplementedError, ExportError, ShareError) as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001 – Dienst nicht erreichbar o. ä.
         dbg.error("dienste", "Dienst-Abfrage fehlgeschlagen", e)
@@ -1859,6 +1860,105 @@ async def services_import(sid: str, request: Request, name: str = ""):
         raise HTTPException(400, "Leere Datei")
     _svc_ram_drop(sid)
     return {"job": dataexport.start(sid, name, bytes(data))}
+
+
+# ------------------------------------------------------------------ Playlists teilen (privater/öffentlicher Schlüssel)
+class ShareReq(BaseModel):
+    name: str = ""
+    key: str = ""
+    nick: str = ""
+    names: list[str] = []
+    public: bool = False
+
+
+def _share(fn, *a):
+    from ..share import ShareError
+    try:
+        return fn(*a)
+    except ShareError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/share")
+def share_status():
+    from .. import share
+    return share.status()
+
+
+@app.post("/api/share/create")
+def share_create(req: ShareReq):
+    from .. import share
+    return _share(share.create, req.name)
+
+
+@app.post("/api/share/join")
+def share_join(req: ShareReq):
+    from .. import share
+    return _share(share.join, req.key)
+
+
+@app.post("/api/share/leave")
+def share_leave():
+    from .. import share
+    return share.leave()
+
+
+@app.post("/api/share/delete")
+def share_delete():
+    from .. import share
+    return _share(share.delete_space)
+
+
+@app.post("/api/share/rename")
+def share_rename(req: ShareReq):
+    from .. import share
+    return _share(share.rename, req.name)
+
+
+@app.post("/api/share/playlists")
+def share_add(req: ShareReq):
+    from .. import share
+    return _share(share.add_local, req.names, req.public)
+
+
+@app.post("/api/share/sync")
+def share_sync():
+    from .. import share
+    return _share(share.update_local)
+
+
+@app.post("/api/share/playlists/{pid}/public")
+def share_public(pid: str, req: ShareReq):
+    from .. import share
+    return _share(share.set_public, pid, req.public)
+
+
+@app.delete("/api/share/playlists/{pid}")
+def share_remove(pid: str):
+    from .. import share
+    return _share(share.remove, pid)
+
+
+@app.post("/api/share/friends")
+def share_friend_add(req: ShareReq):
+    from .. import share
+    _SVC_RAM.clear()
+    return _share(share.add_friend, req.key, req.nick)
+
+
+@app.delete("/api/share/friends/{fid}")
+def share_friend_remove(fid: str):
+    from .. import share
+    _svc_ram_drop(f"friend-{fid}")
+    return share.remove_friend(fid)
+
+
+@app.post("/api/share/friends/{fid}/copy/{pid}")
+def share_friend_copy(fid: str, pid: str, req: ShareReq):
+    from .. import share
+    name, tracks = _share(share.friend_playlist, fid, pid)
+    target = (req.name or name).strip()[:200] or name
+    return {"name": target, "added": share.copy_to_local(target, tracks)}
 
 
 @app.get("/api/services/import/{jid}")

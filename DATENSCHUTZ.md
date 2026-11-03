@@ -39,6 +39,8 @@ Ziel-Domain `shtunebridge.bs002.de` wählbar):
 - *Zur Gemeinschafts-Genre-Datenbank beitragen* – je Song, den du selbst eingeordnet hast: Datum, Künstler,
   Titel, ISRC, Genre, Subgenre, Herkunft (Playlist-Name / App / KI / von dir geändert). Siehe „Genre-Datenbank“.
 
+- *Playlists teilen* – nur verschlüsselte Blöcke, siehe „Playlists teilen“.
+
 **Laden** (standardmäßig aus): *Gemeinschafts-Genre-Datenbank laden* – einmal am Tag eine signierte Datei
 (nur Song → Genre) vom selben Server. Gesendet wird dabei nur die Anfrage selbst.
 
@@ -77,9 +79,10 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Google (YouTube), SoundCloud | Anmeldung über deine **eigene** App (Client-ID/-Secret); Login-Token | nur wenn du den Login einrichtest – direkt zwischen deinem Rechner und dem Dienst, kein Server dazwischen |
 | Deezer, Apple; bei verbundenen Diensten auch deren Bild-Server | deine IP-Adresse | beim Anzeigen von Covern und Abspielen von Hörproben (direkt vom Anbieter) |
 | TIDAL | Playlists/Songs | nur wenn du TIDAL verbindest und überträgst |
-| GitHub | deine IP-Adresse | Update-Prüfung (alle 6 Std.) |
+| GitHub | deine IP-Adresse | Update-Prüfung (stündlich) |
 | Hugging Face, GitHub | deine IP-Adresse | einmalig beim Download von Modell/Laufzeit |
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
+| Entwickler (`shtunebridge.bs002.de`) – Playlists teilen | nur Ende-zu-Ende-verschlüsselte Blöcke, zufällige Bereichs-Kennung, Prüfwert des Schreib-Schlüssels (technisch deine IP-Adresse) | beim Teilen, Aktualisieren und Ansehen von Freunde-Playlists, **nur mit Einwilligung** „Playlists teilen“ |
 | Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, **nur mit Einwilligung** „laden“ |
 
 Für diese Dienste gelten deren eigene Datenschutzbestimmungen.
@@ -219,6 +222,34 @@ Kontodaten – wird nicht gelesen und nicht gespeichert, die Datei selbst wird n
 Einzige Netzanfrage: Bei Google Takeout stehen in Playlists nur Video-Nummern. Die Titel dazu fragt SH-Tunebridge
 einzeln bei YouTube ab (öffentliches oEmbed, ohne Konto und ohne Key); YouTube sieht dabei die Video-Nummer und
 deine IP-Adresse. Nichts davon geht an den Entwickler.
+
+## Playlists teilen (Ende-zu-Ende verschlüsselt, Standard: aus)
+
+Unter **Teilen** kannst du eigene Playlists mit Freunden teilen – ohne Konto, nur mit Schlüsseln:
+
+- **Privater Schlüssel** (`SHT-P-…`): lesen und ändern, alle geteilten Playlists. Gehört nur dir (z. B. für
+  deinen zweiten Rechner) – wie ein Passwort behandeln.
+- **Öffentlicher Schlüssel** (`SHT-O-…`): nur lesen, nur die Playlists, die du als „öffentlich“ markierst.
+  Den gibst du an Freunde weiter.
+
+**Was geteilt wird:** je Song Titel, Künstler, Album, ISRC, Länge, Genre und Kennungen bei den Diensten.
+**Nie:** Musik, Hörproben, Cover, Hörverlauf, Konten, Daten über dich.
+
+**Was der Server sieht:** Die Playlists werden **auf deinem Rechner** mit AES-256-GCM verschlüsselt (Schlüssel
+werden aus deinem privaten Schlüssel abgeleitet, der Server bekommt ihn nie). Gespeichert werden nur: eine
+zufällige Bereichs-Kennung, ein Prüfwert (Hash) des Schreib-Schlüssels, zwei unlesbare Blöcke (privat und
+öffentlich), eine Versionsnummer und das Datum (ohne Uhrzeit) der letzten Änderung. Keine IP-Adressen, keine
+Namen, keine Playlist-Namen. Bereiche, die ein Jahr lang nicht geändert wurden, löscht der Server automatisch.
+„Bereich löschen“ entfernt alles sofort; beide Schlüssel funktionieren danach nicht mehr.
+
+**Wer was lesen kann:** nur wer einen Schlüssel hat – der Entwickler nicht. Wer deinen öffentlichen
+Schlüssel weitergibt, gibt auch deine öffentlichen Playlists weiter; nimm sie dann aus „öffentlich“ heraus
+oder lösche den Bereich und lege einen neuen an.
+
+**Rechtliches:** Geteilt werden nur Songlisten (Titel/Künstler/Album) – keine Musik und keine geschützten
+Bilder. Teile nur Playlists, die du selbst erstellt hast, und keine personenbezogenen Daten anderer (z. B. in
+Playlist-Namen). Für das, was du teilst, bist du selbst verantwortlich. Playlists von Freunden werden nur
+angezeigt; „In meine Playlists“ kopiert die Songliste in eine eigene, lokale Playlist.
 
 ## YouTube- und SoundCloud-Login
 

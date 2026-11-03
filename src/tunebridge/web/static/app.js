@@ -74,6 +74,7 @@ const ICONS = {
   repeat: P("m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"),
   tag: P("M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9Z", "M7.5 7.5h.01"),
   copy: P("M9 9h11v11H9z", "M5 15H4V4h11v1"),
+  share: P("M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "m8.6 13.5 6.8 4", "m15.4 6.5-6.8 4"),
 };
 const icon = (n, cls = "") => `<i data-icon="${n}" class="${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n] || ""}</svg></i>`;
 function hydrateIcons(root = document) {
@@ -398,7 +399,7 @@ async function refreshMeta() {
 
 function markNav() {
   const h = location.hash || "#/listen";
-  const base = h.split("?")[0];
+  const base = /[?&]svc=friend-/.test(h) ? "#/share" : h.split("?")[0];
   $$(".nav a, .foot-link").forEach(a => a.classList.toggle("active", base === a.getAttribute("href")));
   $$("#sidePlaylists a").forEach(a => a.classList.toggle("active", base === a.getAttribute("href")));
   $$("#sideServices a").forEach(a => a.classList.toggle("active", h === a.getAttribute("href")));
@@ -427,7 +428,7 @@ const SideSvc = {
     const box = $("#sideServices"); if (!box) return;
     $("#sideSvcLabel").classList.toggle("hidden", !this.list.length);
     box.innerHTML = this.list.map(s => {
-      const [m, c] = SVC_STYLE[s.id] || ["?", "#888"], open = !!this.open[s.id], pl = this.pls[s.id];
+      const [m, c] = svcStyle(s.id), open = !!this.open[s.id], pl = this.pls[s.id];
       const inner = !open ? "" : !pl || pl instanceof Promise ? `<div class="ss-hint">Lade Playlists …</div>`
         : pl.error ? `<div class="ss-hint">${esc(pl.error)}</div>`
         : pl.length ? pl.map(p => `<a href="${svcPlHref(s.id, p)}" title="${esc(p.name)}"><span>${esc(p.name)}</span>${p.count != null ? `<em>${p.count}</em>` : ""}</a>`).join("")
@@ -1312,7 +1313,7 @@ function plCard(p) {
     ${p.top?.length ? `<div class="pl-dist">${p.top.map(t => `<b style="flex:${t[1] / tot};background:${genreColor(t[2], t[3])}"></b>`).join("")}</div>` : ""}</a>`;
 }
 function svcCard(sid, p) {
-  const [m, c] = SVC_STYLE[sid] || ["?", "#888"];
+  const [m, c] = svcStyle(sid);
   const art = p.cover ? `<div class="mosaic single"><img src="${esc(p.cover)}" alt="" loading="lazy"></div>`
     : `<div class="mosaic"><div class="mosaic-ph svc-ph" style="--g:${c}"><span>${p.id === "__liked__" ? "♥" : m}</span></div></div>`;
   return `<a class="pl-card" href="${svcPlHref(sid, p)}" style="--g:${c}" data-name="${esc(p.name.toLowerCase())}">
@@ -1523,7 +1524,7 @@ const PLATFORM_STYLE = {
   spotify: ["Spotify", "S", "#1ed760"], tidal: ["TIDAL", "T", "#d6dbe2"], ytmusic: ["YouTube Music", "YM", "#ff5a50"],
   youtube: ["YouTube", "YT", "#ff5a50"], soundcloud: ["SoundCloud", "SC", "#ff8a3d"], apple: ["Apple Music", "A", "#fa6a86"],
 };
-const SVC_NAME = id => id === "local" ? "SH-Tunebridge" : id === "link" ? "Link" : (PLATFORM_STYLE[id]?.[0] || id);
+const SVC_NAME = id => String(id).startsWith("friend-") ? (Share.nicks[id] || "Freund") : id === "local" ? "SH-Tunebridge" : id === "link" ? "Link" : (PLATFORM_STYLE[id]?.[0] || id);
 const Transfer = { job: null };
 /* ---------- Dienste einrichten: Schritt-für-Schritt-Assistent (eigene Entwickler-App) und Datei-Import
    Ziel: auch ohne Fachwissen. Jeder Schritt: was öffnen, was anklicken, was kopieren – mit Kopieren-Knöpfen,
@@ -3231,6 +3232,10 @@ const Consent = {
     ["genredb", "Gemeinschafts-Genre-Datenbank laden",
       "Lädt einmal am Tag die signierte Datenbank (nur Song → Genre, keine Nutzerdaten) von diesem Server und nutzt sie bei der Erkennung. " +
       "Gesendet wird dabei nichts außer der Anfrage selbst; die Signatur wird vor der Nutzung geprüft."],
+    ["share", "Playlists teilen (Ende-zu-Ende verschlüsselt)",
+      "Nur wenn du unter „Teilen“ Playlists freigibst oder Playlists von Freunden ansiehst: Die Playlists (Titel, Künstler, Album, ISRC, Genre – nie Musik oder Cover) " +
+      "werden auf deinem Rechner mit AES-256 verschlüsselt; der Server speichert nur unlesbare Blöcke, eine zufällige Kennung und das Datum der letzten Änderung. " +
+      "Keine IP-Adressen, kein Konto. Lesen kann nur, wer deinen Schlüssel hat. Unbenutzte Bereiche werden nach einem Jahr gelöscht."],
     ["songs", "Erkannte Songs für die Genre-Analyse senden",
       "Je erkanntem Song: Datum, Künstler, Titel, ISRC, ermitteltes Genre/Subgenre/Nische, Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor, KI-Musik-Hinweis. " +
       "Kein Hörverlauf mit Uhrzeit, keine Playlists, kein Konto. Zweck: Genre-Zuordnung und Song-Analyse für alle verbessern."],
@@ -3319,10 +3324,11 @@ const Privacy = {
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
       ["Genre-Datenbank", "deine Einordnungen bleiben lokal; Playlist-Namen werden nur lokal ausgewertet", c.server.genres ? "Beiträge: mit deiner Einwilligung" : "Beiträge: aus"],
       [`${c.domain} (Gemeinschafts-Genre-Datenbank)`, "nur die Anfrage – Datei ist signiert, enthält nur Song → Genre", c.server.genredb ? "einmal am Tag" : "aus"],
+      [`${c.domain} (Playlists teilen)`, "nur verschlüsselte Blöcke – Server kann sie nicht lesen", c.server.share ? "beim Teilen / Ansehen von Freunde-Playlists" : "aus"],
       ["Offizielle Player (YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer)", "IP-Adresse, Geräteinfos, ggf. Cookies des Anbieters", "erst nach deinem Klick auf „Player laden“"],
       ["Deezer / Apple (Cover, Hörproben)", "deine IP-Adresse beim Laden", "beim Anzeigen/Abspielen"],
       ["TIDAL", "deine Playlists/Songs beim Übertragen", "nur wenn verbunden"],
-      ["GitHub", "deine IP-Adresse", "Update-Prüfung alle 6 Std."],
+      ["GitHub", "deine IP-Adresse", "Update-Prüfung stündlich"],
       ["Hugging Face, GitHub", "deine IP-Adresse", "einmalig beim Modell-Download"],
       ["Lokales LLM", "nichts – läuft komplett auf deinem Rechner", ""],
       ["Debug-Protokoll", "nichts – nur lokal; Bericht verschickst du selbst", "standardmäßig aus"],
@@ -3732,10 +3738,157 @@ Views.settings = async (main) => {
 };
 
 /* ================================================================= Dienste: Playlists ansehen & sortieren */
+/* ---------- Playlists teilen (Ende-zu-Ende verschlüsselt; privater Schlüssel = lesen+schreiben, öffentlicher = nur lesen) */
+const Share = {
+  nicks: {},
+  remember(st) { (st.friends || []).forEach(f => this.nicks[`friend-${f.id}`] = f.nick || f.name || "Freund"); },
+  async call(path, body, method = "POST") {
+    try { const st = await api(path, { method, body }); this.remember(st); return st; }
+    catch (e) { toast(e.message, "err"); throw { silent: true }; }
+  },
+  consent() {
+    modal({ title: "Playlists teilen erlauben?",
+      body: `<div class="cons"><p class="cons-intro">Zum Teilen werden deine ausgewählten Playlists <b>auf deinem Rechner verschlüsselt</b> und nur als
+        unlesbarer Block an den Server des Entwicklers gesendet.
+        Der Server kennt weder Playlist-Namen noch Songs noch dich – nur eine zufällige Kennung und das Datum der letzten Änderung.
+        Lesen kann es nur, wer deinen Schlüssel hat.</p>
+        <label class="cons-check"><input type="checkbox" id="shC1"><span>Ich habe die <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden.</span></label>
+        <label class="cons-check"><input type="checkbox" id="shC2"><span>Ich erlaube, dass verschlüsselte Playlists an den Server des Entwicklers (Deutschland) gesendet werden.
+          Ich teile nur eigene Playlists – es werden nur Titel, Künstler und Album geteilt, nie Musik oder Cover.</span></label></div>`,
+      confirm: "Erlauben", wide: true,
+      onConfirm: async box => {
+        if (!$("#shC1", box).checked || !$("#shC2", box).checked) { toast("Bitte beide Punkte bestätigen", "err"); throw { silent: true }; }
+        await api("/api/consent", { method: "POST", body: { privacy: true, server: { domain: true, share: true } } });
+        route();
+      } });
+  },
+  keyBox(label, key, hint, secret) {
+    return `<div class="sh-key ${secret ? "sh-key--secret" : ""}"><div class="sh-key-head"><b>${label}</b><span class="hint">${hint}</span></div>
+      <div class="sh-key-row"><code ${secret ? 'data-secret="1"' : ""}>${secret ? "•".repeat(28) : esc(key)}</code>
+      ${secret ? `<button class="btn btn--sm btn--ghost" data-reveal>Anzeigen</button>` : ""}
+      <button class="btn btn--sm" data-copykey="${esc(key)}">${icon("copy")}Kopieren</button></div></div>`;
+  },
+};
+
+Views.share = async (main) => {
+  main.innerHTML = `<div class="page view-enter">${skeletonRows(3)}</div>`;
+  const [st, pls] = await Promise.all([api("/api/share"), api("/api/playlists").catch(() => [])]);
+  Share.remember(st);
+  const locals = pls.filter(p => p.origin === "lokal");
+  const head = `<div class="page-head"><div><h1>Playlists teilen</h1><p>Teile eigene Playlists mit Freunden – über einen Schlüssel, ohne Konto.
+    Der <b>öffentliche Schlüssel</b> zeigt nur die Playlists, die du freigibst (nur lesen). Mit dem <b>privaten Schlüssel</b> verwaltest du alles, z. B. von deinem zweiten Rechner.</p></div></div>`;
+  const legal = `<div class="hint gdb-note">${icon("info")}<span>Geteilt werden nur <b>Titel, Künstler, Album, ISRC und Genre</b> – keine Musik, keine Cover, keine Hörproben.
+    Alles wird auf deinem Rechner verschlüsselt (AES-256); der Server sieht nur unlesbare Blöcke. Teile nur eigene Playlists.
+    Unbenutzte Bereiche löscht der Server nach einem Jahr.</span></div>`;
+  if (!st.allowed) {
+    main.innerHTML = `<div class="page view-enter">${head}
+      <div class="card sh-off"><div>${icon("key")}</div><div><h3>Teilen ist noch aus</h3>
+        <p>Zum Teilen braucht es deine Einwilligung, weil verschlüsselte Playlists über den Server des Entwicklers laufen. Freunde-Playlists ansehen braucht sie auch.</p>
+        <button class="btn btn--primary" id="shAllow">Teilen erlauben</button></div></div>${legal}</div>`;
+    hydrateIcons(main);
+    $("#shAllow").onclick = () => Share.consent();
+    return;
+  }
+  const mine = !st.active ? `<div class="sh-start">
+      <div class="card"><h3>${icon("plus")}Neu anlegen</h3><p class="hint">Erstellt deinen Teilen-Bereich mit einem privaten und einem öffentlichen Schlüssel.</p>
+        <div class="sh-in"><input class="input" id="shName" placeholder="Name, den Freunde sehen (z. B. „Leons Playlists“)" maxlength="80"><button class="btn btn--primary" id="shCreate">Anlegen</button></div></div>
+      <div class="card"><h3>${icon("key")}Mit privatem Schlüssel verbinden</h3><p class="hint">Du hast schon einen Bereich (z. B. auf deinem anderen Rechner)? Privaten Schlüssel <code>SHT-P-…</code> einfügen.</p>
+        <div class="sh-in"><input class="input" id="shJoin" placeholder="SHT-P-…" autocomplete="off" spellcheck="false"><button class="btn" id="shJoinGo">Verbinden</button></div></div>
+    </div>`
+    : `<div class="card sh-space">
+      <div class="sh-space-head"><div><div class="cell-sub">Dein Teilen-Bereich</div><h3>${esc(st.name || "Ohne Namen")} <button class="icon-btn" id="shRename" title="Umbenennen">${icon("pencil")}</button></h3></div>
+        <div class="btn-row"><button class="btn btn--sm btn--ghost" id="shSync" title="Geteilte Playlists mit dem aktuellen Stand deiner Playlists hochladen">${icon("repeat")}Aktualisieren</button>
+        <button class="btn btn--sm btn--ghost" id="shLeave" title="Schlüssel von diesem Rechner entfernen – geteilte Playlists bleiben">Von diesem Rechner trennen</button>
+        <button class="btn btn--sm btn--ghost" id="shDel">${icon("trash")}Bereich löschen</button></div></div>
+      ${Share.keyBox("Öffentlicher Schlüssel", st.public_key, "an Freunde geben – nur lesen, nur freigegebene Playlists", false)}
+      ${Share.keyBox("Privater Schlüssel", st.private_key, "wie ein Passwort: nie weitergeben! Lesen und ändern, alle Playlists", true)}
+    </div>
+    <div class="section-title">Geteilte Playlists <span class="cell-sub">${st.playlists.length}</span>
+      <button class="btn btn--sm btn--primary" id="shAdd" style="margin-left:auto">${icon("plus")}Playlists hinzufügen</button></div>
+    ${st.playlists.length ? `<div class="card gdb-votes">${st.playlists.map(p => `<div class="sh-pl" data-pid="${p.id}">
+        <div style="min-width:0"><div class="li-title">${esc(p.name)}</div><div class="cell-sub">${p.count} Songs${p.local ? "" : " · von einem anderen Rechner"}</div></div>
+        <label class="switch-row" title="Öffentlich = sichtbar für alle mit dem öffentlichen Schlüssel"><label class="switch"><input type="checkbox" data-pub="${p.id}" ${p.public ? "checked" : ""}><span class="track"></span></label><span>${p.public ? "öffentlich" : "nur privat"}</span></label>
+        <button class="icon-btn" data-rm="${p.id}" title="Nicht mehr teilen">${icon("x")}</button></div>`).join("")}</div>`
+      : `<div class="empty">${icon("stack")}<h3>Noch nichts geteilt</h3><p>Füge Playlists hinzu und lege fest, welche öffentlich sind.</p></div>`}`;
+  const friends = `<div class="section-title">Von Freunden <span class="cell-sub">${st.friends.length}</span></div>
+    <div class="card sh-addf"><input class="input" id="shFKey" placeholder="Öffentlichen Schlüssel einfügen (SHT-O-…)" autocomplete="off" spellcheck="false">
+      <input class="input" id="shFNick" placeholder="Name (optional)" maxlength="60"><button class="btn btn--primary" id="shFAdd">Hinzufügen</button></div>
+    <div id="shFriends">${st.friends.map(f => `<div class="card sh-friend" data-fid="${f.id}">
+      <div class="sh-friend-head"><div><h4>${esc(f.nick || f.name || "Freund")}</h4><div class="cell-sub">${esc(f.name && f.nick ? f.name : "")}</div></div>
+        <div class="btn-row"><button class="btn btn--sm btn--ghost" data-fre="${f.id}">${icon("repeat")}Neu laden</button>
+        <button class="icon-btn" data-frm="${f.id}" title="Entfernen">${icon("trash")}</button></div></div>
+      <div class="sh-flists" data-fl="${f.id}"><div class="hint">Lade …</div></div></div>`).join("")}</div>`;
+  main.innerHTML = `<div class="page view-enter">${head}${mine}${friends}${legal}</div>`;
+  hydrateIcons(main);
+
+  $$("[data-copykey]", main).forEach(b => b.onclick = async () => toast(await Clip.write(b.dataset.copykey) ? "Schlüssel kopiert" : "Kopieren fehlgeschlagen", "ok"));
+  $$("[data-reveal]", main).forEach(b => b.onclick = () => {
+    const c = $("code", b.parentElement); const show = c.dataset.secret === "1";
+    c.textContent = show ? st.private_key : "•".repeat(28); c.dataset.secret = show ? "0" : "1"; b.textContent = show ? "Verbergen" : "Anzeigen";
+  });
+  const go = async (path, body, method) => { await Share.call(path, body, method).catch(() => null); route(); };
+  const btn = (id, fn) => { const b = $(id, main); if (b) b.onclick = fn; };
+  btn("#shCreate", async () => { await Share.call("/api/share/create", { name: $("#shName").value }).then(() => toast("Teilen-Bereich angelegt")).catch(() => null); route(); });
+  btn("#shJoinGo", async () => { await Share.call("/api/share/join", { key: $("#shJoin").value }).then(() => toast("Verbunden")).catch(() => null); route(); });
+  btn("#shSync", async () => { await Share.call("/api/share/sync").then(() => toast("Aktualisiert")).catch(() => null); route(); });
+  btn("#shRename", () => modal({ title: "Namen ändern", body: `<input class="input" id="shRn" maxlength="80" style="width:100%" value="${esc(st.name)}">`, confirm: "Speichern",
+    onConfirm: async box => { await Share.call("/api/share/rename", { name: $("#shRn", box).value }); route(); } }));
+  btn("#shLeave", () => modal({ title: "Von diesem Rechner trennen?", text: "Der Schlüssel wird hier gelöscht. Deine geteilten Playlists bleiben auf dem Server – mit dem privaten Schlüssel kannst du dich wieder verbinden. Hast du ihn nicht notiert, kommst du nicht mehr heran.",
+    confirm: "Trennen", danger: true, onConfirm: () => go("/api/share/leave") }));
+  btn("#shDel", () => modal({ title: "Teilen-Bereich löschen?", text: "Alle geteilten Playlists werden vom Server gelöscht. Beide Schlüssel funktionieren danach nicht mehr – auch nicht bei deinen Freunden. Deine Playlists in der App bleiben.",
+    confirm: "Endgültig löschen", danger: true, onConfirm: () => go("/api/share/delete") }));
+  btn("#shAdd", () => {
+    const shared = new Set(st.playlists.map(p => p.local).filter(Boolean));
+    const avail = locals.filter(p => !shared.has(p.name));
+    if (!avail.length) return toast(locals.length ? "Alle deine Playlists sind schon geteilt" : "Du hast noch keine eigenen Playlists", "err");
+    modal({ title: "Playlists teilen", wide: true,
+      body: `<div class="sh-pick">${avail.map(p => `<label class="cons-check"><input type="checkbox" data-n="${esc(p.name)}"><span>${esc(p.name)} <span class="cell-sub">· ${p.count} Songs</span></span></label>`).join("")}</div>
+        <label class="switch-row" style="margin-top:12px"><label class="switch"><input type="checkbox" id="shPub"><span class="track"></span></label><span>Gleich öffentlich machen (für alle mit dem öffentlichen Schlüssel sichtbar)</span></label>`,
+      confirm: "Teilen",
+      onConfirm: async box => {
+        const names = $$("[data-n]:checked", box).map(i => i.dataset.n);
+        if (!names.length) { toast("Bitte mindestens eine Playlist wählen", "err"); throw { silent: true }; }
+        await Share.call("/api/share/playlists", { names, public: $("#shPub", box).checked }); toast("Geteilt"); route();
+      } });
+  });
+  $$("[data-pub]", main).forEach(i => i.onchange = async () => {
+    try { await Share.call(`/api/share/playlists/${i.dataset.pub}/public`, { public: i.checked }); i.closest(".switch-row").lastElementChild.textContent = i.checked ? "öffentlich" : "nur privat"; }
+    catch { i.checked = !i.checked; }
+  });
+  $$("[data-rm]", main).forEach(b => b.onclick = () => go(`/api/share/playlists/${b.dataset.rm}`, undefined, "DELETE"));
+  btn("#shFAdd", async () => {
+    const key = $("#shFKey").value.trim(); if (!key) return toast("Bitte einen Schlüssel einfügen", "err");
+    await Share.call("/api/share/friends", { key, nick: $("#shFNick").value }).then(() => { toast("Hinzugefügt"); SideSvc.pls = {}; }).catch(() => null); route();
+  });
+  $$("[data-frm]", main).forEach(b => b.onclick = () => modal({ title: "Freund entfernen?", text: "Seine geteilten Playlists verschwinden hier. Was du schon in deine Playlists kopiert hast, bleibt.", confirm: "Entfernen", danger: true,
+    onConfirm: () => go(`/api/share/friends/${b.dataset.frm}`, undefined, "DELETE") }));
+  const loadF = async (fid, fresh = false) => {
+    const box = $(`[data-fl="${fid}"]`, main); if (!box) return;
+    const sid = `friend-${fid}`;
+    try {
+      const lists = await api(`/api/services/${sid}/playlists${fresh ? "?refresh=1" : ""}`);
+      box.innerHTML = lists.length ? lists.map(p => `<div class="sh-fl"><a href="${svcPlHref(sid, p)}">${icon("stack")}<span>${esc(p.name)}</span><em>${p.count} Songs</em></a>
+          <button class="btn btn--sm btn--ghost" data-cp="${esc(p.id)}" data-cpn="${esc(p.name)}">${icon("download")}In meine Playlists</button></div>`).join("")
+        : `<div class="hint">Gerade ist nichts öffentlich geteilt.</div>`;
+      hydrateIcons(box);
+      $$("[data-cp]", box).forEach(b => b.onclick = () => Share.copy(fid, b.dataset.cp, b.dataset.cpn));
+    } catch (e) { box.innerHTML = `<div class="hint">${esc(e.message)}</div>`; }
+  };
+  st.friends.forEach(f => loadF(f.id));
+  $$("[data-fre]", main).forEach(b => b.onclick = () => loadF(b.dataset.fre, true));
+};
+Share.copy = (fid, pid, name) => modal({ title: "In deine Playlists übernehmen", text: "Kopiert die Songliste (Titel, Künstler, Album) in eine eigene Playlist in SH-Tunebridge.",
+  body: `<input class="input" id="shCpN" maxlength="200" style="width:100%" value="${esc(name)}">`, confirm: "Übernehmen",
+  onConfirm: async box => {
+    try { const r = await api(`/api/share/friends/${fid}/copy/${encodeURIComponent(pid)}`, { method: "POST", body: { name: $("#shCpN", box).value } }); toast(`${r.added} Songs in „${r.name}“`); refreshMeta(); }
+    catch (e) { toast(e.message, "err"); throw { silent: true }; }
+  } });
+
 const SVC_STYLE = {
   spotify: ["S", "#1ed760"], tidal: ["T", "#d6dbe2"], youtube: ["YT", "#ff5a50"], deezer: ["D", "#a238ff"],
   lastfm: ["fm", "#d51007"], apple: ["A", "#fa6a86"], soundcloud: ["SC", "#ff8a3d"],
 };
+const svcStyle = sid => SVC_STYLE[sid] || (String(sid).startsWith("friend-") ? ["♪", "#8b8cf8"] : ["?", "#888"]);
 const SORT_LEVELS = [
   [1, "Passende Mixes", "Tempo-Blöcke von etwa einer Stunde, Reihenfolge nach Tempo, Tonart und Energie – Genre egal."],
   [2, "Stimmung & Energie", "Chill · Groove · Energie · Peak – darin mixbar geordnet."],
@@ -3807,7 +3960,7 @@ Views.services = async (main, _, params) => {
 };
 
 Views.servicePlaylists = async (main, sid) => {
-  const [m, c] = SVC_STYLE[sid] || ["?", "#888"];
+  const [m, c] = svcStyle(sid);
   if (!SideSvc.loaded) await SideSvc.load();
   const s = SideSvc.list.find(x => x.id === sid) || { id: sid, name: SVC_NAME(sid), account: "" };
   main.innerHTML = `<div class="page view-enter">
@@ -3836,7 +3989,7 @@ Views.servicePlaylists = async (main, sid) => {
 };
 
 Views.svcPlaylist = async (main, sid, pid, name) => {
-  const [m, c] = SVC_STYLE[sid] || ["?", "#888"];
+  const [m, c] = svcStyle(sid);
   if (!SideSvc.loaded) await SideSvc.load();
   const sname = SideSvc.list.find(x => x.id === sid)?.name || SVC_NAME(sid);
   main.innerHTML = `<div class="page page--pl view-enter"><section class="ph" style="--hc:${c}"><div class="ph-art"><div class="mosaic skeleton"></div></div>
@@ -3850,17 +4003,19 @@ Views.svcPlaylist = async (main, sid, pid, name) => {
   const sortHref = `#/services?svc=${sid}&pl=${encodeURIComponent(pid)}&name=${encodeURIComponent(name)}`;
   main.innerHTML = `<div class="page page--pl view-enter">
     ${plHero({ kicker: `<span class="ss-badge sm" style="--pc:${c}">${m}</span>Playlist · ${esc(sname)}`, title: name, count: tracks.length, ms, covers, color: c,
-      back: [`#/services?svc=${sid}`, `${sname}-Playlists`],
+      back: sid.startsWith("friend-") ? ["#/share", "Teilen"] : [`#/services?svc=${sid}`, `${sname}-Playlists`],
       sorts: [["", "Reihenfolge"], ["title", "Titel"], ["artist", "Künstler"], ["album", "Album"], ["dur", "Länge"]],
       actions: `<a class="btn btn--sm btn--primary" href="${sortHref}">${icon("layers")}Sortieren lassen</a>
+        ${sid.startsWith("friend-") ? `<button class="btn btn--sm btn--ghost" id="plCopy">${icon("download")}In meine Playlists</button>` : ""}
         <button class="btn btn--sm btn--ghost" id="plReload">${icon("repeat")}Neu laden</button>` })}
-    <div class="pls-src">${icon("info")}Titel, Künstler und Cover-Adressen kommen über die offizielle Schnittstelle von ${esc(sname)} und liegen nur im Arbeitsspeicher. Hörproben (30 s) werden direkt beim Anbieter gestreamt.</div>
+    <div class="pls-src">${icon("info")}${sid.startsWith("friend-") ? `Geteilt von ${esc(sname)} (Ende-zu-Ende verschlüsselt, nur Titel/Künstler/Album). Hörproben suchst du über die Song-Details selbst.` : `Titel, Künstler und Cover-Adressen kommen über die offizielle Schnittstelle von ${esc(sname)} und liegen nur im Arbeitsspeicher. Hörproben (30 s) werden direkt beim Anbieter gestreamt.`}</div>
     <div class="tl tl--svc" id="plList"></div></div>`;
   hydrateIcons(main);
   plList(main, tracks.map(t => ({ t, c3: `<span class="cell-muted">${esc(t.album || "")}</span>`, c4: t.duration_ms ? fmtTime(t.duration_ms / 1000) : "" })),
     { h3: "Album", h4: "Länge", empty: "Diese Playlist ist leer.", bind: box => {
       $$(".tl-row", box).forEach(row => row.ondblclick = () => $(".tl-play", row)?.click());
     } });
+  const cpb = $("#plCopy"); if (cpb) cpb.onclick = () => Share.copy(sid.slice(7), pid, name);
   $("#plReload").onclick = async () => { await svcTracks(sid, pid, true).catch(e => toast(e.message, "err")); Views.svcPlaylist(main, sid, pid, name); };
 };
 

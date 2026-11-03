@@ -9,6 +9,10 @@ Der Updater installiert nur signierte Versionen.
   mit Kopieren-Knöpfen, Skizzen und Hilfe bei Fehlermeldungen (z. B. „redirect_uri: Not matching configuration“).
 - **Datenexport importieren:** Spotify-Kontodaten, Google Takeout (YouTube) und Apple-Music-Mediathek – ohne
   Premium und ohne Entwickler-App; alle Playlists auf einmal.
+- **Playlists teilen** (neue Seite „Teilen“): eigene Playlists per Schlüssel teilen. Privater Schlüssel = lesen
+  und ändern (z. B. zweiter Rechner), öffentlicher Schlüssel = nur lesen, nur Playlists, die du als „öffentlich“
+  markierst. Ende-zu-Ende verschlüsselt (AES-256-GCM), nur Songlisten, Einwilligung „Playlists teilen“ (Standard aus).
+  Playlists von Freunden ansehen, sortieren lassen und in eigene Playlists kopieren.
 - Neustart nach einem Update behält die Startargumente (z. B. `ui --port 8800`).
 
 ## 0.6.3 – 2026-11-03

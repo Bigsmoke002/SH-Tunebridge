@@ -187,6 +187,10 @@ ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch 
   Schritt durch die Entwickler-App (Kopieren-Knöpfe, Skizzen, Hilfe bei typischen Fehlermeldungen).
 - **Ohne Login:** Spotify-Kontodaten (ZIP), Google Takeout (YouTube-Playlists + Musikbibliothek) oder die
   Apple-Music-Mediathek (XML) importieren – alle Playlists auf einmal, kein Premium, keine Entwickler-App.
+- **Playlists teilen:** eigene Playlists per Schlüssel mit Freunden teilen – privater Schlüssel (lesen +
+  ändern, z. B. für den zweiten Rechner), öffentlicher Schlüssel (nur lesen, nur freigegebene Playlists).
+  Ende-zu-Ende verschlüsselt, nur Songlisten (keine Musik, keine Cover), standardmäßig aus. Details in
+  [DATENSCHUTZ.md](DATENSCHUTZ.md#playlists-teilen-ende-zu-ende-verschlüsselt-standard-aus).
 
 | Dienst | Status | Login |
 |---|---|---|

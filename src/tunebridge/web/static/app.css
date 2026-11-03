@@ -1329,3 +1329,37 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .wz-trouble summary { cursor: pointer; color: var(--text); }
 .wz-trouble details div { margin-top: 6px; color: var(--text-2); line-height: 1.55; }
 .wz-trouble .btn-row { margin-top: 10px; }
+
+/* ---------- Playlists teilen */
+.sh-off { display: flex; gap: 16px; align-items: flex-start; padding: 20px; }
+.sh-off > div:first-child { font-size: 28px; color: var(--accent); }
+.sh-off h3 { margin: 0 0 6px; }
+.sh-off p { margin: 0 0 12px; color: var(--text-2); }
+.sh-start { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.sh-start .card { padding: 18px; }
+.sh-start h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 6px; font-size: 15px; }
+.sh-in, .sh-addf { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.sh-in .input, .sh-addf .input { flex: 1 1 200px; min-width: 0; }
+.sh-addf { padding: 12px; margin-top: 0; }
+.sh-addf #shFNick { flex: 0 1 180px; }
+.sh-space { padding: 18px; display: grid; gap: 12px; }
+.sh-space-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.sh-space-head h3 { margin: 2px 0 0; display: flex; align-items: center; gap: 6px; }
+.sh-key { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.sh-key--secret { border-color: color-mix(in srgb, #e5a03a 45%, var(--line)); }
+.sh-key-head { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 6px; }
+.sh-key-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.sh-key-row code { flex: 1 1 260px; min-width: 0; font-size: 12.5px; word-break: break-all; user-select: all; }
+.sh-pl { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; align-items: center; padding: 8px 14px; }
+.sh-pl + .sh-pl { border-top: 1px solid var(--line); }
+.sh-pl .switch-row { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2); min-width: 120px; }
+.sh-friend { padding: 14px 16px; margin-top: 10px; }
+.sh-friend-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.sh-friend h4 { margin: 0; }
+.sh-flists { margin-top: 8px; display: grid; gap: 4px; }
+.sh-fl { display: flex; align-items: center; gap: 8px; }
+.sh-fl a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; color: inherit; text-decoration: none; }
+.sh-fl a:hover { background: var(--hover, rgba(255,255,255,.05)); }
+.sh-fl a span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-fl em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--text-2); }
+.sh-pick { display: grid; gap: 6px; max-height: 50vh; overflow: auto; }
