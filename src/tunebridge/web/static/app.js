@@ -814,16 +814,27 @@ $("#drawerClose").onclick = closeDrawer;
 $("#drawerBackdrop").onclick = closeDrawer;
 
 /* ================================================================= Pegel / Spektrum */
+const VIZ = [["bars", "Spektrum", "Frequenzbalken"], ["wave", "Welle 3-Band", "Lauf-Wellenform wie am DJ-Player: Bass blau, Mitten orange, Höhen weiß"],
+  ["rgb", "Welle RGB", "Lauf-Wellenform, Farbe nach Klang: Bass rot, Mitten grün, Höhen blau"]];
 const Meter = {
   ws: null, source: null, active: false, frame: null, last: 0, raf: 0, quietSince: 0,
   bands: new Float32Array(32), peak: -90, peakT: 0, scanList: null,
+  viz: store.get("viz", "bars"), cols: [], total: 0, colAt: 0, wpeak: .2,
+  setViz(v) {
+    this.viz = v; store.set("viz", v);
+    api("/api/companion", { method: "POST", body: { viz: v } }).catch(() => {});   // Schwebe-Icon zeigt dasselbe
+  },
   start(source) {
     if (this.active && this.source === source && this.ws?.readyState <= 1) return;
     this.stop();
     this.active = true; this.source = source; this.frame = null; this.quietSince = Date.now();
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/level?source=${enc(source)}`);
     this.ws = ws;
-    ws.onmessage = e => { const f = JSON.parse(e.data); if (f.error) { this.err = f.error; return; } this.err = null; this.frame = f; this.last = Date.now(); };
+    ws.onmessage = e => {
+      const f = JSON.parse(e.data); if (f.error) { this.err = f.error; return; }
+      this.err = null; this.frame = f; this.last = Date.now();
+      if (f.wv) { for (const c of f.wv) this.cols.push(c); this.total += f.wv.length; this.colAt = performance.now(); if (this.cols.length > 720) this.cols.splice(0, this.cols.length - 600); }
+    };
     ws.onclose = () => { if (this.active && this.ws === ws) setTimeout(() => this.active && this.ws === ws && this.start(source, true), 1200); };
     const loop = () => { this.draw(); if (this.active) this.raf = requestAnimationFrame(loop); };
     this.raf = requestAnimationFrame(loop);
@@ -843,6 +854,7 @@ const Meter = {
     const sig = $("#signal"), cv = $("#spec");
     if (!sig) return;
     this.bands.fill(0);
+    this.cols = []; this.total = 0; this.wpeak = .2;
     sig.dataset.state = "off"; $("#orb")?.removeAttribute("data-sig");
     $("#sigText").textContent = S.listen.mode === "mic" ? "Mikrofon aus – öffnet sich erst beim Erkennen" : "Pegel aus";
     $("#sigDb").textContent = ""; const vf = $("#vuFill"); if (vf) vf.style.width = "0%";
@@ -854,6 +866,55 @@ const Meter = {
     if (f.rms > -50) { this.quietSince = Date.now(); return ["ok", "Signal kommt an", f.rms]; }
     if (f.rms > -60) { this.quietSince = Date.now(); return ["low", "Leise, aber da", f.rms]; }
     return Date.now() - this.quietSince > 1200 ? ["none", "Kein Signal – falsches Gerät?", f.rms] : ["ok", "Signal kommt an", f.rms];
+  },
+  drawBars(g, w, h, col) {
+    // Spektrum mitten im Kreis: gespiegelte Balken, Mitte = Bässe, außen = Höhen; außen flacher (Kreisform)
+    const n = 17, gap = 4, span = w * .7, bw = (span - gap * (n - 1)) / n, x0 = (w - span) / 2, mid = h / 2;
+    for (let i = 0; i < n; i++) {
+      const d = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);            // 0 Mitte .. 1 Rand
+      const band = Math.min(31, Math.round(d * 26 + 1));
+      const v = this.bands[band];
+      const room = Math.sqrt(Math.max(0, 1 - d * d)) * h * .36;       // Platz im Kreis
+      const bh = Math.max(3, v * room * 2);
+      g.globalAlpha = .35 + v * .65; g.fillStyle = col;
+      const x = x0 + i * (bw + gap), r = bw / 2;
+      g.beginPath(); g.roundRect ? g.roundRect(x, mid - bh / 2, bw, bh, r) : g.rect(x, mid - bh / 2, bw, bh); g.fill();
+    }
+    g.globalAlpha = 1;
+  },
+  // Lauf-Wellenform wie an DJ-Playern: neueste Spalte rechts, wandert nach links.
+  // "wave" = 3-Band (Bass blau, Mitten orange, Höhen weiß übereinander), "rgb" = eine Hülle, Farbe aus Bass/Mitten/Höhen.
+  drawWave(g, w, h, st) {
+    const cols = this.cols, n = cols.length;
+    if (!n) return;
+    const cw = 1, now = performance.now();
+    const slide = Math.min(4, (now - this.colAt) / 10);                 // 4 Spalten je 40-ms-Frame weich einschieben
+    const pos = this.total - 4 + slide, head = w * .86, mid = h / 2;
+    const fresh = cols.slice(-4);
+    const mx = Math.max(...fresh.map(c => Math.max(c[0], c[1] * 1.4, c[2] * 2.2)));
+    this.wpeak = Math.max(this.wpeak * .997, mx, .06);                  // automatische Verstärkung
+    const gain = .95 / this.wpeak, off = st === "none";
+    const room = x => { const d = (x - w / 2) / (w / 2); return Math.sqrt(Math.max(0, 1 - d * d)) * h * .44; };
+    for (let i = n - 1; i >= 0; i--) {
+      const x = head - (pos - (this.total - n + i)) * cw;
+      if (x < 0) break;
+      if (x > head) continue;
+      const c = cols[i], lim = room(x), fade = Math.min(1, x / (w * .3));
+      const lo = Math.min(1, c[0] * gain), md = Math.min(1, c[1] * 1.4 * gain), hi = Math.min(1, c[2] * 2.2 * gain);
+      g.globalAlpha = (off ? .35 : 1) * (.35 + .65 * fade);
+      if (this.viz === "rgb") {
+        const a = Math.max(lo, md, hi), m = a || 1;
+        g.fillStyle = off ? "#777" : `rgb(${Math.round(60 + 195 * lo / m)},${Math.round(40 + 215 * md / m * .9)},${Math.round(60 + 195 * hi / m)})`;
+        const y = Math.max(1, a * lim); g.fillRect(x, mid - y, cw + .4, y * 2);
+      } else {
+        for (const [v, col] of [[lo, "#2b6ef2"], [md, "#e8952c"], [hi, "#f4f4f4"]]) {
+          const y = Math.max(.5, v * lim * (col === "#f4f4f4" ? .6 : col === "#e8952c" ? .8 : 1));
+          g.fillStyle = off ? "#777" : col; g.fillRect(x, mid - y, cw + .4, y * 2);
+        }
+      }
+    }
+    g.globalAlpha = .9; g.fillStyle = "#fff"; g.fillRect(head + 1, mid - h * .3, 1.5, h * .6);   // Abspielposition
+    g.globalAlpha = 1;
   },
   draw() {
     const cv = $("#spec");
@@ -871,19 +932,8 @@ const Meter = {
     g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, w, h);
     const [st, text] = this.state();
     const col = st === "none" ? "#e2786e" : st === "low" ? "#e0b46a" : "#6cc8a8";
-    // Spektrum mitten im Kreis: gespiegelte Balken, Mitte = Bässe, außen = Höhen; außen flacher (Kreisform)
-    const n = 17, gap = 4, span = w * .7, bw = (span - gap * (n - 1)) / n, x0 = (w - span) / 2, mid = h / 2;
-    for (let i = 0; i < n; i++) {
-      const d = Math.abs(i - (n - 1) / 2) / ((n - 1) / 2);            // 0 Mitte .. 1 Rand
-      const band = Math.min(31, Math.round(d * 26 + 1));
-      const v = this.bands[band];
-      const room = Math.sqrt(Math.max(0, 1 - d * d)) * h * .36;       // Platz im Kreis
-      const bh = Math.max(3, v * room * 2);
-      g.globalAlpha = .35 + v * .65; g.fillStyle = col;
-      const x = x0 + i * (bw + gap), r = bw / 2;
-      g.beginPath(); g.roundRect ? g.roundRect(x, mid - bh / 2, bw, bh, r) : g.rect(x, mid - bh / 2, bw, bh); g.fill();
-    }
-    g.globalAlpha = 1;
+    if (this.viz !== "bars") this.drawWave(g, w, h, st);
+    else this.drawBars(g, w, h, col);
     const rms = alive ? f.rms : -90;
     const orb = $("#orb"), sig = $("#signal");
     if (orb && orb.dataset.sig !== st) orb.dataset.sig = st;
@@ -982,6 +1032,8 @@ Views.listen = async (main, _, params) => {
             </select>
             ${L.mode === "desktop" ? `<div class="cell-sub opt-hint">${icon("info")}Anwendung wählen, um nur z. B. den Browser oder Spotify zu hören – Sprachchats (Discord, Teams …) werden nie angeboten.</div>` : ""}</div>
           <div class="scan-wrap"><button class="link-btn" id="scanBtn">${icon("search")}Gerät mit Signal finden</button><div id="scanOut"></div></div>
+          <div><div class="opt-label">Anzeige im Kreis</div>
+            <div class="segmented" id="vizSeg">${VIZ.map(([v, l, t]) => `<button data-viz="${v}" title="${t}" class="${Meter.viz === v ? "on" : ""}">${l}</button>`).join("")}</div></div>
           <div><div class="opt-label">Aufnahmedauer</div>
             <div class="segmented" id="secSeg">${[6, 10, 15, 20].map(s => `<button data-s="${s}" class="${L.seconds === s ? "on" : ""}">${s} s</button>`).join("")}</div></div>
           <label class="switch"><input type="checkbox" id="autoSw" ${L.auto ? "checked" : ""}><span class="track"></span>Dauer-Modus – erkennt jeden neuen Song</label>
@@ -993,6 +1045,10 @@ Views.listen = async (main, _, params) => {
       </div>
     </div></div>`;
 
+  $$("#vizSeg button").forEach(b => b.onclick = () => {
+    Meter.setViz(b.dataset.viz);
+    $$("#vizSeg button").forEach(x => x.classList.toggle("on", x === b));
+  });
   $$("#modeSeg button").forEach(b => b.onclick = () => {
     L.mode = b.dataset.mode; L.running = false; stopHold();
     // gespeichertes Gerät dieses Modus wiederherstellen (nicht auf Standard zurückfallen)
@@ -4175,6 +4231,7 @@ document.addEventListener("keydown", e => {
 
 /* ================================================================= Start */
 hydrateIcons();
+api("/api/companion").then(c => { if (c?.viz && c.viz !== Meter.viz) { Meter.viz = c.viz; store.set("viz", c.viz); } }).catch(() => {});
 /* Hauptleiste ein-/ausklappen (gemerkt pro Rechner); eingeklappt zeigen Tooltips die Namen */
 const Side = {
   set(min) {

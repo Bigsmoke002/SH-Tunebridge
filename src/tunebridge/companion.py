@@ -65,7 +65,8 @@ def main(port: int = 8765) -> None:
     bus = Bus()
 
     st = {"busy": False, "accent": QColor("#6cc8a8"), "cfg": {}, "fails": 0, "source": "desktop",
-          "bands": [0.0] * 32, "rms": -90.0, "t0": 0.0}
+          "bands": [0.0] * 32, "rms": -90.0, "t0": 0.0,
+          "wv": [], "wv_total": 0, "wv_at": 0.0, "wpeak": 0.2}
 
     def bg(fn, *a):
         threading.Thread(target=fn, args=a, daemon=True).start()
@@ -86,9 +87,58 @@ def main(port: int = 8765) -> None:
                         continue
                     if "bands" in f:
                         st["bands"], st["rms"] = f["bands"], f.get("rms", -90.0)
+                    if f.get("wv"):
+                        st["wv"] = (st["wv"] + f["wv"])[-400:]
+                        st["wv_total"] += len(f["wv"])
+                        st["wv_at"] = time.monotonic()
         except Exception:  # noqa: BLE001 – ohne Pegel geht es auch (nur Fortschrittsring)
             pass
         st["bands"], st["rms"] = [0.0] * 32, -90.0
+        st["wv"], st["wv_total"], st["wpeak"] = [], 0, 0.2
+
+    # ------------------------------------------------------------ Lauf-Wellenform (wie DJ-Player, wandert nach links)
+    WAVE_COLS = ((0, QColor("#2b6ef2"), 1.0), (1, QColor("#e8952c"), 0.8), (2, QColor("#f4f4f4"), 0.6))
+
+    def draw_wave(p, head: float, left: float, mid: float, room, cw: float = 1.0):
+        """Spalten von head (jetzt) nach links bis left; room(x) = halbe Höhe, die dort Platz hat."""
+        cols, total = st["wv"], st["wv_total"]
+        if not cols:
+            return
+        slide = min(4.0, (time.monotonic() - st["wv_at"]) * 100)
+        pos = total - 4 + slide
+        fresh = cols[-4:]
+        mx = max(max(c[0], c[1] * 1.4, c[2] * 2.2) for c in fresh)
+        st["wpeak"] = max(st["wpeak"] * 0.997, mx, 0.06)
+        gain = 0.95 / st["wpeak"]
+        rgb = (st["cfg"] or {}).get("viz") == "rgb"
+        p.setPen(Qt.PenStyle.NoPen)
+        n = len(cols)
+        for i in range(n - 1, -1, -1):
+            x = head - (pos - (total - n + i)) * cw
+            if x < left:
+                break
+            if x > head:
+                continue
+            c, lim = cols[i], room(x)
+            fade = min(1.0, (x - left) / max(1.0, (head - left) * 0.3))
+            lo, md, hi = min(1.0, c[0] * gain), min(1.0, c[1] * 1.4 * gain), min(1.0, c[2] * 2.2 * gain)
+            p.setOpacity(0.35 + 0.65 * fade)
+            if rgb:
+                a = max(lo, md, hi)
+                m = a or 1.0
+                p.setBrush(QColor(int(60 + 195 * lo / m), int(40 + 194 * md / m), int(60 + 195 * hi / m)))
+                y = max(0.8, a * lim)
+                p.drawRect(QRectF(x, mid - y, cw + 0.4, 2 * y))
+            else:
+                for idx, col, k in WAVE_COLS:
+                    v = (lo, md, hi)[idx]
+                    y = max(0.4, v * lim * k)
+                    p.setBrush(col)
+                    p.drawRect(QRectF(x, mid - y, cw + 0.4, 2 * y))
+        p.setOpacity(0.9)
+        p.setBrush(QColor(255, 255, 255))
+        p.drawRect(QRectF(head + 1, mid - room(head) * 1.1, 1.4, 2.2 * room(head)))
+        p.setOpacity(1.0)
 
     # ------------------------------------------------------------ Aktionen
     def scan():
@@ -303,11 +353,17 @@ def main(port: int = 8765) -> None:
                     p.setPen(QColor("#e4e6ea"))
                     lab = f"Hört zu · {max(1, math.ceil(left))} s" if left > 0 else "Wird erkannt …"
                     p.drawText(QRectF(inner.x(), inner.y() + 5, inner.width(), 16), Qt.AlignmentFlag.AlignLeft, lab)
+                    if (st["cfg"] or {}).get("viz", "bars") != "bars":
+                        wm = inner.bottom() - 15
+                        draw_wave(p, inner.right() - 4, inner.x(), wm, lambda _x: 9.0)
+                        p.setOpacity(self.fade)
                     # Spektrum (echte Pegel der Quelle)
                     n, bw = len(self.bars), inner.width() / len(self.bars)
+                    if (st["cfg"] or {}).get("viz", "bars") != "bars":
+                        n = 0
                     base_y, mh = inner.bottom() - 7, 16
                     p.setPen(Qt.PenStyle.NoPen)
-                    for i, v in enumerate(self.bars):
+                    for i, v in enumerate(self.bars if n else []):
                         h = 2 + v * mh
                         col = QColor(acc)
                         col.setAlpha(110 + int(145 * v))
@@ -374,7 +430,16 @@ def main(port: int = 8765) -> None:
                     p.drawArc(ring, -a * 16, 90 * 16)
                 p.setPen(Qt.PenStyle.NoPen)
                 p.setBrush(acc)
-                for i in range(5):
+                if (st["cfg"] or {}).get("viz", "bars") != "bars":
+                    rr = r - 7
+                    clip = QPainterPath()
+                    clip.addEllipse(ctr, rr, rr)
+                    p.save()
+                    p.setClipPath(clip)
+                    draw_wave(p, ctr.x() + rr * 0.7, ctr.x() - rr, ctr.y(),
+                              lambda x: math.sqrt(max(0.0, 1 - ((x - ctr.x()) / rr) ** 2)) * rr * 0.75)
+                    p.restore()
+                for i in range(5 if (st["cfg"] or {}).get("viz", "bars") == "bars" else 0):
                     v = max(self.bars[i * 4:(i + 1) * 4] or [0])
                     h = 5 + v * 18
                     p.drawRoundedRect(QRectF(ctr.x() - 13 + i * 6, ctr.y() - h / 2, 3.4, h), 1.7, 1.7)

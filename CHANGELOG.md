@@ -5,6 +5,8 @@ Der Updater installiert nur signierte Versionen.
 
 ## 0.7.0 – 2026-11-03
 Playlists teilen, Dienste ohne Fachwissen einrichten, Datenexporte importieren.
+- **Lauf-Wellenform** im Erkennen-Kreis und im Schwebe-Icon (wie am DJ-Player, wandert von rechts nach links):
+  „Welle 3-Band“ (Bass blau, Mitten orange, Höhen weiß) oder „Welle RGB“; umschaltbar unter Erkennen › „Anzeige im Kreis“.
 - **Schranz** ist ein eigenes Subgenre (vorher unter Hard Techno versteckt); „Schranz“ im Titel/Künstlernamen zählt.
 - **Dienste einrichten ohne Fachwissen:** Schritt-für-Schritt-Assistent für Spotify, YouTube, SoundCloud und Last.fm
   mit Kopieren-Knöpfen, Skizzen und Hilfe bei Fehlermeldungen (z. B. „redirect_uri: Not matching configuration“).

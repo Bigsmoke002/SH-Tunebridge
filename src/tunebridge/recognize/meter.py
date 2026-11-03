@@ -30,6 +30,29 @@ _bins = np.clip((_edges / (RATE / 2) * (FFT_N // 2)).astype(int), 1, FFT_N // 2)
 _window = np.hanning(FFT_N)
 
 
+# Lauf-Wellenform (wie Traktor/Pioneer): je Frame WAVE_SUB Spalten mit Bass/Mitten/Höhen (lineare Amplitude)
+WAVE_SUB = 4
+WAVE_N = 512
+_wwin = np.hanning(WAVE_N).astype(np.float32)
+_wf = np.fft.rfftfreq(WAVE_N, 1 / RATE)
+_wlo, _wmid, _whi = (_wf >= 30) & (_wf < 200), (_wf >= 200) & (_wf < 2500), _wf >= 2500
+_wnorm = float(_wwin.sum()) / 2
+
+
+def wave_cols(hist: np.ndarray, n_new: int) -> list[list[float]]:
+    """Spalten für die neuesten n_new Samples: [[bass, mitten, höhen], …] (0..~1, linear)."""
+    out = []
+    step = n_new / WAVE_SUB
+    for k in range(WAVE_SUB):
+        end = hist.size - n_new + int(round((k + 1) * step))
+        seg = hist[max(0, end - WAVE_N):end]
+        if seg.size < WAVE_N:
+            seg = np.pad(seg, (WAVE_N - seg.size, 0))
+        mag = np.abs(np.fft.rfft(seg * _wwin)) / _wnorm
+        out.append([round(min(1.5, float(np.sqrt(np.sum(mag[m] ** 2)))), 3) for m in (_wlo, _wmid, _whi)])
+    return out
+
+
 def resolve(source: str) -> str:
     return default_source(source) if source in ("desktop", "mic") else source
 
@@ -81,6 +104,7 @@ async def levels(source: str):
             hist = np.concatenate([hist[s.size:], s])
             frame = analyze(hist[-CHUNK:])
             frame["bands"] = analyze(hist)["bands"]
+            frame["wv"] = wave_cols(hist, s.size)
             yield frame
     finally:
         if proc.returncode is None:

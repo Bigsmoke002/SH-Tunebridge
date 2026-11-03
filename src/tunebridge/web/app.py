@@ -1506,7 +1506,7 @@ WINDOW_HOOKS: dict = {}
 def _comp_cfg() -> dict:
     import json
     raw = store.meta_get("companion")
-    return {"tray": False, "bubble": False, "pos": None, **(json.loads(raw) if raw else {})}
+    return {"tray": False, "bubble": False, "pos": None, "viz": "bars", **(json.loads(raw) if raw else {})}
 
 
 def companion_available() -> tuple[bool, str]:
@@ -1557,6 +1557,9 @@ def companion_get():
             "desktop": bool(WINDOW_HOOKS), "source": _prefs().get("device_desktop") or "desktop"}
 
 
+VIZ_STYLES = ("bars", "wave", "rgb")   # Anzeige beim Zuhören: Spektrum · 3-Band-Welle · RGB-Welle
+
+
 @app.post("/api/companion")
 def companion_set(patch: dict, request: Request):
     import json
@@ -1564,6 +1567,8 @@ def companion_set(patch: dict, request: Request):
     for k in ("tray", "bubble"):
         if k in patch:
             cfg[k] = bool(patch[k])
+    if patch.get("viz") in VIZ_STYLES:
+        cfg["viz"] = patch["viz"]
     if isinstance(patch.get("pos"), list) and len(patch["pos"]) == 2:
         cfg["pos"] = [int(patch["pos"][0]), int(patch["pos"][1])]
     store.meta_set("companion", json.dumps(cfg))
