@@ -21,6 +21,10 @@ Claude, OpenAI oder Gemini.
 3. Starten. SH-Tunebridge trägt sich selbst ins Startmenü ein und aktualisiert sich künftig selbst
    (nur signierte Versionen, vorher wird gesichert).
 
+Beim Update lädt die App die neue Datei (`SH-Tunebridge-<neue version>-x86_64.AppImage`) in denselben Ordner.
+Die alte Datei wird zu einem Verweis auf die neue – eigene Starter, Panel-Pins und Autostart-Einträge mit dem
+alten Namen funktionieren also weiter.
+
 Läuft auf aktuellen Linux-Desktops (x86_64, ab etwa Ubuntu 22.04 / Debian 12 / Fedora 38).
 Falls das AppImage nicht startet, fehlt meist FUSE: Paket `fuse3` (bzw. `libfuse2`) installieren
 oder mit `--appimage-extract-and-run` starten.
@@ -42,6 +46,8 @@ geht die Erkennung über das Mikrofon. Beim ersten Mal fragt macOS nach der Mikr
 Unterschiede zu Linux: einzelne Anwendungen lassen sich nur unter Linux getrennt aufnehmen, und „Was spielt
 gerade?“ (Player-Erkennung) gibt es vorerst nur unter Linux. Updates: Die App prüft auf neue **signierte**
 Versionen und legt sie geprüft in deinen Download-Ordner – installieren bzw. entpacken tust du sie selbst.
+**Windows mit Version 0.6.0:** Diese Version startet nicht (Fehler im Fenstersymbol) und kann sich deshalb nicht
+selbst aktualisieren – bitte 0.6.3 oder neuer einmal von Hand laden.
 Gebaut und getestet werden diese Versionen auf GitHubs eigenen Windows- und Mac-Rechnern.
 
 ## Datenschutz
@@ -145,12 +151,21 @@ ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch 
 - Repo-Zugang von diesem Rechner: Host-Alias `github-sh-tunebridge` (Deploy-Key `~/.ssh/sh_tunebridge_github_deploy`).
 - Releases werden **signiert** (`~/.ssh/sh_tunebridge_signing`); der öffentliche Schlüssel steht in
   `src/tunebridge/release_signers` und wird mit ausgeliefert.
-- Neue Version veröffentlichen: `./scripts/release.sh 0.2.0 "Kurzbeschreibung" "Punkt 1" "Punkt 2"`
-  (testet, erhöht Version, signierter Tag, Push).
-- Die App prüft alle 6 h (und unter *Einstellungen → Jetzt prüfen*) auf neue **signierte** Tags,
-  zeigt die Änderungen, sichert die DB und installiert erst nach Klick. Unsignierte oder fremd
-  signierte Tags werden ignoriert. Der Signier-Schlüssel darf nie ins Repo und nie verloren gehen
-  (Kopie mit ins Backup).
+- Neue Version veröffentlichen – immer in dieser Reihenfolge:
+  1. `uv run pytest -q`, committen, pushen, dann `gh workflow run build --ref main` – Tests und Bau auf
+     Linux, Windows und macOS inkl. Rauchtest (Server **und** App-Fenster wie per Doppelklick) müssen grün sein.
+  2. `./scripts/release.sh X.Y.Z "Kurzbeschreibung" "Punkt 1" …` – testet, erhöht die Version, signierter Tag,
+     Push, baut das AppImage (Docker, ubuntu:22.04) und lädt es mit signiertem Manifest hoch.
+  3. Der Tag startet die CI „build“ (Windows-zip, macOS-dmg). Danach `./scripts/publish-platforms.sh X.Y.Z`
+     (prüft, signiert die Manifeste und lädt hoch). macOS-Runner manchmal überlastet → `gh run rerun`.
+  4. Änderungen in `CHANGELOG.md` eintragen.
+- Die App prüft beim Start, danach **stündlich** (und unter *Einstellungen → Jetzt prüfen*) auf neue
+  **signierte** Versionen; nach einem Fehler (offline) nach 15 Minuten erneut. Sie zeigt die Änderungen, sichert
+  die DB und installiert erst nach Klick. Unsignierte oder fremd signierte Versionen werden ignoriert; ein
+  Release, dessen Dateien noch hochgeladen werden, wird einfach später erkannt. Der Signier-Schlüssel darf nie
+  ins Repo und nie verloren gehen (Kopie mit ins Backup).
+- Gemeinschafts-Genre-Datenbank: wird auf dem Rechner des Herausgebers gebaut und mit demselben Schlüssel
+  signiert (Namespace `sh-tunebridge-genredb`); die App lädt sie höchstens einmal am Tag und nur mit Einwilligung.
 
 ## Song erkennen („Shazam“)
 - Erkennung parallel über **Shazam** (kein Key), **AudD**, **ACRCloud** (Keys optional);

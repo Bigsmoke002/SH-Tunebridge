@@ -17,3 +17,8 @@ Höchstens Grauzone, nie klar rechtswidrig – niemand darf zu Schaden kommen. S
 ## Technik
 - Python 3.14, uv, FastAPI + pywebview (Qt), Vanilla-JS ohne Build-Schritt.
 - Tests: `uv run pytest -q`. Releases nur signiert: `./scripts/release.sh X.Y.Z "Titel" "Punkt" …`.
+- Ablauf Release, Windows-Test und Gemeinschafts-Genre-Datenbank: README.md › „Updates & Releases“; Änderungen in CHANGELOG.md.
+- Tests nie gegen die echte Datenbank (`data/`): `tests/conftest.py` isoliert DATA/DB/Outbox/Schlüssel.
+- Fenstersymbol je System: Linux `icon.svg`, Windows nur `icon.ico` (sonst Absturz), macOS aus dem Bundle.
+- AppImage-Update: alte Datei nie löschen, sondern durch Verweis auf die neue ersetzen (`update._keep_old_path`).
+- Der Code des Annahme-Servers ist privat – keine Server-Interna und keine lokalen Pfade in dieses öffentliche Repo.
