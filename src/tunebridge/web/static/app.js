@@ -72,6 +72,7 @@ const ICONS = {
   chat: P("M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z", "M8.5 12h.01", "M12 12h.01", "M15.5 12h.01"),
   shuffle: P("m18 14 4 4-4 4", "m18 2 4 4-4 4", "M2 18h1.4a4 4 0 0 0 3.3-1.7l6.6-9.6A4 4 0 0 1 16.6 5H22", "M2 6h1.4a4 4 0 0 1 3.1 1.5", "M22 19h-5.4a4 4 0 0 1-3.1-1.5"),
   repeat: P("m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"),
+  tag: P("M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9Z", "M7.5 7.5h.01"),
 };
 const icon = (n, cls = "") => `<i data-icon="${n}" class="${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n] || ""}</svg></i>`;
 function hydrateIcons(root = document) {
@@ -460,6 +461,8 @@ function detailHtml(r) {
     x.genre_source === "llm" ? `<span class="chip chip--warn">Subgenre vom LLM</span>` : "",
     x.genre_source === "llm_genre" ? `<span class="chip chip--warn">Genre vom LLM geschätzt</span>` : "",
     t.genre === "Electronic" ? `<span class="chip chip--warn">nur grob bekannt</span>` : "",
+    x.genre_source === "eigene Einordnung" ? `<span class="chip chip--own" title="Von dir festgelegt – gilt vor allem anderen">${icon("check")}deine Einordnung</span>` : "",
+    x.genre_source === "Gemeinschafts-Datenbank" ? `<span class="chip chip--own" title="Aus der Gemeinschafts-Datenbank (signiert, ${x.genredb?.votes || "mehrere"} Stimmen)">${icon("stack")}Gemeinschaft</span>` : "",
     aiChip(x.ai),
     x.version ? `<span class="chip chip--version" title="${x.speed ? "Erst nach Tempo-Korrektur erkannt – angezeigt wird das Original" : "Version laut Titel – Genre & Empfehlungen vom Original"}">${icon("wave")}${esc(x.version)}</span>` : ""].join("");
   const links = x.links?.shazam ? `<a class="btn btn--sm btn--ghost" href="${esc(x.links.shazam)}" target="_blank" rel="noopener">${icon("external")}Shazam</a>` : "";
@@ -485,20 +488,21 @@ function detailHtml(r) {
         ${links}
         ${r.id != null && (x.cached || x.local) ? `<button class="btn btn--sm btn--ghost" data-role="refresh" title="Genre, Cover, Hörprobe und Links frisch online nachschlagen">${icon("repeat")}Infos neu laden</button>` : ""}
         <button class="btn btn--sm btn--ghost" data-role="aianalyze" title="Song von der gewählten KI einschätzen lassen">${icon("sparkle")}KI-Analyse</button>
+        ${r.id != null || r.key ? `<button class="btn btn--sm btn--ghost" data-role="setgenre" title="Genre selbst festlegen – gilt sofort für diesen Song und verbessert die Erkennung">${icon("pencil")}Genre festlegen</button>` : ""}
         ${x.local && location.hash.startsWith("#/listen") ? `<button class="btn btn--sm btn--ghost" data-role="recheck" title="Nochmal aufnehmen und bei Shazam prüfen">${icon("wave")}Online prüfen</button>` : ""}
       </div>
       ${x.alternatives?.length ? `<div class="alt-note">Andere Dienste meinten: ${x.alternatives.map(esc).join("; ")}</div>` : ""}
     </div>
   </div>
-  <div class="det-grid">
+  <div class="det-stack">
     <section class="det-card">
       <div class="det-h">${icon("external")}<b>Anhören & öffnen</b><span class="det-legend"><span class="lg lg--d"></span>direkt <span class="lg"></span>Suche</span></div>
       <div class="open-grid" data-role="links">${PLATFORM_IDS.map(() => `<span class="otile otile--sk"></span>`).join("")}</div>
     </section>
-    <section class="det-card">
-      <div class="det-h">${icon("download")}<b>Kaufen</b><span class="det-legend">beste Qualität zuerst</span></div>
+    <details class="det-card det-fold" ${store.get("buyOpen", false) ? "open" : ""}>
+      <summary class="det-h">${icon("download")}<b>Kaufen</b><span class="det-legend">beste Qualität zuerst</span><i class="det-chev">${icon("chevron")}</i></summary>
       <div data-role="buy">${skelBuy()}</div>
-    </section>
+    </details>
   </div>
   <section class="det-card det-player hidden" data-role="embeds">
     <div class="det-h">${icon("play")}<b>Offizieller Player</b><span class="det-legend">lädt erst nach deinem Klick · Hörprobe oben bleibt ohne Drittanbieter</span></div>
@@ -680,6 +684,8 @@ function linkName(k) {
 
 function bindDetail(root, r, onChange) {
   loadLinks(root, r);
+  const fold = $(".det-fold", root);
+  if (fold) fold.ontoggle = () => store.set("buyOpen", fold.open);   // aufgeklappt lassen, wenn man es so mag
   ArtistMore.load(root, r);
   const ident = r.id != null ? { id: r.id } : { key: r.key };
   const update = async (path, playlist, msg) => {
@@ -714,6 +720,13 @@ function bindDetail(root, r, onChange) {
     const mark = b.dataset.aimark || null;
     try { const st = await api("/api/ai-mark", { method: "POST", body: { ...ident, mark } }); onChange({ ...r, extra: { ...r.extra, ai: st } }); toast(mark ? "Markierung gespeichert" : "Markierung entfernt"); }
     catch (e) { toast(e.message, "err"); }
+  });
+  const sg = $("[data-role=setgenre]", root);
+  if (sg) sg.onclick = () => GenreDB.pick(r.track.genre, r.track.subgenre, `${r.track.artists.join(", ")} – ${r.track.title}`, async (g, sub) => {
+    const v = await api("/api/genredb/vote", { method: "POST", body: { id: r.id ?? null, key: r.id == null ? r.key : null, genre: g, subgenre: sub } });
+    toast(`Gespeichert: ${v.subgenre || v.genre}`);
+    onChange({ ...r, track: { ...r.track, genre: v.genre, subgenre: v.subgenre, niche: v.genre === r.track.genre ? r.track.niche : null },
+      extra: { ...r.extra, genre_source: "eigene Einordnung" } });
   });
   const ai = $("[data-role=aianalyze]", root);
   if (ai) ai.onclick = () => AI.analyzeTrack(r.id != null ? { id: r.id } : { track: { artist: r.track.artists.join(", "), title: r.track.title, album: r.track.album, tags: Object.keys(r.track.tags || {}), genre: r.track.genre, subgenre: r.track.subgenre } }, ai);
@@ -974,7 +987,6 @@ Views.listen = async (main, _, params) => {
         </div>
       </div>
       <div class="listen-main">
-        <div class="page-head"><div><h1>Erkennen</h1><p>Spiel Musik ab oder halt das Mikro hin – SH-Tunebridge sagt dir, was läuft.</p></div></div>
         <div id="listenResult"></div>
       </div>
     </div></div>`;
@@ -1021,7 +1033,12 @@ function renderListenState() {
   if (L.busy) st.innerHTML = `<strong>${L.phase === "rec" ? "Höre zu …" : "Erkenne …"}</strong><span>${
     L.phase === "rec3" ? "prüfe auch Slowed/Sped-up-Version (max. 25 s)" : L.auto && L.running ? "Dauer-Modus aktiv – Klick stoppt" : "einen Moment"}</span>`;
   else if (L.auto && L.running) st.innerHTML = `<strong>Dauer-Modus aktiv</strong><span>${esc(L.msg ? L.msg[0] + (L.msg[1] ? " · " + L.msg[1] : "") : "")} · Klick stoppt</span>`;
-  else if (L.msg) st.innerHTML = `<strong>${esc(L.msg[0])}</strong><span>${esc(L.msg[1] || "")}</span>`;
+  else if (L.msg) {
+    st.innerHTML = `<strong>${esc(L.msg[0])}</strong><span>${esc(L.msg[1] || "")}</span>${L.tempoOffer ? `<button class="btn btn--sm" id="tempoBtn" style="margin-top:10px;align-self:center"
+      title="Nimmt neu auf und fragt Shazam zusätzlich mit 2–3 umgerechneten Tempi – kostet mehr Anfragen">Als Slowed/Sped-up suchen</button>` : ""}`;
+    const tb = $("#tempoBtn", st);
+    if (tb) tb.onclick = () => listenOnce({ tempo: true });
+  }
   else st.innerHTML = `<strong>Bereit</strong><span>${L.auto ? "Klicken startet den Dauer-Modus" : "Zum Erkennen klicken"}</span>`;
 }
 
@@ -1140,7 +1157,7 @@ async function listenOnce(opts = {}) {
     L.msg = ["Shazam-Limit erreicht", `Nichts aufgenommen – wieder frei in ${Limits.wait("shazam")} s`]; renderListenState();
     return;
   }
-  L.busy = true; L.phase = "rec"; L.started = Date.now(); L.msg = null;
+  L.busy = true; L.phase = "rec"; L.started = Date.now(); L.msg = null; L.tempoOffer = false;
   let last = null;
   renderListenState(); ringProgress();
   const micMeter = L.mode === "mic";
@@ -1148,8 +1165,9 @@ async function listenOnce(opts = {}) {
   const t = setTimeout(() => { L.phase = "rec2"; renderListenState(); }, L.seconds * 1000 + 1500);
   const t2 = setTimeout(() => { L.phase = "rec3"; renderListenState(); }, L.seconds * 1000 + 6500);
   try {
-    const r = await api("/api/listen", { method: "POST", body: { mode: L.mode, source: L.source, seconds: L.seconds, skip_key: L.auto ? L.lastKey : null, force: !!opts.force, auto: !!L.auto } });
+    const r = await api("/api/listen", { method: "POST", body: { mode: L.mode, source: L.source, seconds: L.seconds, skip_key: L.auto ? L.lastKey : null, force: !!opts.force, auto: !!L.auto, tempo: !!opts.tempo } });
     last = r;
+    L.tempoOffer = !L.auto && !r.found && !!r.tempo_offer;
     if (!r.found && r.silent) L.msg = ["Kein Ton angekommen", `Pegel ${Math.round(r.level_db)} dB – anderes Gerät wählen oder „Gerät mit Signal finden“`];
     else if (r.limited || (!r.found && /Limit|antwortet nicht/.test(r.errors?.shazam || ""))) {
       L.msg = ["Shazam-Limit erreicht", (r.errors?.shazam || "").replace(/^\w+: /, "")];
@@ -1743,6 +1761,160 @@ Views.inbox = async (main) => {
   Player.sync();
   if (d.running) setTimeout(() => location.hash.startsWith("#/inbox") && route(), 3000);
 };
+
+/* ---------- Genre-Datenbank: eigene Einordnungen (wirken sofort) + Gemeinschafts-Datenbank (mit Einwilligung) */
+const GDB_SRC = { playlist: "Playlist-Name", app: "App", ki: "KI", korrektur: "von dir geändert" };
+const GDB_STATUS = { ok: ["passt", "ok"], pruefen: ["bitte prüfen", "warn"], offen: ["unbekannt", ""], eingeordnet: ["eingeordnet", "own"] };
+const GenreDB = {
+  tax: null, job: null, filter: "pruefen",
+  async taxonomy() { if (!this.tax) this.tax = (await api("/api/genredb")).taxonomy; return this.tax; },
+  genreSel(g, attrs = "") {
+    return `<select class="select select--sm" data-g ${attrs}><option value="">– Genre –</option>${Object.keys(this.tax).map(x => `<option ${x === g ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+  },
+  subSel(g, sub, attrs = "") {
+    return `<select class="select select--sm" data-s ${attrs}><option value="">– kein Subgenre –</option>${(this.tax[g] || []).map(x => `<option ${x === sub ? "selected" : ""}>${esc(x)}</option>`).join("")}</select>`;
+  },
+  async pick(g, sub, label, save) {
+    await this.taxonomy();
+    modal({ title: "Genre festlegen", text: label,
+      body: `<div class="gdb-pick">${this.genreSel(g)}${this.subSel(g, sub)}</div>
+        <div class="hint" style="margin-top:10px">Gilt sofort für diesen Song – auch beim nächsten Erkennen – und geht allem anderen vor.
+        Wenn du „Zur Gemeinschafts-Datenbank beitragen“ erlaubt hast, fließt es anonym mit ein.</div>`,
+      confirm: "Speichern",
+      onConfirm: async box => {
+        const gv = $("[data-g]", box).value; if (!gv) { toast("Bitte ein Genre wählen", "err"); throw { silent: true }; }
+        await save(gv, $("[data-s]", box).value || null);
+      } });
+    const box = $("#modal");
+    $("[data-g]", box).onchange = e => { $("[data-s]", box).outerHTML = this.subSel(e.target.value, null); };
+  },
+};
+
+Views.genredb = async (main) => {
+  main.innerHTML = `<div class="page view-enter">${skeletonRows(4)}</div>`;
+  const [d, svcs] = await Promise.all([api("/api/genredb"), api("/api/services").catch(() => [])]);
+  GenreDB.tax = d.taxonomy;
+  const srcs = [["local", "SH-Tunebridge (lokal)"], ...svcs.filter(s => s.ready && s.id !== "local").map(s => [s.id, s.name])];
+  const c = d.counts, cm = d.community || {};
+  main.innerHTML = `<div class="page view-enter">
+    <div class="page-head"><div><h1>Genre-Datenbank</h1><p>Lass deine Playlists einordnen und bestätige oder korrigiere die Vorschläge. Deine Einordnungen gelten sofort für die Erkennung –
+      und fließen auf Wunsch anonym in die Gemeinschafts-Datenbank ein, von der alle profitieren.</p></div></div>
+    <div class="gdb-stats">
+      <div class="card gdb-stat"><b>${c.total}</b><span>eigene Einordnungen${c.total ? ` · ${c.sent} beigetragen` : ""}</span></div>
+      <div class="card gdb-stat"><b>${cm.songs ?? "–"}</b><span>${cm.songs != null ? `Songs in der Gemeinschafts-Datenbank · Stand ${esc(cm.created || "?")}` : d.consent.genredb ? "Gemeinschafts-Datenbank noch nicht geladen" : "Gemeinschafts-Datenbank nicht aktiviert"}</span></div>
+      <div class="card gdb-stat gdb-consent">
+        <div>${icon(d.consent.genres ? "check" : "x")} Beitragen: <b>${d.consent.genres ? "an" : "aus"}</b></div>
+        <div>${icon(d.consent.genredb ? "check" : "x")} Gemeinschafts-DB nutzen: <b>${d.consent.genredb ? "an" : "aus"}</b></div>
+        <div style="display:flex;gap:6px;margin-top:6px"><button class="btn btn--sm btn--ghost" id="gdbConsent">Einstellen</button>
+          ${d.consent.genredb ? `<button class="btn btn--sm btn--ghost" id="gdbUpd">${icon("repeat")}Jetzt laden</button>` : ""}</div>
+      </div>
+    </div>
+    <div class="section-title">Playlist analysieren</div>
+    <div class="card gdb-form">
+      <div class="field"><label>Quelle</label><select class="select" id="gdbSrc">${srcs.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join("")}</select></div>
+      <div class="field grow"><label>Playlist</label><select class="select" id="gdbPl"><option>Lade …</option></select></div>
+      <label class="switch-row" title="${d.ai_ready ? "Die KI sieht nur Künstler, Titel, Album und Tempo – keine Tags oder Genres der Dienste" : "Erst unter Einstellungen › KI eine KI einrichten"}"><input type="checkbox" id="gdbAi" ${d.ai_ready ? "" : "disabled"}><span>KI mitentscheiden lassen</span></label>
+      <button class="btn btn--primary" id="gdbGo">${icon("sparkle")}Analysieren</button>
+    </div>
+    <div class="hint gdb-note">${icon("info")}<span>Ausgewertet wird lokal: das Ergebnis der App, der <b>Name der Playlist</b> (z. B. „Hardtekk 2024“ → Hardtekk – der Name selbst verlässt nie deinen Rechner)
+      und auf Wunsch eine KI, die <b>nur Künstler, Titel, Album und Tempo</b> sieht. Gespeichert wird erst, was du übernimmst.</span></div>
+    <div id="gdbJob"></div>
+    <div class="section-title">Deine Einordnungen <span class="cell-sub">${c.total}</span></div>
+    <div id="gdbVotes">${d.votes.length ? `<div class="card gdb-votes">${d.votes.map(v => `<div class="gdb-vote" data-k="${esc(v.key)}">
+        <div style="min-width:0"><div class="li-title">${esc(v.title)}</div><div class="cell-sub">${esc(v.artist)}</div></div>
+        <div>${genreChip(v.genre, v.subgenre)}</div><span class="cell-sub">${esc(GDB_SRC[v.source] || v.source)}${v.sent ? " · beigetragen" : ""}</span>
+        <button class="icon-btn" data-del="${esc(v.key)}" title="Einordnung löschen">${icon("x")}</button></div>`).join("")}
+      </div><div style="display:flex;justify-content:flex-end;margin-top:8px"><button class="btn btn--sm btn--ghost" id="gdbDelAll">Alle eigenen Einordnungen löschen</button></div>`
+      : `<div class="empty">${icon("stack")}<h3>Noch keine</h3><p>Analysiere eine Playlist oder lege im Song-Detail über „Genre festlegen“ ein Genre fest.</p></div>`}</div>
+  </div>`;
+  hydrateIcons(main);
+  const loadPl = async () => {
+    const sid = $("#gdbSrc").value, sel = $("#gdbPl");
+    sel.innerHTML = `<option>Lade …</option>`;
+    try {
+      const list = sid === "local" ? (await api("/api/playlists")).filter(p => p.origin === "lokal").map(p => ({ id: p.name, name: p.name, count: p.count }))
+        : await api(`/api/services/${sid}/playlists`);
+      sel.innerHTML = list.length ? list.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.count != null ? ` (${p.count})` : ""}</option>`).join("") : `<option value="">– keine Playlists –</option>`;
+    } catch (e) { sel.innerHTML = `<option value="">${esc(e.message)}</option>`; }
+  };
+  $("#gdbSrc").onchange = loadPl; loadPl();
+  $("#gdbGo").onclick = async () => {
+    const pid = $("#gdbPl").value; if (!pid) return toast("Bitte eine Playlist wählen", "err");
+    try {
+      const r = await api("/api/genredb/analyze", { method: "POST", body: { sid: $("#gdbSrc").value, pid, ai: $("#gdbAi").checked } });
+      GenreDB.job = r.job; GenreDB.filter = "pruefen"; pollGdb();
+    } catch (e) { toast(e.message, "err"); }
+  };
+  $("#gdbConsent").onclick = () => Consent.dialog(false);
+  const upd = $("#gdbUpd"); if (upd) upd.onclick = async () => {
+    try { const r = await api("/api/genredb/update", { method: "POST" }); toast(r.updated ? `Geladen: ${r.songs} Songs` : r.none ? "Noch keine Gemeinschafts-Datenbank veröffentlicht" : "Schon aktuell"); route(); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  $$("[data-del]", main).forEach(b => b.onclick = async () => { await api("/api/genredb/votes/delete", { method: "POST", body: { keys: [b.dataset.del] } }); b.closest(".gdb-vote").remove(); });
+  const da = $("#gdbDelAll"); if (da) da.onclick = () => modal({ title: "Alle eigenen Einordnungen löschen?", text: "Die Erkennung nutzt danach wieder nur ihre automatischen Ergebnisse. Bereits Beigetragenes löschst du unter Einstellungen › Nicht erkannt („Alles von mir dort löschen“).",
+    confirm: "Löschen", danger: true, onConfirm: async () => { await api("/api/genredb/votes/delete", { method: "POST", body: { all: true } }); route(); } });
+  if (GenreDB.job) pollGdb();
+};
+
+async function pollGdb() {
+  const box = $("#gdbJob"); if (!box || !GenreDB.job) return;
+  const j = await api(`/api/genredb/job/${GenreDB.job}`).catch(() => null);
+  if (!j) { GenreDB.job = null; box.innerHTML = ""; return; }
+  const running = !["done", "error", "cancelled"].includes(j.state);
+  if (running) {
+    const pct = j.total ? Math.round(j.done / j.total * 100) : 0;
+    box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>${esc(j.name || "Playlist")}</b><button class="btn btn--sm btn--ghost" id="gdbCancel">Abbrechen</button></div>
+      <div class="llm-bar"><div style="width:${j.state === "ai" ? 100 : pct}%"></div></div>
+      <div class="llm-job">${j.state === "loading" ? "Lade Songs …" : j.state === "ai" ? "KI schätzt ein (nur Künstler/Titel/Album/Tempo) …" : `Analysiere ${j.done} / ${j.total} …`}</div></div>`;
+    $("#gdbCancel").onclick = () => api(`/api/genredb/job/${j.id}/cancel`, { method: "POST" });
+    return setTimeout(pollGdb, 800);
+  }
+  if (j.state !== "done") { box.innerHTML = `<div class="notice">${icon("info")}<div>${j.state === "error" ? esc(j.error) : "Abgebrochen"}</div></div>`; GenreDB.job = null; return; }
+  renderGdb(box, j);
+}
+
+function renderGdb(box, j) {
+  const cnt = s => j.items.filter(i => i.status === s).length;
+  const f = GenreDB.filter;
+  const rows = j.items.filter(i => f === "alle" || i.status === f);
+  const [pg, ps] = j.playlist_genre || [];
+  const cell = (g, s) => g ? genreChip(g, s) : `<span class="cell-sub">–</span>`;
+  box.innerHTML = `<div class="card gdb-res">
+    <div class="t-job-head"><b>${esc(j.name)}</b><span class="cell-sub">${j.items.length} Songs${j.cut ? ` (erste ${j.items.length})` : ""} · Playlist-Name ${pg ? `→ ${esc(ps || pg)}` : "nennt kein eindeutiges Genre"}${j.ai_error ? ` · KI: ${esc(j.ai_error)}` : ""}</span>
+      <button class="btn btn--sm btn--ghost" id="gdbClose">${icon("x")}</button></div>
+    <div class="filter-chips" id="gdbF">${[["pruefen", "Bitte prüfen"], ["ok", "Passt"], ["offen", "Unbekannt"], ["eingeordnet", "Schon eingeordnet"], ["alle", "Alle"]]
+      .map(([k, n]) => `<button data-f="${k}" class="${f === k ? "on" : ""}">${n} <em>${k === "alle" ? j.items.length : cnt(k)}</em></button>`).join("")}</div>
+    <div class="gdb-table">
+      <div class="gdb-row head"><div>Song</div><div>App</div><div>Playlist</div><div>KI</div><div>Ergebnis</div><div></div></div>
+      ${rows.map(it => `<div class="gdb-row" data-i="${it.i}">
+        <div class="gdb-song">${it.cover ? `<img class="li-cover" src="${esc(it.cover)}" alt="" loading="lazy">` : `<div class="li-cover"></div>`}
+          <div style="min-width:0"><div class="li-title">${esc(it.title)}</div><div class="cell-sub">${esc((it.artists || []).join(", "))}</div></div></div>
+        <div>${cell(it.app_genre, it.app_subgenre)}</div><div>${cell(it.pl_genre, it.pl_subgenre)}</div><div>${cell(it.ki?.genre, it.ki?.subgenre)}</div>
+        <div class="gdb-pick">${GenreDB.genreSel(it.genre)}${GenreDB.subSel(it.genre, it.subgenre)}</div>
+        <div class="gdb-act"><span class="acc-badge ${GDB_STATUS[it.status][1]}">${GDB_STATUS[it.status][0]}</span>
+          ${it.status !== "eingeordnet" ? `<button class="icon-btn" data-ok="${it.i}" title="Übernehmen">${icon("check")}</button>` : ""}</div>
+      </div>`).join("") || `<div class="cell-sub" style="padding:14px">Keine Songs in dieser Ansicht.</div>`}
+    </div>
+    <div class="gdb-foot"><span class="cell-sub grow">Übernommen wird, was in „Ergebnis“ steht. Änderst du etwas, zählt es als deine Korrektur.</span>
+      <button class="btn btn--sm" id="gdbTakeOk">${icon("check")}Alle „Passt“ übernehmen (${cnt("ok")})</button>
+      <button class="btn btn--sm btn--primary" id="gdbTakeView">Alle in dieser Ansicht übernehmen</button></div>
+  </div>`;
+  hydrateIcons(box);
+  const val = row => ({ i: +row.dataset.i, genre: $("[data-g]", row).value, subgenre: $("[data-s]", row).value || null });
+  const take = async list => {
+    list = list.filter(x => x.genre);
+    if (!list.length) return toast("Nichts zum Übernehmen – erst ein Genre wählen", "err");
+    try { const r = await api(`/api/genredb/job/${j.id}/accept`, { method: "POST", body: { rows: list } }); toast(`${r.saved} Einordnungen gespeichert`); }
+    catch (e) { return toast(e.message, "err"); }
+    const nj = await api(`/api/genredb/job/${j.id}`); renderGdb(box, nj);
+  };
+  $$("[data-g]", box).forEach(sel => sel.onchange = () => { $("[data-s]", sel.parentElement).outerHTML = GenreDB.subSel(sel.value, null); });
+  $$("[data-ok]", box).forEach(b => b.onclick = () => take([val(b.closest(".gdb-row"))]));
+  $("#gdbTakeOk").onclick = () => take(j.items.filter(i => i.status === "ok").map(i => ({ i: i.i, genre: i.genre, subgenre: i.subgenre })));
+  $("#gdbTakeView").onclick = () => take($$(".gdb-row[data-i]", box).filter(r => !$(".acc-badge.own", r)).map(val));
+  $$("#gdbF button", box).forEach(b => b.onclick = () => { GenreDB.filter = b.dataset.f; renderGdb(box, j); });
+  $("#gdbClose").onclick = () => { GenreDB.job = null; box.innerHTML = ""; route(); };
+}
 
 function trackLine(t, extra = "") {
   const g = t.genre ? genreChip(t.genre, t.subgenre) : "";
@@ -2835,12 +3007,26 @@ const Consent = {
       "Bei einem Programmfehler: Datum, Bereich (z. B. „erkennen“), Fehlermeldung, Fehlertyp und Programmstelle (Datei:Zeile), App-Version. " +
       "Benutzername, Rechnername, Home-Pfad und Schlüssel werden vorher geschwärzt; gleiche Fehler nur einmal, höchstens 50 in der Warteschlange. " +
       "Zweck: Fehler finden und beheben. Das ausführliche Debug-Protokoll bleibt lokal."],
+    ["genres", "Zur Gemeinschafts-Genre-Datenbank beitragen",
+      "Je Song, den du eingeordnet hast (Playlist-Analyse oder „Genre festlegen“): Datum, Künstler, Titel, ISRC, Genre, Subgenre und Herkunft " +
+      "(Playlist-Name / App / KI / von dir geändert). Nie gesendet: Playlist-Namen, ganze Playlists, Konten. Zweck: eine gemeinsame Genre-Datenbank, " +
+      "die erst übernimmt, was mehrere Installationen unabhängig voneinander melden. Nur Einordnungen ab jetzt."],
+    ["genredb", "Gemeinschafts-Genre-Datenbank laden",
+      "Lädt einmal am Tag die signierte Datenbank (nur Song → Genre, keine Nutzerdaten) von diesem Server und nutzt sie bei der Erkennung. " +
+      "Gesendet wird dabei nichts außer der Anfrage selbst; die Signatur wird vor der Nutzung geprüft."],
     ["songs", "Erkannte Songs für die Genre-Analyse senden",
       "Je erkanntem Song: Datum, Künstler, Titel, ISRC, ermitteltes Genre/Subgenre/Nische, Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor, KI-Musik-Hinweis. " +
       "Kein Hörverlauf mit Uhrzeit, keine Playlists, kein Konto. Zweck: Genre-Zuordnung und Song-Analyse für alle verbessern."],
   ],
   async dialog(first = false) {
     const c = await api("/api/consent");
+    const comp = first ? await api("/api/companion").catch(() => null) : null;
+    const compRow = (id, lbl, hint) => `<div class="cons-row">
+        <label class="switch"><input type="checkbox" data-comp="${id}" checked><span class="track"></span></label>
+        <div><div class="lbl">${esc(lbl)}</div><div class="hint">${esc(hint)}</div></div></div>`;
+    const compSec = comp?.available ? `<div class="cons-h">3 · Bedienung am Desktop <span>(jederzeit unter Einstellungen → Darstellung änderbar)</span></div>
+      ${compRow("bubble", "Schwebe-Icon anzeigen", "Kleines Icon, das immer im Vordergrund bleibt: ein Klick erkennt die Musik, die gerade am Rechner läuft. Lässt sich frei verschieben.")}
+      ${compRow("tray", "Symbol in der Statusleiste (Tray)", "Symbol neben der Uhr: Erkennen, App öffnen, Beenden. Solange es an ist, legt das Fenster-✕ die App dorthin, statt sie zu beenden.")}` : "";
     const sw = (group, [id, lbl, hint]) => `<div class="cons-row">
         <label class="switch"><input type="checkbox" data-c="${group}.${id}" ${c[group][id] ? "checked" : ""}><span class="track"></span></label>
         <div><div class="lbl">${esc(lbl)}</div><div class="hint">${esc(hint)}</div></div></div>`;
@@ -2862,7 +3048,8 @@ const Consent = {
         <div class="cons-srv ${c.server.domain ? "" : "off"}">${this.SERVER.map(r => sw("server", r)).join("")}
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button type="button" class="btn btn--sm btn--ghost" data-cons-none>Alle abwählen</button><button type="button" class="btn btn--sm" data-cons-all>Alle erlauben</button></div></div>
       </div>
-      <div class="cons-h">3 · Datenschutzerklärung</div>
+      ${compSec}
+      <div class="cons-h">${compSec ? 4 : 3} · Datenschutzerklärung</div>
       <label class="cons-check"><input type="checkbox" data-c="privacy" ${c.privacy_at ? "checked" : ""}>
         <span>Ich habe die <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden.
         Kontakt für Datenschutzanfragen: <a href="mailto:info@smokes-hub.de">info@smokes-hub.de</a> · Discord: Bigsmoke002.de</span></label>
@@ -2872,12 +3059,14 @@ const Consent = {
       text: first ? "Bevor es losgeht: einmal kurz festlegen, welche Daten erhoben werden dürfen." : "",
       body, wide: true, sticky: first, cancel: first ? null : "Abbrechen", confirm: "Speichern",
       onConfirm: async box => {
-        const v = k => $(`[data-c="${k}"]`, box).checked;
+        const v = k => $(`[data-c="${k}"]`, box).checked, v2 = k => $(`[data-comp="${k}"]`, box).checked;
         if (!v("privacy")) { toast("Bitte die Datenschutzerklärung bestätigen", "err"); throw { silent: true }; }
         const body = { privacy: true, local: {}, server: { domain: v("server.domain") } };
         this.LOCAL.forEach(([id]) => body.local[id] = v(`local.${id}`));
         this.SERVER.forEach(([id]) => body.server[id] = body.server.domain && v(`server.${id}`));
         await api("/api/consent", { method: "POST", body });
+        if (compSec) await api("/api/companion", { method: "POST", body: { bubble: v2("bubble"), tray: v2("tray") } })
+          .catch(e => toast(e.message, "err"));
         toast("Gespeichert");
         const pb = $("#privacyBox"); if (pb) Privacy.render(pb);
       },
@@ -2911,6 +3100,8 @@ const Privacy = {
       ["Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud", "Abruf deiner Playlists und Likes, bei Spotify/TIDAL auf Wunsch neue Playlists anlegen", "unter „Dienste“ und beim automatischen Abgleich (nur verbundene Dienste)"],
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
+      ["Genre-Datenbank", "deine Einordnungen bleiben lokal; Playlist-Namen werden nur lokal ausgewertet", c.server.genres ? "Beiträge: mit deiner Einwilligung" : "Beiträge: aus"],
+      [`${c.domain} (Gemeinschafts-Genre-Datenbank)`, "nur die Anfrage – Datei ist signiert, enthält nur Song → Genre", c.server.genredb ? "einmal am Tag" : "aus"],
       ["Offizielle Player (YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer)", "IP-Adresse, Geräteinfos, ggf. Cookies des Anbieters", "erst nach deinem Klick auf „Player laden“"],
       ["Deezer / Apple (Cover, Hörproben)", "deine IP-Adresse beim Laden", "beim Anzeigen/Abspielen"],
       ["TIDAL", "deine Playlists/Songs beim Übertragen", "nur wenn verbunden"],

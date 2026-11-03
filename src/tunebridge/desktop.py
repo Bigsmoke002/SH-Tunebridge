@@ -45,6 +45,9 @@ def run() -> None:
                 break
             time.sleep(0.05)
 
+    # Tray/Schwebe-Icon gleich mit starten – nicht erst, wenn das App-Fenster fertig geladen ist
+    threading.Thread(target=_companion_early, daemon=True).start()
+
     # Qt WebEngine (pip-Build) rendert mit NVIDIA unter Wayland nur Pixelmüll ("GBM is not supported").
     # Die Oberfläche ist leicht – Software-Rendering ist flüssig genug und läuft überall.
     # Mit TUNEBRIDGE_GPU=1 lässt sich die GPU wieder einschalten.
@@ -171,6 +174,14 @@ def _hooks(win) -> None:
         web.WINDOW_HOOKS.update(clipboard_get=clipboard_get, clipboard_set=clipboard_set)
     win.events.closing += closing
     win.events.loaded += loaded
+
+
+def _companion_early() -> None:
+    try:
+        from .web import app as web
+        web.companion_ensure(PORT)
+    except Exception as e:  # noqa: BLE001 – ohne Begleiter läuft die App trotzdem
+        print("Begleiter nicht gestartet:", e)
 
 
 def _qt_env() -> None:

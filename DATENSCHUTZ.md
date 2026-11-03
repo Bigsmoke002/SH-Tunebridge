@@ -36,8 +36,14 @@ Ziel-Domain `shtunebridge.bs002.de` wählbar):
   Benutzername, Rechnername, Home-Pfad und Schlüssel werden vorher geschwärzt.
 - *Erkannte Songs (Genre-Analyse)* – Datum, Künstler, Titel, ISRC, ermitteltes Genre/Subgenre/Nische,
   Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor.
+- *Zur Gemeinschafts-Genre-Datenbank beitragen* – je Song, den du selbst eingeordnet hast: Datum, Künstler,
+  Titel, ISRC, Genre, Subgenre, Herkunft (Playlist-Name / App / KI / von dir geändert). Siehe „Genre-Datenbank“.
 
-Nie gesendet: Ton/Aufnahmen, Rechner-, Benutzer- oder Gerätenamen, Konten, Tokens, Playlists, Uhrzeiten.
+**Laden** (standardmäßig aus): *Gemeinschafts-Genre-Datenbank laden* – einmal am Tag eine signierte Datei
+(nur Song → Genre) vom selben Server. Gesendet wird dabei nur die Anfrage selbst.
+
+Nie gesendet: Ton/Aufnahmen, Rechner-, Benutzer- oder Gerätenamen, Konten, Tokens, ganze Playlists,
+Playlist-Namen, Uhrzeiten.
 Automatisch gesendet wird nur, was nach deiner Einwilligung entsteht (etwa alle 6 Stunden).
 
 ## Was bleibt auf deinem Rechner
@@ -48,6 +54,7 @@ Automatisch gesendet wird nur, was nach deiner Einwilligung entsteht (etwa alle 
 - Darstellung: Farben und ein eigenes Hintergrundbild (verkleinert, im Datenordner unter `appearance/`)
 - Automatischer Abgleich: Einstellungen, Prüfsummen schon gesehener Songs (keine Titel) und die Liste „Neu für dich“
 - Deine Entscheidungen zu eingebetteten Playern („immer laden“ je Anbieter, im Speicher des App-Fensters)
+- Deine Genre-Einordnungen (Song → Genre, Herkunft) und – wenn erlaubt – die geladene Gemeinschafts-Genre-Datenbank
 - Selbst gelernte Genres: unbekannte Last.fm-Tags deiner Songs und wie oft sie vorkamen. „Vorschlagen“
   öffnet nur ein GitHub-Issue mit dem Genre-Namen (ohne deine Songs) – abschicken musst du es selbst.
 
@@ -58,7 +65,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 
 | Empfänger | Daten | Wann |
 |---|---|---|
-| Shazam (Apple) | Fingerabdruck der Aufnahme – **kein hörbares Audio** | nur nach Klick auf „Erkennen“ (im Dauer-Modus bis zum nächsten Klick). Wird nichts Sicheres gefunden, bis zu 9 weitere Fingerabdrücke der lokal im Tempo umgerechneten Aufnahme (Slowed/Sped-up-Erkennung) |
+| Shazam (Apple) | Fingerabdruck der Aufnahme – **kein hörbares Audio** | nur nach Klick auf „Erkennen“ (im Dauer-Modus bis zum nächsten Klick). Bei einem unsicheren Treffer – oder wenn du nach „Nichts erkannt“ auf „Als Slowed/Sped-up suchen“ klickst – bis zu 3 weitere Fingerabdrücke der lokal im Tempo umgerechneten Aufnahme |
 | AudD, ACRCloud | Aufnahme-Ausschnitt (Audio) | **nur mit deiner Zustimmung**, getrennt für Desktop und Mikrofon |
 | Deezer, iTunes-Suche, Last.fm, MusicBrainz | Künstler und Titel (ggf. ISRC); zur Genre-Prüfung die Kennung des schon gefundenen Künstlers | nach einer Erkennung, beim Link-Einfügen, Sortieren und automatischen Abgleich (Cover, Hörprobe, Genre, Mikro-Genre) |
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
@@ -71,6 +78,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | GitHub | deine IP-Adresse | Update-Prüfung (alle 6 Std.) |
 | Hugging Face, GitHub | deine IP-Adresse | einmalig beim Download von Modell/Laufzeit |
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
+| Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, **nur mit Einwilligung** „laden“ |
 
 Für diese Dienste gelten deren eigene Datenschutzbestimmungen.
 
@@ -233,6 +241,34 @@ Hinweise auf KI-generierte Musik ermittelt die App aus vorhandenen Angaben (Comm
 Label-/Titelangaben) und deiner eigenen Markierung. Das ist **kein Beweis** und wird nur als Hinweis mit Quelle
 angezeigt. Deine Markierungen bleiben lokal; nur wenn du „Erkannte Songs senden“ erlaubst, geht der Hinweis-Status
 mit.
+
+## Genre-Datenbank (eigene Einordnungen und Gemeinschaft)
+
+Unter **Genre-Datenbank** kannst du deine Playlists einordnen lassen und die Vorschläge bestätigen oder ändern;
+im Song-Detail legst du mit **„Genre festlegen“** ein Genre selbst fest.
+
+- **Was ausgewertet wird – lokal:** das Ergebnis der App, der **Name deiner Playlist** (z. B. „Hardtekk 2024“ →
+  Hardtekk; Stimmungswörter wie „Chill“ oder „Party“ zählen nicht) und – nur wenn du es ankreuzt – ein Urteil
+  deiner KI. Die KI bekommt dafür **nur Künstler, Titel, Album und Tempo**, ausdrücklich keine Tags oder Genres
+  von Spotify, TIDAL, Last.fm oder Deezer. Es gelten die Hinweise unter „KI-Analyse“.
+- **Gespeichert** wird erst, was du übernimmst – auf deinem Rechner. Deine Einordnung gilt sofort und geht bei der
+  Erkennung allem anderen vor. Du kannst sie einzeln oder alle löschen.
+- **Beitragen (nur mit Einwilligung):** gesendet werden je Song Datum, Künstler, Titel, ISRC, Genre, Subgenre und
+  die Herkunft deiner Einordnung – **nie der Playlist-Name, nie ganze Playlists, kein Konto**. Es gelten dieselben
+  Regeln wie im nächsten Abschnitt (pseudonyme Kennung, verschlüsselt, höchstens 12 Monate, selbst löschbar).
+  Nur Einordnungen, die nach deiner Einwilligung entstehen, werden automatisch gesendet.
+- **Gemeinschafts-Datenbank:** Der Entwickler wertet die Beiträge auf seinem eigenen Rechner aus. Übernommen
+  wird ein Genre erst, wenn **mehrere verschiedene Installationen** (mindestens drei) es übereinstimmend melden
+  und mindestens eine Meldung nicht nur von einer KI stammt; Widersprüche prüft der Entwickler von Hand. Die
+  fertige Datenbank enthält **nur Song → Genre, Subgenre und die Zahl der Stimmen** – keine Kennungen, keine
+  Zeitpunkte, nichts über einzelne Nutzer. Sie wird mit dem Release-Schlüssel signiert; die App nutzt sie nur,
+  wenn die Signatur stimmt.
+- **Laden (nur mit Einwilligung):** einmal am Tag, nur die Anfrage selbst wird gesendet. Nimmst du die Einwilligung
+  zurück, löscht die App die geladene Datei.
+- **Rechtsgrundlage:** deine Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), jederzeit widerrufbar. Löschst du deine
+  Beiträge auf dem Server, fließen sie in künftige Fassungen der Datenbank nicht mehr ein.
+- **Keine fremden Datenbanken:** In die Gemeinschafts-Datenbank fließen nur Urteile von Menschen bzw. ihrer KI
+  (aus Fakten) und freie Daten – keine Daten, die aus Spotify, TIDAL, Last.fm & Co. abgezogen wurden.
 
 ## Liste „Nicht erkannt“ und Senden an den Entwickler
 

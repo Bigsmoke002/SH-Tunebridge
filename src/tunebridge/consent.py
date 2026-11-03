@@ -19,12 +19,12 @@ DOMAIN = "shtunebridge.bs002.de"
 _KEY = "consent"
 
 LOCAL = ("misses", "player", "cache")          # lokal speichern
-SERVER = ("misses", "fehler", "songs")         # an den Server senden
+SERVER = ("misses", "fehler", "songs", "genres", "genredb")   # mit dem Server des Entwicklers (genredb = laden)
 
 DEFAULTS = {
     "version": 0, "privacy_at": None,
     "local": {"misses": True, "player": True, "cache": True},
-    "server": {"domain": False, "misses": False, "fehler": False, "songs": False},
+    "server": {"domain": False, "misses": False, "fehler": False, "songs": False, "genres": False, "genredb": False},
 }
 
 
@@ -52,7 +52,7 @@ def save(data: dict) -> dict:
     if not server["domain"]:                 # ohne Domain-Bestätigung keine Sende-Erlaubnis
         server = {k: False for k in server}
     now = time.time()
-    for k in ("songs", "misses"):          # automatisch nur, was NACH der Einwilligung entsteht
+    for k in ("songs", "misses", "genres"):   # automatisch nur, was NACH der Einwilligung entsteht
         if server[k] and not (cur["server"][k] and cur["server"]["domain"]):
             store.meta_set(f"outbox:{k}_since", str(now))
     out = {"version": VERSION, "privacy_at": cur["privacy_at"] or now, "local": local, "server": server}

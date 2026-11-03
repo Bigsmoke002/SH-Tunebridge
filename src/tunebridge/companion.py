@@ -494,6 +494,8 @@ def main(port: int = 8765) -> None:
                 bubble.place(g.right() - D - 40, g.bottom() - D - 120)
         if bool(cfg.get("bubble")) != bubble.isVisible():
             bubble.setVisible(bool(cfg.get("bubble")))
+            if bubble.isVisible():
+                bubble.raise_()
         a_bub.blockSignals(True)
         a_bub.setChecked(bool(cfg.get("bubble")))
         a_bub.blockSignals(False)
@@ -508,6 +510,13 @@ def main(port: int = 8765) -> None:
                 bus.state.emit({"_gone": True})
         bg(run)
     QTimer(app, interval=2500, timeout=poll).start()
+    try:   # Einstellungen vom Start mitgegeben -> Icon sofort zeigen, Akzent/Server-Stand kommt mit der ersten Abfrage
+        import os
+        first = json.loads(os.environ.get("TUNEBRIDGE_COMPANION_CFG") or "{}")
+        if first.get("tray") or first.get("bubble"):
+            apply({**first, "accent": None})
+    except (ValueError, TypeError):
+        pass
     poll()
     sys.exit(app.exec())
 

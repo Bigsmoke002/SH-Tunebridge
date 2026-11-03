@@ -207,22 +207,68 @@ def bpm_guess(bpm: float | None, coarse: list[str]) -> str | None:
     return None
 
 
+_VERSION = re.compile(r"[\(\[]([^\)\]]+)[\)\]]|\s[-–]\s(.+)$")
+_VERSION_WORDS = re.compile(r"\b(remix|edit|bootleg|version|mix|flip|rework|vip|cover|radio|extended|original|sped up|slowed)\b", re.I)
+_TEKK = re.compile(r"tekk", re.I)
+
+
+def title_tags(track: Track, hint: str | None = None) -> dict[str, float]:
+    """Genre-Angaben im Titel des (schon geprüften) Songs: „(Hardtekk Remix)“, „- HardTekk“, „(techno & hardtekk)“.
+    Szenen wie Tekk sind bei Last.fm kaum verschlagwortet – der Titel ist dann der beste Beleg.
+    Nur Begriffe, die direkt auf eins unserer Genres zeigen; „Tekk“ in Titel/Künstlername zählt, solange
+    das Dienst-Genre nicht klar woandershin zeigt (Vybz Kartel – „Tekk“ ist Dancehall)."""
+    from .genres.classify import _family, _lookup, service_main
+    out: dict[str, float] = {}
+    title = track.title or ""
+    for m in _VERSION.finditer(title):
+        part = (m.group(1) or m.group(2) or "").strip()
+        if _TEKK.search(part):                      # „(Hardtekk Remix)“, „(TekkSchuster Remix)“, „- HardTekk“
+            out["hardtekk"] = 80.0
+            continue
+        for chunk in re.split(r"\s*(?:&|/|,|\+| x | and | und )\s*", _VERSION_WORDS.sub(" ", part)):
+            key = normalize(chunk)
+            if not key or len(key) < 3:
+                continue
+            hit, conf = _lookup(key)
+            if hit and conf >= 1.0 and hit[0] in TAXONOMY:
+                out[key] = 80.0
+    fam = _family(hint)
+    if not service_main(hint) or (fam and "Techno" in fam):
+        if _TEKK.search(title) and "hardtekk" not in out and "tekk" not in out and _VERSION.search(title) is None:
+            out["hardtekk"] = 80.0
+        elif any(_TEKK.search(a or "") for a in track.artists):
+            out.setdefault("hardtekk", 45.0)       # Künstlername wie „TEKKCAT“: Hinweis, kein Beweis
+    return out
+
+
 def enrich(rec: Recognition, fresh: bool = False) -> tuple[Track, dict]:
     """-> (Track mit Genre, Zusatzinfos für die Anzeige). Bekannte Songs kommen aus dem Speicher."""
     from . import aidetect, consent, songcache
     use_cache = consent.local("cache")
     if use_cache and not fresh and (hit := songcache.lookup(rec)):
         hit[1]["ai"] = aidetect.check(*hit)
+        _known(*hit)
         return hit
     track, extra = _enrich_online(rec)
     extra["ai"] = aidetect.check(track, extra)
-    if not use_cache:
-        return track, extra
-    try:
-        songcache.save(rec, track, extra)
-    except Exception as e:
-        dbg.error("speicher", "Song konnte nicht gespeichert werden", e)
+    if use_cache:
+        try:
+            songcache.save(rec, track, extra)      # gespeichert wird das eigene Ergebnis der App
+        except Exception as e:
+            dbg.error("speicher", "Song konnte nicht gespeichert werden", e)
+    _known(track, extra)
     return track, extra
+
+
+def _known(track: Track, extra: dict) -> None:
+    """Eigene Einordnung bzw. Gemeinschafts-Datenbank geht vor dem automatischen Ergebnis."""
+    from . import genredb
+    try:
+        if genredb.apply(track, extra):
+            dbg.event("genre", f"Genre aus {extra['genre_source']}", song=f"{track.artist} – {track.title}",
+                      genre=f"{track.genre}/{track.subgenre}", vorher=extra.get("genre_before"))
+    except Exception as e:  # noqa: BLE001
+        dbg.error("genre", "Genre-Datenbank nicht nutzbar", e)
 
 
 def _enrich_online(rec: Recognition) -> tuple[Track, dict]:
@@ -295,6 +341,9 @@ def _enrich_online(rec: Recognition) -> tuple[Track, dict]:
             steps.append(f"Dienst-Genre {service[0]} widerspricht Deezer {dzg} -> nur schwach gewertet")
     for g in service:
         tags.setdefault(g.lower(), weight)
+    for k, v in title_tags(track, hint).items():
+        tags[k] = max(tags.get(k, 0), v)
+        steps.append(f"Titel/Künstler nennt das Genre: „{k}“")
     c = classify(tags, hint)
     steps.append(f"Tags -> {c.genre}/{c.subgenre}/{c.niche} ({c.confidence})")
     source = "tags"

@@ -5,6 +5,9 @@ Kategorien (jede einzeln erlaubt oder nicht):
 * fehler  – kurze Fehlerberichte: Bereich, Meldung, Fehlertyp, Programmstelle (Datei:Zeile).
             Benutzername, Rechnername, Home-Pfad und Schlüssel werden geschwärzt.
 * songs   – erkannte Songs mit Genre-Ergebnis (Künstler, Titel, ISRC, Genre, Sicherheit, Quelle)
+* genres  – eigene Genre-Einordnungen für die Gemeinschafts-Datenbank (Künstler, Titel, ISRC, Genre, Subgenre,
+            Herkunft playlist/app/ki/korrektur – nie der Playlist-Name)
+* genredb – (kein Senden) die signierte Gemeinschafts-Datenbank laden
 Nie gesendet: Ton, Rechner-/Gerätenamen, Konten, Playlists, IP-Speicherung beim Server.
 Zeitangaben nur als Datum (kein Uhrzeit-Profil).
 """
@@ -96,6 +99,10 @@ def song_entries(limit: int = 200) -> list[dict]:
     return out
 
 
+def _vote_ts(e: dict) -> float:
+    return float(e.get("_ts") or 0)
+
+
 # ------------------------------------------------------------------ Senden
 def _package(entries: list[dict]) -> dict:
     from . import __version__
@@ -124,6 +131,19 @@ def flush() -> dict:
             rest = [e for e in _load() if e["uid"] not in {x["uid"] for x in q}]
             QUEUE.write_text(json.dumps(rest), encoding="utf-8") if rest else clear_errors()
         done["fehler"] = len(q)
+    if consent.server("genres"):
+        from . import genredb
+        since = float(store.meta_get("outbox:genres_since") or 0)
+        g = [e for e in genredb.upload_entries(1000) if _vote_ts(e) >= since][:200]
+        if g:
+            upload.send(_package(g))
+            genredb.mark_sent([e["_key"] for e in g])
+            done["genres"] = len(g)
+    if consent.server("genredb"):
+        from . import genredb
+        r = genredb.update()
+        if r.get("updated"):
+            done["genredb"] = r.get("songs")
     if consent.server("songs") and (s := song_entries()):
         upload.send(_package(s))
         store.meta_set(_SONGS_SINCE, str(max(e["_ts"] for e in s)))

@@ -137,3 +137,22 @@ def test_local_recognition_refreshes_unchecked_cache(monkeypatch):
     track, _ = fake_enrich(songcache.lookup_key("GB2LD2610373")[0], True)
     assert track.genre == "Drum & Bass" and called == [("Deeper", True)]
     del asyncio
+
+
+def test_title_names_the_genre():
+    """Tekk & Co. sind bei Last.fm kaum verschlagwortet – steht das Genre im Titel, zählt es."""
+    from tunebridge.enrich import title_tags
+    from tunebridge.genres import classify
+    from tunebridge.models import Track
+
+    def tt(title, artist="X", hint=None):
+        return title_tags(Track(title=title, artists=[artist]), hint)
+    assert tt("In My Skin - HardTekk", hint="Dance") == {"hardtekk": 80.0}
+    assert tt("Weißer Hai (TekkSchuster Remix)", hint="Hip-Hop/Rap") == {"hardtekk": 80.0}
+    assert tt("Song (Hardtekk Remix)", hint="Pop") == {"hardtekk": 80.0}
+    assert tt("Song (Hardstyle Remix)") == {"hardstyle": 80.0}
+    assert tt("Tekk", "Vybz Kartel", "Reggae") == {}          # Dancehall-Song namens „Tekk“
+    assert tt("Song (feat. Someone)") == {} and tt("Song - Radio Edit") == {}
+    assert tt("Morning Light", "Tic-Tekk-Toe", "Dance") == {"hardtekk": 45.0}
+    c = classify({"hardtekk": 80, "techno": 60}, "Dance")
+    assert (c.genre, c.subgenre) == ("Techno", "Hardtekk")

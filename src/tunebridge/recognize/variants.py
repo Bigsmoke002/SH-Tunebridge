@@ -62,8 +62,8 @@ def _write_speed(x: np.ndarray, ch: int, rate: int, factor: float) -> Path:
 LAST_SEEN: list[str] = []   # Einzeltreffer der letzten Suche (für die Liste „Nicht erkannt“)
 BUDGET = 25.0   # Sekunden für die ganze Suche – danach lieber „nichts erkannt“ als ewig laden
 MAX_TRIES = 3   # höchstens so viele zusätzliche Shazam-Anfragen pro Scan (die häufigsten Tempi zuerst)
-RESERVE = 6     # so viele Shazam-Anfragen pro Minute bleiben immer für normale Scans frei
-PAUSE = 1.5     # Sekunden zwischen den Versuchen – schnelle Serien lösen bei Shazam eher eine Sperre aus
+RESERVE = 5     # so viele Shazam-Anfragen pro Minute bleiben immer für normale Scans frei
+PAUSE = 2.5     # Sekunden zwischen den Versuchen – schnelle Serien lösen bei Shazam eher eine Sperre aus
 
 
 def tries_allowed(free: int) -> int:

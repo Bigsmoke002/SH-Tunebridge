@@ -615,3 +615,58 @@ def review_genres(items: list[dict], chunk: int = 60) -> list[dict]:
             out.append({"i": i, "genre": g, "subgenre": sg, "grund": grund})
     dbg.event("ki", f"KI-Prüfung: {len(out)} Korrekturen bei {len(items)} Songs", anbieter=settings()["provider"])
     return out
+
+
+def judge_genres(items: list[dict], chunk: int = 40, cancel=None) -> list[dict]:
+    """Eigenes KI-Urteil für die Genre-Datenbank. Die KI bekommt NUR Fakten: Künstler, Titel, Album, BPM –
+    ausdrücklich keine Tags oder Genres von Spotify/TIDAL/Last.fm/Deezer und kein bisheriges Ergebnis
+    (sonst wäre es nur umgeschriebene Fremd-Daten). -> [{i, genre, subgenre, n}] für Songs, die die KI kennt."""
+    from .genres import TAXONOMY
+    subs = {g: [s for s in v if s != "_"] for g, v in TAXONOMY.items()}
+    allowed = "\n".join(f"- {g}: {', '.join(v) or '-'}" for g, v in subs.items())
+    out: list[dict] = []
+    for start in range(0, len(items), chunk):
+        if cancel and cancel():
+            break
+        block = items[start:start + chunk]
+        lines = "\n".join(
+            f"{start + n}. {', '.join(it.get('artists') or [])} - {it.get('title')}"
+            f"{' | album: ' + it['album'] if it.get('album') else ''}{' | ' + str(round(it['bpm'])) + ' bpm' if it.get('bpm') else ''}"
+            for n, it in enumerate(block))
+        prompt = (
+            "You are an expert music curator. Classify each song by genre from your own knowledge.\n"
+            f"Allowed main genres and their subgenres:\n{allowed}\n\n"
+            f"Songs (number. artists - title | album | tempo):\n{lines}\n\n"
+            "Only answer for songs or artists you actually know. Skip songs you do not know – do not guess. "
+            "A genre named in the title (e.g. '(Hardtekk Remix)') counts. Use exactly the names from the allowed list.\n"
+            'Reply only with JSON: {"songs": [{"i": <number>, "genre": "<main genre>", "subgenre": "<subgenre or null>"}]}')
+        try:
+            replies = ask_all(prompt, 2500, 300)
+        except AIError as e:
+            if not out and start == 0:
+                raise
+            dbg.error("ki", "KI-Urteil: Block übersprungen", e)
+            continue
+        votes: dict[int, list[tuple[str, str | None]]] = {}
+        for text in replies.values():
+            try:
+                got = _json(text).get("songs") or []
+            except AIError:
+                continue
+            for f in got:
+                try:
+                    i, g, sg = int(f["i"]), f.get("genre"), f.get("subgenre") or None
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not (start <= i < start + len(block)) or g not in TAXONOMY:
+                    continue
+                votes.setdefault(i, []).append((g, sg if sg in subs[g] else None))
+        need = len(replies) // 2 + 1
+        for i, vs in sorted(votes.items()):
+            g, n = _majority([v[0] for v in vs])
+            if n < need:
+                continue
+            sg, m = _majority([v[1] for v in vs if v[0] == g])
+            out.append({"i": i, "genre": g, "subgenre": sg if m >= need else None, "n": n})
+    dbg.event("ki", f"KI-Urteil (nur Fakten): {len(out)} von {len(items)} Songs eingeschätzt")
+    return out

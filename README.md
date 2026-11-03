@@ -231,7 +231,13 @@ Titel/Künstler/Dauer. Remix/VIP/Edit wird **nicht** mit dem Original verwechsel
 ## Genre-Erkennung
 - `genres/taxonomy.py`: Genre-Baum mit Tag-Synonymen – hier Subgenres ergänzen.
 - `genres/classify.py`: gewichtete Tags → Genre/Subgenre + Sicherheit.
-- Quellen: **Last.fm**, **MusicBrainz** (Song + geprüfter Künstler), Apple-/Deezer-Genres (fertig).
+- Quellen: **Last.fm**, **MusicBrainz** (Song + geprüfter Künstler), Apple-/Deezer-Genres (fertig),
+  Genre-Angaben im Titel („(Hardtekk Remix)“).
+- **Genre-Datenbank** (`genredb.py`, Seite *Genre-Datenbank*): Playlists einordnen lassen (App-Ergebnis,
+  Genre-Name der Playlist – nur lokal ausgewertet –, optional eine KI, die nur Künstler/Titel/Album/Tempo sieht),
+  Vorschläge bestätigen oder korrigieren; im Song-Detail „Genre festlegen“. Eigene Einordnungen gelten sofort.
+  Mit Einwilligung fließen sie pseudonym in die **Gemeinschafts-Genre-Datenbank** (erst ab mehreren unabhängigen
+  Installationen, signiert mit dem Release-Schlüssel, Namespace `sh-tunebridge-genredb`).
   Geplant: Discogs-Styles, SoundCloud-Tags,
   optional **Audio-Analyse** (Essentia, Discogs-400-Modell, lokal) über 30-s-Previews
   (z. B. Deezer) – für Songs ohne brauchbare Tags.

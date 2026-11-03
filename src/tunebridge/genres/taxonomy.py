@@ -57,6 +57,8 @@ TAXONOMY: dict[str, dict[str, list[str]]] = {
         "Hardgroove": ["hardgroove", "hard groove"],
         "Acid Techno": ["acid techno"],
         "Dub Techno": ["dub techno"],
+        # deutsche Szene: harte Kick, 150–170 BPM, oft Remixe/Bootlegs bekannter Songs („… (Hardtekk Remix)“)
+        "Hardtekk": ["hardtekk", "hard tekk", "tekk", "tekkno", "hard tekkno", "hardtekk remix", "tekk remix"],
     },
     "UK Garage / Bass": {
         "_": ["uk garage", "ukg", "garage", "uk bass", "bassline"],

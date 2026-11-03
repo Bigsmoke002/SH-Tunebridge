@@ -37,7 +37,7 @@ DEFAULTS = {
 ACTIVITIES = {
     "listen": "Erkennt Musik", "history": "Stöbert im Verlauf", "playlists": "Sieht sich Playlists an",
     "services": "Sieht sich Playlists an", "sort": "Sortiert eine Playlist", "discover": "Entdeckt neue Musik",
-    "split": "Teilt Playlists nach Genre auf", "transfer": "Überträgt Playlists", "links": "Importiert einen Link", "inbox": "Sortiert neue Songs ein",
+    "split": "Teilt Playlists nach Genre auf", "transfer": "Überträgt Playlists", "links": "Importiert einen Link", "inbox": "Sortiert neue Songs ein", "genredb": "Ordnet Genres ein",
 }
 
 

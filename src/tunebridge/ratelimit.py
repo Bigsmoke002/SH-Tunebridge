@@ -38,7 +38,7 @@ class _Limit:
 
 
 LIMITS: dict[str, _Limit] = {
-    "shazam": _Limit("Shazam", 12, 60, gap=1.0, pause=90),
+    "shazam": _Limit("Shazam", 10, 60, gap=2.0, pause=90),   # Serien in wenigen Sekunden lösen Sperren aus
     "lastfm": _Limit("Last.fm", 4, 1, gap=0.2, pause=60),
     "deezer": _Limit("Deezer", 40, 5, pause=10),
     "itunes": _Limit("iTunes-Suche", 18, 60, gap=0.5, pause=120),

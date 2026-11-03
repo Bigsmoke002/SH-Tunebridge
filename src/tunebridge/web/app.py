@@ -185,6 +185,7 @@ class ListenReq(BaseModel):
     skip_key: str | None = None
     force: bool = False     # True = lokalen Wiedererkenner überspringen, immer online prüfen
     auto: bool = False      # Dauer-Modus (keine zusätzliche Tempo-Suche)
+    tempo: bool = False     # ausdrücklich nach Slowed/Sped-up suchen (Knopf nach „Nichts erkannt“)
 
 
 def _left(track: Track, pos: float | None, rec_start: float) -> float | None:
@@ -218,7 +219,7 @@ async def listen(req: ListenReq):
     cons = consent.get()["local"]
     player = players.minimal(await asyncio.to_thread(players.current)) \
         if mode == "desktop" and cons["player"] else None
-    variant, notice, hashes, res = None, None, [], None
+    variant, notice, hashes, res, tempo_offer = None, None, [], None, False
     try:
         level = await asyncio.to_thread(meter.wav_level, wav)
         if level <= meter.SILENT_DB:
@@ -245,6 +246,8 @@ async def listen(req: ListenReq):
                     extra = {**extra, **fresh_x, "cached": None}
                 except Exception as e:  # noqa: BLE001 – offline: alten Stand zeigen
                     dbg.error("lokal", "Song-Infos ließen sich nicht auffrischen", e)
+            from ..enrich import _known
+            _known(track, extra)
             speed = localfp.parse_ref(m["ref"])[1]
             extra.update(engines=["lokal"], agreement=1, alternatives=[], local=m,
                          speed=None if speed == 1.0 else speed)
@@ -269,10 +272,16 @@ async def listen(req: ListenReq):
         variants.LAST_SEEN.clear()
         if variants.suspicious(res.best):
             from .. import ratelimit
-            tries = 0 if shazam_paused() else variants.tries_allowed(ratelimit.free("shazam"))
+            free = ratelimit.free("shazam")
+            tries = 0 if shazam_paused() else (min(variants.MAX_TRIES, free) if req.tempo else variants.tries_allowed(free))
             if req.auto:
                 # Dauer-Modus: keine Tempo-Suche – ein unbekannter Song würde sonst jede Runde das Budget aufbrauchen
                 dbg.event("erkennen", "Dauer-Modus: Tempo-Suche ausgelassen")
+            elif res.best is None and not req.tempo:
+                # Gar kein Treffer: nicht automatisch 3 weitere Anfragen hinterherschicken (Shazam sperrt sonst schnell).
+                # Die Tempo-Suche gibt es dann per Knopf („Als Slowed/Sped-up suchen“).
+                tempo_offer = True
+                dbg.event("erkennen", "Kein Treffer – Tempo-Suche nur auf Wunsch")
             elif not tries:
                 notice = "Tempo-Suche (Slowed/Sped-up) diesmal ausgelassen – spart Shazam-Anfragen"
                 dbg.problem("erkennen", notice, frei=ratelimit.free("shazam"))
@@ -297,7 +306,7 @@ async def listen(req: ListenReq):
         except Exception as e:
             dbg.error("erkennen", "Nicht-erkannt-Eintrag fehlgeschlagen", e)
         return {"found": False, "silent": False, "level_db": round(level, 1), "errors": res.errors,
-                "notice": notice, "missed": True}
+                "notice": notice, "missed": True, "tempo_offer": tempo_offer}
     if variant is best:
         dbg.event("erkennen", "Über Tempo-Korrektur gefunden", song=f"{best.artists} – {best.title}", tempo=best.speed,
                   vorher=res.best and f"{res.best.artists} – {res.best.title}")
@@ -1489,6 +1498,7 @@ def look_bg_get(orig: bool = False):
 
 # ------------------------------------------------------------------ Begleiter: Tray + Schwebe-Icon
 _companion: dict = {"proc": None}
+_companion_lock = threading.Lock()
 # Vom Desktop-Fenster gesetzt (desktop.py): Fenster zeigen bzw. App beenden
 WINDOW_HOOKS: dict = {}
 
@@ -1510,17 +1520,24 @@ def companion_available() -> tuple[bool, str]:
 def companion_ensure(port: int | None = None) -> None:
     """Begleit-Prozess starten, wenn Tray oder Schwebe-Icon an ist und er noch nicht läuft.
     (Ausschalten erledigt er selbst: er fragt alle 2,5 s die Einstellungen ab und beendet sich.)"""
-    import os
-    import subprocess
-    import sys
     cfg = _comp_cfg()
     if not (cfg["tray"] or cfg["bubble"]) or not companion_available()[0]:
         return
+    with _companion_lock:
+        _companion_start(cfg, port)
+
+
+def _companion_start(cfg: dict, port: int | None) -> None:
+    import json
+    import os
+    import subprocess
+    import sys
     p = _companion["proc"]
     if p is not None and p.poll() is None:
         return
     port = port or int(os.environ.get("TUNEBRIDGE_PORT", "8765"))
     env = {k: v for k, v in os.environ.items() if not k.startswith("QTWEBENGINE")}
+    env["TUNEBRIDGE_COMPANION_CFG"] = json.dumps(cfg)   # sofort anzeigen, nicht erst nach der ersten Abfrage
     if sys.platform.startswith("linux") and env.get("WAYLAND_DISPLAY") and env.get("DISPLAY"):
         env["QT_QPA_PLATFORM"] = "xcb"     # XWayland: „immer im Vordergrund“ + freie Position sind erlaubt
     cmd = [sys.executable, "companion", "--port", str(port)] if getattr(sys, "frozen", False) else \
@@ -1820,6 +1837,113 @@ async def services_playlist_tracks(sid: str, pid: str, refresh: bool = False):
     return await asyncio.to_thread(_svc_ram, ("tr", sid, pid), load, refresh)
 
 
+# ------------------------------------------------------------------ Genre-Datenbank (eigene Einordnungen + Gemeinschaft)
+class GdbAnalyzeReq(BaseModel):
+    sid: str
+    pid: str
+    ai: bool = False
+
+
+class GdbAcceptReq(BaseModel):
+    rows: list[dict]
+
+
+class GdbVoteReq(BaseModel):
+    id: int | None = None          # Erkennung im Verlauf
+    key: str | None = None         # Song aus einer lokalen Playlist
+    genre: str
+    subgenre: str | None = None
+
+
+class GdbDeleteReq(BaseModel):
+    keys: list[str] | None = None
+    all: bool = False
+
+
+@app.get("/api/genredb")
+def genredb_overview():
+    from .. import ai, consent, genredb
+    return {"counts": genredb.counts(), "community": genredb.community_info(),
+            "consent": {"genres": consent.server("genres"), "genredb": consent.server("genredb")},
+            "ai_ready": ai.ready()[0], "votes": genredb.votes(300),
+            "taxonomy": {g: [x for x in subs if x != "_"] for g, subs in TAXONOMY.items()},
+            "checked": float(store.meta_get("genredb:checked") or 0) or None}
+
+
+@app.post("/api/genredb/analyze")
+def genredb_analyze(req: GdbAnalyzeReq):
+    from .. import ai, genredb
+    if req.ai and not ai.ready()[0]:
+        raise HTTPException(400, f"KI nicht bereit: {ai.ready()[1]}")
+    return {"job": genredb.start(req.sid, req.pid, req.ai)}
+
+
+@app.get("/api/genredb/job/{jid}")
+def genredb_job(jid: str):
+    from .. import genredb
+    j = genredb.job(jid)
+    if not j:
+        raise HTTPException(404, "Auftrag nicht gefunden")
+    return j
+
+
+@app.post("/api/genredb/job/{jid}/cancel")
+def genredb_cancel(jid: str):
+    from .. import genredb
+    genredb.cancel(jid)
+    return {"ok": True}
+
+
+@app.post("/api/genredb/job/{jid}/accept")
+def genredb_accept(jid: str, req: GdbAcceptReq):
+    from .. import genredb
+    try:
+        return genredb.accept(jid, req.rows)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/genredb/vote")
+def genredb_vote(req: GdbVoteReq):
+    """Genre eines Songs von Hand festlegen (Korrektur). Gilt sofort; im Verlauf wird der Eintrag angepasst."""
+    from .. import genredb
+    if req.id is not None and (got := store.get_recognition(req.id)):
+        t, extra = got
+    elif req.key and (t := store.find_track(req.key)):
+        extra = None
+    else:
+        raise HTTPException(404, "Song nicht gefunden")
+    try:
+        v = genredb.vote(t.artists, t.title, t.isrc, req.genre, req.subgenre, "korrektur")
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if req.id is not None and extra is not None:
+        from dataclasses import asdict
+        before = [t.genre, t.subgenre]
+        t.genre, t.subgenre = v["genre"], v["subgenre"]
+        if before[0] != t.genre:
+            t.niche = None
+        extra.update(genre_source="eigene Einordnung", genre_before=before, confidence=0.95)
+        store.update_recognition(req.id, asdict(t), extra)
+    dbg.event("genredb", "Genre von Hand festgelegt", song=f"{t.artist} – {t.title}", genre=f"{v['genre']}/{v['subgenre']}")
+    return v
+
+
+@app.post("/api/genredb/votes/delete")
+def genredb_delete(req: GdbDeleteReq):
+    from .. import genredb
+    return {"deleted": genredb.delete(None if req.all else (req.keys or []))}
+
+
+@app.post("/api/genredb/update")
+def genredb_update():
+    from .. import genredb
+    r = genredb.update(force=True)
+    if not r.get("ok"):
+        raise HTTPException(400, r.get("why") or "Nicht geladen")
+    return r
+
+
 class SortStartReq(BaseModel):
     service: str
     playlist: str = ""
@@ -1975,6 +2099,11 @@ def consent_set(data: dict):
         raise HTTPException(400, str(e))
     if not consent.server("fehler"):
         outbox.clear_errors()          # ohne Erlaubnis keine gesammelten Fehlerberichte aufheben
+    from .. import genredb
+    if consent.server("genredb"):
+        threading.Thread(target=genredb.update, kwargs={"force": True}, daemon=True).start()
+    else:
+        genredb.remove_community()     # Erlaubnis zurückgenommen -> geladene Datenbank nicht weiter nutzen
     dbg.event("datenschutz", "Einwilligungen gespeichert", lokal=out["local"], server=out["server"])
     return out
 
