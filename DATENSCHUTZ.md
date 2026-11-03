@@ -54,6 +54,8 @@ Automatisch gesendet wird nur, was nach deiner Einwilligung entsteht (etwa alle 
 - Darstellung: Farben und ein eigenes Hintergrundbild (verkleinert, im Datenordner unter `appearance/`)
 - Automatischer Abgleich: Einstellungen, Prüfsummen schon gesehener Songs (keine Titel) und die Liste „Neu für dich“
 - Deine Entscheidungen zu eingebetteten Playern („immer laden“ je Anbieter, im Speicher des App-Fensters)
+- Importierte Datenexporte (Spotify, YouTube, Apple Music): nur Playlist-Namen und Songs (Titel, Künstler, Album,
+  ISRC/Video-ID) – „Import löschen“ entfernt sie sofort; die hochgeladene Datei selbst wird nicht gespeichert
 - Deine Genre-Einordnungen (Song → Genre, Herkunft) und – wenn erlaubt – die geladene Gemeinschafts-Genre-Datenbank
 - Selbst gelernte Genres: unbekannte Last.fm-Tags deiner Songs und wie oft sie vorkamen. „Vorschlagen“
   öffnet nur ein GitHub-Issue mit dem Genre-Namen (ohne deine Songs) – abschicken musst du es selbst.
@@ -206,7 +208,22 @@ Song bei Deezer und der Bereich der App, in dem du gerade bist (z. B. „Sortier
 Playlists). Discord zeigt das deinen Kontakten; dafür gelten die Bedingungen von Discord. Ausschalten löscht den
 Status sofort.
 
+## Datenexporte der Dienste importieren (ohne Login)
+
+Statt dich anzumelden, kannst du bei Spotify („Daten herunterladen“ → Kontodaten), Google (Takeout → YouTube:
+Playlists und Musikbibliothek) oder in der Musik-App von Apple („Mediathek exportieren“) eine Kopie deiner Daten
+anfordern – das ist dein Recht nach Art. 15 und 20 DSGVO – und die Datei in SH-Tunebridge laden.
+Ausgewertet wird **nur auf deinem Rechner**: SH-Tunebridge liest daraus nur Playlist-Namen und Songs (Titel,
+Künstler, Album, ISRC bzw. Video-ID). Alles andere im Export – z. B. Hörverlauf, Suchanfragen, Zahlungs- oder
+Kontodaten – wird nicht gelesen und nicht gespeichert, die Datei selbst wird nach dem Einlesen verworfen.
+Einzige Netzanfrage: Bei Google Takeout stehen in Playlists nur Video-Nummern. Die Titel dazu fragt SH-Tunebridge
+einzeln bei YouTube ab (öffentliches oEmbed, ohne Konto und ohne Key); YouTube sieht dabei die Video-Nummer und
+deine IP-Adresse. Nichts davon geht an den Entwickler.
+
 ## YouTube- und SoundCloud-Login
+
+Für alle Logins (Spotify, YouTube, SoundCloud, Last.fm-Key) führt ein Assistent Schritt für Schritt durch die
+Einrichtung der eigenen Entwickler-App. Die eingegebenen Zugangsdaten bleiben nur auf deinem Rechner.
 
 Beide Logins laufen **komplett auf deinem Rechner**: Du legst beim Dienst selbst eine App an (Google Cloud bzw.
 SoundCloud-Entwicklerbereich) und trägst deren Client-ID und Client-Secret ein. Angemeldet wird im Browser direkt

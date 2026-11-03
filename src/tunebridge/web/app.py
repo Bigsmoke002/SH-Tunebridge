@@ -1771,10 +1771,11 @@ def import_file(req: FileImportReq):
 # ------------------------------------------------------------------ Dienste: Playlists ansehen & sortieren
 def _svc_call(fn, *a, **kw):
     from .. import services
+    from ..dataexport import ExportError
     from ..linkimport import LinkError
     try:
         return fn(*a, **kw)
-    except (services.ServiceError, LinkError, NotImplementedError) as e:
+    except (services.ServiceError, LinkError, NotImplementedError, ExportError) as e:
         raise HTTPException(400, str(e))
     except Exception as e:  # noqa: BLE001 – Dienst nicht erreichbar o. ä.
         dbg.error("dienste", "Dienst-Abfrage fehlgeschlagen", e)
@@ -1835,6 +1836,55 @@ async def services_playlist_tracks(sid: str, pid: str, refresh: bool = False):
                                           "cover": t.cover, "preview_url": t.preview_url, "ids": t.ids,
                                           "duration_ms": t.duration_ms} for t in tracks[:1000]]}
     return await asyncio.to_thread(_svc_ram, ("tr", sid, pid), load, refresh)
+
+
+# ------------------------------------------------------------------ Datenexporte der Dienste (ohne Entwickler-App)
+def _svc_ram_drop(sid: str) -> None:
+    for k in [k for k in _SVC_RAM if len(k) > 1 and k[1] == sid]:
+        _SVC_RAM.pop(k, None)
+
+
+@app.post("/api/services/{sid}/import")
+async def services_import(sid: str, request: Request, name: str = ""):
+    """Rohe Datei im Body (kein Base64, kein Formular) – Spotify-Kontodaten, Google Takeout, Apple-Mediathek."""
+    from .. import dataexport
+    if sid not in dataexport.IMPORT_SERVICES:
+        raise HTTPException(400, "Für diesen Dienst gibt es keinen Datei-Import")
+    data = bytearray()
+    async for chunk in request.stream():
+        data += chunk
+        if len(data) > dataexport.MAX_UPLOAD:
+            raise HTTPException(413, "Datei ist zu groß (max. 300 MB) – bitte beim Export nur Playlists auswählen")
+    if not data:
+        raise HTTPException(400, "Leere Datei")
+    _svc_ram_drop(sid)
+    return {"job": dataexport.start(sid, name, bytes(data))}
+
+
+@app.get("/api/services/import/{jid}")
+def services_import_job(jid: str):
+    from .. import dataexport
+    j = dataexport.job(jid)
+    if not j:
+        raise HTTPException(404, "Import nicht gefunden")
+    if j["state"] == "done":
+        _svc_ram_drop(j["service"])
+    return j
+
+
+@app.post("/api/services/import/{jid}/cancel")
+def services_import_cancel(jid: str):
+    from .. import dataexport
+    dataexport.cancel(jid)
+    return {"ok": True}
+
+
+@app.delete("/api/services/{sid}/import")
+def services_import_delete(sid: str):
+    from .. import dataexport
+    dataexport.remove(sid)
+    _svc_ram_drop(sid)
+    return {"ok": True}
 
 
 # ------------------------------------------------------------------ Genre-Datenbank (eigene Einordnungen + Gemeinschaft)

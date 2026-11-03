@@ -39,10 +39,11 @@ def _text(data: bytes) -> str:
 
 
 _COLS = {
-    "title": ("track name", "title", "titel", "name", "song", "song name", "track", "track title", "songtitel"),
+    "title": ("track name", "title", "titel", "name", "song", "song name", "song title", "track", "track title",
+              "songtitel"),
     "artist": ("artist name(s)", "artist names", "artist", "artists", "interpret", "künstler", "kunstler",
                "creator", "artist name", "album artist", "interpreten"),
-    "album": ("album name", "album", "release"),
+    "album": ("album name", "album", "album title", "albumtitel", "release"),
     "isrc": ("isrc",),
     "video": ("video id", "video-id", "videoid"),
     "ms": ("duration (ms)", "track duration (ms)", "duration_ms"),

@@ -73,6 +73,7 @@ const ICONS = {
   shuffle: P("m18 14 4 4-4 4", "m18 2 4 4-4 4", "M2 18h1.4a4 4 0 0 0 3.3-1.7l6.6-9.6A4 4 0 0 1 16.6 5H22", "M2 6h1.4a4 4 0 0 1 3.1 1.5", "M22 19h-5.4a4 4 0 0 1-3.1-1.5"),
   repeat: P("m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"),
   tag: P("M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9Z", "M7.5 7.5h.01"),
+  copy: P("M9 9h11v11H9z", "M5 15H4V4h11v1"),
 };
 const icon = (n, cls = "") => `<i data-icon="${n}" class="${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n] || ""}</svg></i>`;
 function hydrateIcons(root = document) {
@@ -1524,75 +1525,283 @@ const PLATFORM_STYLE = {
 };
 const SVC_NAME = id => id === "local" ? "SH-Tunebridge" : id === "link" ? "Link" : (PLATFORM_STYLE[id]?.[0] || id);
 const Transfer = { job: null };
-function spotifySetup(p, main) {
+/* ---------- Dienste einrichten: Schritt-für-Schritt-Assistent (eigene Entwickler-App) und Datei-Import
+   Ziel: auch ohne Fachwissen. Jeder Schritt: was öffnen, was anklicken, was kopieren – mit Kopieren-Knöpfen,
+   einer kleinen Skizze und typischen Fehlern. Wer keine Entwickler-App will (oder kein Premium hat), nimmt den
+   offiziellen Datenexport des Dienstes (DSGVO-Auskunft) und zieht die Datei einfach rein. */
+const REDIRECT = sid => `http://127.0.0.1:8765/api/${sid === "spotify" ? "spotify" : `oauth/${sid}`}/callback`;
+const sketch = (url, rows) => `<div class="wz-sketch" aria-hidden="true"><div class="wz-bar"><i></i><i></i><i></i><span>${esc(url)}</span></div>
+  <div class="wz-page">${rows.map(r => `<div class="wz-row">${r}</div>`).join("")}</div></div>`;
+const hl = t => `<span class="wz-hl">${esc(t)}</span>`, fake = t => `<span class="wz-fake">${esc(t)}</span>`;
+
+const SETUP = {
+  spotify: {
+    name: "Spotify", needs: "Spotify Premium (für den App-Besitzer, also dich)", time: "ca. 5 Minuten",
+    why: "Spotify lässt andere Programme nur über eine eigene, kostenlose „Entwickler-App“ an deine Playlists. Die legst du einmal an – wir zeigen dir jeden Klick.",
+    steps: [
+      { title: "Bei Spotify für Entwickler anmelden", link: ["https://developer.spotify.com/dashboard", "Spotify-Dashboard öffnen"],
+        html: "Melde dich mit deinem <b>normalen Spotify-Konto</b> an. Beim ersten Mal fragt Spotify nach den Nutzungsbedingungen – zustimmen. Falls Spotify eine Bestätigungs-Mail schickt, kurz bestätigen.",
+        sketch: sketch("developer.spotify.com/dashboard", [`<b>Dashboard</b>`, `${fake("Deine Apps")} ${hl("Create app")}`]) },
+      { title: "App anlegen", html: "Klicke auf <b>„Create app“</b> und fülle das Formular aus. Am einfachsten über die Kopieren-Knöpfe:",
+        copy: [["App name", "SH-Tunebridge"], ["App description", "Meine Playlists in SH-Tunebridge"], ["Redirect URIs", REDIRECT("spotify")]],
+        after: "Nach dem Einfügen der Redirect-URI auf <b>„Add“</b> klicken. Dann bei „Which API/SDKs are you planning to use?“ <b>„Web API“</b> anhaken, den Bedingungen zustimmen und ganz unten <b>„Save“</b>.",
+        sketch: sketch("developer.spotify.com/create", [`App name ${fake("SH-Tunebridge")}`, `Redirect URIs ${fake("http://127.0.0.1:8765/…")} ${hl("Add")}`, `☑ ${hl("Web API")}`, `${hl("Save")}`]) },
+      { title: "Client ID kopieren", html: "Du bist jetzt in deiner neuen App. Klicke oben rechts auf <b>„Settings“</b>. Ganz oben steht die <b>Client ID</b> – kopieren und hier einfügen.<br><span class=\"muted\">Nicht „View client secret“ – das Secret brauchen wir nicht.</span>",
+        sketch: sketch("developer.spotify.com/dashboard/…/settings", [`Basic Information`, `Client ID ${hl("a1b2c3…  (kopieren)")}`, `${fake("View client secret")} ← nicht nötig`]),
+        fields: [{ id: "SPOTIFY_CLIENT_ID", label: "Client ID", ph: "32 Zeichen, z. B. 1a2b3c4d…", re: /^[0-9a-f]{32}$/i,
+          err: "Eine Client ID besteht aus genau 32 Zeichen (Ziffern und a–f). Bitte nur die ID kopieren, ohne Leerzeichen." }] },
+    ],
+    trouble: [
+      ["„redirect_uri: Not matching configuration“", `Die Redirect-URI in deiner Spotify-App stimmt nicht genau. Bei der App › Settings › Edit › Redirect URIs genau diese Adresse eintragen, „Add“ und unten „Save“ klicken:<div class="wz-copyline"><code>${REDIRECT("spotify")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("spotify")}">Kopieren</button></div>Typische Fehler: <code>localhost</code> statt <code>127.0.0.1</code>, <code>https</code>, ein <code>/</code> am Ende, „Save“ vergessen. Nach dem Speichern kann es 1–2 Minuten dauern.`],
+      ["„INVALID_CLIENT: Invalid client“", "Die Client ID ist falsch (oder es wurde das Secret eingefügt). Einrichtung wiederholen und die Client ID neu kopieren."],
+      ["Hinweis zu Premium oder „user not registered“", "Spotify verlangt seit 2026 Premium für den Besitzer der Entwickler-App. Andere Konten musst du in deiner App unter „User Management“ eintragen (höchstens 5). Ohne Premium: nimm den Datei-Import."],
+      ["Es passiert gar nichts", "Hat sich der Browser geöffnet? Sonst den Link oben im Fenster anklicken. Läuft SH-Tunebridge? Die Anmeldung kommt an diese App zurück."],
+    ],
+  },
+  youtube: {
+    name: "YouTube", needs: "ein Google-Konto", time: "ca. 10 Minuten",
+    why: "Google lässt andere Programme nur über ein eigenes, kostenloses „Google-Cloud-Projekt“ an deine YouTube-Playlists. Es wird nur gelesen.",
+    steps: [
+      { title: "Projekt anlegen", link: ["https://console.cloud.google.com/projectcreate", "Google Cloud öffnen"],
+        html: "Mit deinem Google-Konto anmelden. Beim ersten Mal Land wählen und den Bedingungen zustimmen. Projektname eintragen und <b>„Erstellen“</b>. Kostet nichts – es wird keine Zahlungsart gebraucht.",
+        copy: [["Projektname", "SH-Tunebridge"]],
+        sketch: sketch("console.cloud.google.com/projectcreate", [`Neues Projekt`, `Projektname ${fake("SH-Tunebridge")}`, hl("Erstellen")]) },
+      { title: "YouTube-Schnittstelle einschalten", link: ["https://console.cloud.google.com/apis/library/youtube.googleapis.com", "YouTube Data API öffnen"],
+        html: "Oben muss dein neues Projekt „SH-Tunebridge“ ausgewählt sein. Dann auf <b>„Aktivieren“</b> klicken.",
+        sketch: sketch("console.cloud.google.com/apis/library/youtube…", [`YouTube Data API v3`, hl("Aktivieren")]) },
+      { title: "Anmeldeseite einrichten", link: ["https://console.cloud.google.com/auth/overview", "Google Auth Platform öffnen"],
+        html: "Auf <b>„Jetzt starten“</b>. App-Name eintragen, als Support-E-Mail deine Adresse wählen › Weiter. Zielgruppe <b>„Extern“</b> › Weiter. Kontakt-E-Mail: deine Adresse › Weiter. Zustimmen › <b>„Erstellen“</b>.",
+        copy: [["App-Name", "SH-Tunebridge"]],
+        sketch: sketch("console.cloud.google.com/auth/overview", [`App-Name ${fake("SH-Tunebridge")}`, `Zielgruppe ${hl("Extern")}`, hl("Erstellen")]) },
+      { title: "Dich als Testnutzer eintragen", link: ["https://console.cloud.google.com/auth/audience", "Zielgruppe öffnen"],
+        html: "Unter <b>„Testnutzer“</b> auf <b>„+ Add users“</b> und deine eigene Gmail-Adresse eintragen › Speichern. Ohne diesen Schritt sagt Google später „Zugriff blockiert“.",
+        sketch: sketch("console.cloud.google.com/auth/audience", [`Testnutzer`, `${hl("+ Add users")} ${fake("du@gmail.com")}`]) },
+      { title: "Zugangsdaten erstellen", link: ["https://console.cloud.google.com/auth/clients/create", "Client erstellen"],
+        html: "Anwendungstyp <b>„Desktop-App“</b> wählen (wichtig!), Name eintragen › <b>„Erstellen“</b>. Google zeigt dann <b>Client-ID</b> und <b>Clientschlüssel</b> – beide kopieren und hier einfügen.",
+        copy: [["Name", "SH-Tunebridge"]],
+        sketch: sketch("console.cloud.google.com/auth/clients/create", [`Anwendungstyp ${hl("Desktop-App")}`, `Client-ID ${fake("123…apps.googleusercontent.com")}`, `Clientschlüssel ${fake("GOCSPX-…")}`]),
+        fields: [{ id: "YOUTUBE_OAUTH_CLIENT_ID", label: "Client-ID", ph: "…apps.googleusercontent.com", re: /^[\w.-]+\.apps\.googleusercontent\.com$/,
+                   err: "Die Client-ID endet auf „.apps.googleusercontent.com“." },
+                 { id: "YOUTUBE_OAUTH_CLIENT_SECRET", label: "Clientschlüssel", ph: "GOCSPX-…", secret: true, re: /^\S{10,}$/, err: "Bitte auch den Clientschlüssel einfügen." }] },
+    ],
+    trouble: [
+      ["„Zugriff blockiert“ / „access_denied“", "Du bist nicht als Testnutzer eingetragen (Schritt 4). Danach erneut verbinden."],
+      ["„Google hat diese App nicht überprüft“", "Das ist bei eigenen Projekten normal: auf „Weiter“ klicken. Es ist deine eigene App."],
+      ["„redirect_uri_mismatch“", "Der Client ist keine „Desktop-App“. Lege in Schritt 5 einen neuen Client als Desktop-App an und trage die neuen Daten ein."],
+      ["„YouTube Data API … has not been used“", "Die Schnittstelle ist nicht eingeschaltet (Schritt 2) – oder oben war ein anderes Projekt ausgewählt."],
+      ["Nach 7 Tagen abgemeldet", "Google beendet Logins von Test-Apps nach 7 Tagen. Einfach erneut auf „Verbinden“ klicken."],
+    ],
+  },
+  soundcloud: {
+    name: "SoundCloud", needs: "SoundCloud Artist Pro", time: "ca. 5 Minuten",
+    why: "SoundCloud gibt Zugriff nur über eine eigene SoundCloud-App. Neue Apps können nur Konten mit Artist Pro anlegen. Einen Datenexport zum Hochladen bietet SoundCloud leider nicht an.",
+    steps: [
+      { title: "App anlegen", link: ["https://soundcloud.com/you/apps", "SoundCloud-Apps öffnen"],
+        html: "Anmelden und eine neue App anlegen. Name und Redirect-URI über die Knöpfe kopieren, dann speichern.",
+        copy: [["Name", "SH-Tunebridge"], ["Redirect URI", REDIRECT("soundcloud")]],
+        sketch: sketch("soundcloud.com/you/apps", [`Register a new application`, `Redirect URI ${fake("http://127.0.0.1:8765/…")}`, hl("Save")]) },
+      { title: "Zugangsdaten kopieren", html: "In deiner App stehen <b>Client ID</b> und <b>Client Secret</b> – beide kopieren und hier einfügen.",
+        fields: [{ id: "SOUNDCLOUD_CLIENT_ID", label: "Client ID", ph: "Client ID", re: /^[A-Za-z0-9_-]{16,64}$/, err: "Das sieht nicht nach einer Client ID aus." },
+                 { id: "SOUNDCLOUD_CLIENT_SECRET", label: "Client Secret", ph: "Client Secret", secret: true, re: /^\S{8,}$/, err: "Bitte auch das Client Secret einfügen." }] },
+    ],
+    trouble: [
+      ["„redirect_uri“ / „invalid_request“", `Die Redirect-URI stimmt nicht genau. In deiner SoundCloud-App diese Adresse eintragen:<div class="wz-copyline"><code>${REDIRECT("soundcloud")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("soundcloud")}">Kopieren</button></div>`],
+      ["„invalid_client“", "Client ID oder Secret falsch – Einrichtung wiederholen."],
+    ],
+  },
+  lastfm: {
+    name: "Last.fm", needs: "ein Last.fm-Konto", time: "ca. 2 Minuten", key: true,
+    why: "Last.fm liefert Genre-Angaben und deine Loved Tracks. Dafür braucht es einen kostenlosen API-Key.",
+    steps: [
+      { title: "API-Konto anlegen", link: ["https://www.last.fm/api/account/create", "Last.fm öffnen"],
+        html: "Mit deinem Last.fm-Konto anmelden. Im Formular reichen Name und Beschreibung – „Callback URL“ und „Application homepage“ leer lassen › <b>„Submit“</b>.",
+        copy: [["Application name", "SH-Tunebridge"], ["Application description", "Genres und Loved Tracks für SH-Tunebridge"]],
+        sketch: sketch("last.fm/api/account/create", [`Application name ${fake("SH-Tunebridge")}`, `Callback URL ${fake("(leer lassen)")}`, hl("Submit")]) },
+      { title: "API-Key kopieren", html: "Last.fm zeigt jetzt <b>API key</b> und <b>Shared secret</b>. Nur den <b>API key</b> kopieren und hier einfügen.",
+        sketch: sketch("last.fm/api/account/create", [`API key ${hl("0123abcd…  (kopieren)")}`, `Shared secret ${fake("…")} ← nicht nötig`]),
+        fields: [{ id: "LASTFM_API_KEY", label: "API key", ph: "32 Zeichen", re: /^[0-9a-f]{32}$/i, err: "Der API key besteht aus 32 Zeichen (Ziffern und a–f)." }] },
+    ],
+    trouble: [],
+  },
+};
+
+const IMPORT = {
+  spotify: {
+    name: "Spotify", wait: "meist 1–5 Tage", accept: ".zip,.json",
+    why: "Spotify muss dir eine Kopie deiner Daten geben (DSGVO). Darin stecken alle eigenen Playlists und Lieblingssongs. Kein Premium, keine Entwickler-App.",
+    steps: [
+      { title: "Daten anfordern", link: ["https://www.spotify.com/de/account/privacy/", "Spotify-Datenschutzseite öffnen"],
+        html: "Anmelden und nach unten zu <b>„Daten herunterladen“</b>. Nur <b>„Kontodaten“</b> anhaken – das reicht (der erweiterte Streamingverlauf ist nicht nötig). Auf <b>„Daten anfordern“</b> klicken.",
+        sketch: sketch("spotify.com/account/privacy", [`Daten herunterladen`, `☑ ${hl("Kontodaten")}`, `☐ ${fake("Erweiterter Streamingverlauf")}`, hl("Daten anfordern")]) },
+      { title: "E-Mail bestätigen", html: "Spotify schickt sofort eine E-Mail. Darin auf den <b>Bestätigungs-Link</b> klicken – sonst wird nichts vorbereitet." },
+      { title: "Warten und Datei hier reinziehen", html: "Wenn die Daten fertig sind (meist nach 1–5 Tagen), kommt eine zweite E-Mail. Die Datei <b>my_spotify_data.zip</b> herunterladen und unten hineinziehen. Entpacken ist nicht nötig.", drop: true },
+    ],
+  },
+  youtube: {
+    name: "YouTube / YouTube Music", wait: "meist Minuten bis Stunden", accept: ".zip,.csv",
+    why: "Google Takeout gibt dir deine YouTube-Playlists und die YouTube-Music-Bibliothek als Datei. Kein Google-Cloud-Projekt nötig.",
+    steps: [
+      { title: "Takeout öffnen und nur YouTube wählen", link: ["https://takeout.google.com/", "Google Takeout öffnen"],
+        html: "Oben auf <b>„Auswahl aufheben“</b>, dann nach unten scrollen und nur <b>„YouTube und YouTube Music“</b> anhaken.",
+        sketch: sketch("takeout.google.com", [hl("Auswahl aufheben"), `☐ ${fake("Chrome")}  ☐ ${fake("Drive")} …`, `☑ ${hl("YouTube und YouTube Music")}`]) },
+      { title: "Nur Playlists und Musik", html: "Bei YouTube auf <b>„Alle YouTube-Daten einbezogen“</b> klicken › <b>„Auswahl aufheben“</b> › nur <b>„Musikbibliothek“</b> und <b>„Playlists“</b> anhaken › OK.<br><span class=\"muted\">Wichtig: „Videos“ nicht auswählen – sonst wird die Datei riesig.</span>",
+        sketch: sketch("takeout.google.com", [`☑ ${hl("Musikbibliothek")}`, `☑ ${hl("Playlists")}`, `☐ ${fake("Videos")} ← nicht auswählen`]) },
+      { title: "Export erstellen", html: "Ganz unten <b>„Nächster Schritt“</b> › „Einmal exportieren“, Dateityp <b>.zip</b> › <b>„Export erstellen“</b>." },
+      { title: "Datei hier reinziehen", html: "Wenn Google die E-Mail schickt, die ZIP-Datei herunterladen und unten hineinziehen. Für Playlists liefert Google nur Video-Nummern – die Titel fragt SH-Tunebridge dann einzeln bei YouTube ab (offizielles oEmbed, ohne Konto). Das kann bei großen Listen ein paar Minuten dauern.", drop: true },
+    ],
+  },
+  apple: {
+    name: "Apple Music", wait: "sofort", accept: ".xml,.txt,.csv,.m3u,.m3u8,.zip",
+    why: "Die Musik-App kann deine ganze Mediathek als Datei speichern – mit allen Playlists.",
+    steps: [
+      { title: "Mediathek exportieren", html: "<b>Mac:</b> Musik-App › Menü <b>„Ablage“</b> › <b>„Mediathek“</b> › <b>„Mediathek exportieren …“</b> › speichern.<br><b>Windows:</b> iTunes › <b>„Datei“</b> › <b>„Mediathek“</b> › <b>„Mediathek exportieren …“</b>.<br><span class=\"muted\">Nur eine Playlist? Rechtsklick auf die Playlist › „Playlist exportieren …“ geht auch.</span>",
+        sketch: sketch("Musik › Ablage", [`Ablage › ${hl("Mediathek")} › ${hl("Mediathek exportieren …")}`]) },
+      { title: "Datei hier reinziehen", html: "Die gespeicherte <b>.xml</b>-Datei unten hineinziehen.", drop: true },
+    ],
+  },
+};
+
+/* Auswahl: direkt verbinden oder Datei importieren */
+function connectService(sid, main) {
+  const c = SETUP[sid], im = IMPORT[sid];
+  if (c && !im) return setupWizard(sid, main);
+  if (im && !c) return importWizard(sid, main);
   modal({
-    title: "Spotify einrichten (einmalig)", wide: true, confirm: "Speichern & verbinden",
-    body: `<div class="privacy-note"><p>Spotify erlaubt Drittprogrammen den Zugriff nur über eine <b>eigene, kostenlose Spotify-App</b> – das ist der offizielle Weg.</p>
-      <ol style="margin:6px 0 0 18px;padding:0;line-height:1.6">
-        <li>Öffne <a href="https://developer.spotify.com/dashboard" target="_blank" rel="noopener">developer.spotify.com/dashboard</a> und melde dich an.</li>
-        <li>„Create app“: Name z. B. „SH-Tunebridge“, Beschreibung beliebig.</li>
-        <li>Bei <b>Redirect URI</b> genau eintragen: <code>http://127.0.0.1:8765/api/spotify/callback</code></li>
-        <li>„Web API“ anhaken, speichern, dann die <b>Client ID</b> kopieren und hier einfügen.</li></ol>
-      <p class="cell-sub" style="white-space:normal">Hinweis: Seit 2026 braucht der App-Besitzer Spotify Premium; eine App darf höchstens 5 Nutzer haben, und es lassen sich nur eigene Playlists lesen. Ein Client-Secret ist nicht nötig.</p></div>
-      <input class="input" id="spCid" placeholder="Client ID (32 Zeichen)" autocomplete="off" spellcheck="false">`,
+    title: `${c.name} verbinden`, wide: true, cancel: "Abbrechen", confirm: "Weiter",
+    body: `<div class="wz-choice">
+      <label class="wz-opt"><input type="radio" name="wzc" value="connect" checked><div><b>Direkt verbinden</b>
+        <span class="wz-tags"><span class="acc-badge ok">immer aktuell</span><span class="acc-badge">${esc(c.time)} Einrichtung</span><span class="acc-badge warn">braucht ${esc(c.needs)}</span></span>
+        <p>${c.why}</p></div></label>
+      <label class="wz-opt"><input type="radio" name="wzc" value="import"><div><b>Datenexport importieren</b>
+        <span class="wz-tags"><span class="acc-badge ok">einfach</span><span class="acc-badge ok">ohne Premium</span><span class="acc-badge">Wartezeit ${esc(im.wait)}</span></span>
+        <p>${im.why} Aktualisiert sich nicht von selbst – neu importieren geht jederzeit.</p></div></label></div>`,
+    onConfirm: box => { const v = $("input[name=wzc]:checked", box).value; setTimeout(() => v === "import" ? importWizard(sid, main) : setupWizard(sid, main), 50); },
+  });
+}
+
+/* Ein Assistent mit Schritten. Weiter/Zurück im selben Fenster; der letzte Schritt speichert. */
+function Wizard({ title, intro, steps, finishLabel, onFinish, onRender }) {
+  let i = 0;
+  const vals = {};
+  const draw = box => {
+    const s = steps[i];
+    $("#wzBody", box).innerHTML = `
+      <div class="wz-prog">${steps.map((_, k) => `<span class="${k < i ? "done" : k === i ? "on" : ""}"></span>`).join("")}<em>Schritt ${i + 1} von ${steps.length}</em></div>
+      ${i === 0 && intro ? `<p class="wz-intro">${intro}</p>` : ""}
+      <h4 class="wz-title">${esc(s.title)}</h4>
+      ${s.link ? `<a class="btn btn--sm btn--primary wz-link" href="${esc(s.link[0])}" target="_blank" rel="noopener">${icon("external")}${esc(s.link[1])}</a>` : ""}
+      <div class="wz-text">${s.html}</div>
+      ${s.copy ? `<div class="wz-copies">${s.copy.map(([l, v]) => `<div class="wz-copyline"><span>${esc(l)}</span><code>${esc(v)}</code><button class="btn btn--sm btn--ghost" data-copy="${esc(v)}">${icon("copy")}Kopieren</button></div>`).join("")}</div>` : ""}
+      ${s.after ? `<div class="wz-text">${s.after}</div>` : ""}
+      ${s.sketch || ""}
+      ${(s.fields || []).map(f => `<label class="wz-field"><span>${esc(f.label)}</span><input class="input" data-f="${f.id}" type="${f.secret ? "password" : "text"}" placeholder="${esc(f.ph)}" autocomplete="off" spellcheck="false" value="${esc(vals[f.id] || "")}"><small class="wz-err hidden"></small></label>`).join("")}
+      ${s.drop ? `<div id="wzDrop"></div>` : ""}
+      ${i > 0 ? `<button class="link-btn wz-back">← Zurück</button>` : ""}`;
+    hydrateIcons(box);
+    $$("[data-copy]", box).forEach(b => b.onclick = async () => { await Clip.write(b.dataset.copy); b.classList.add("ok"); toast("Kopiert"); });
+    const back = $(".wz-back", box); if (back) back.onclick = () => { save(box); i--; draw(box); };
+    $$("[data-f]", box).forEach(inp => inp.addEventListener("input", () => { inp.value = inp.value.trim(); }));
+    const ok = $("[data-m=ok]"); if (ok) { ok.textContent = i === steps.length - 1 ? (finishLabel || "Fertig") : "Weiter"; ok.classList.toggle("hidden", !!s.drop); }
+    onRender?.(box, s);
+  };
+  const save = box => $$("[data-f]", box).forEach(inp => { vals[inp.dataset.f] = inp.value.trim(); });
+  modal({
+    title, wide: true, sticky: true, cancel: "Abbrechen", confirm: "Weiter", body: `<div id="wzBody" class="wz"></div>`,
     onConfirm: async box => {
-      const v = $("#spCid", box).value.trim();
-      if (!/^[0-9a-f]{32}$/i.test(v)) { toast("Das sieht nicht nach einer Client-ID aus", "err"); throw { silent: true }; }
-      await api("/api/settings", { method: "POST", body: { key: "SPOTIFY_CLIENT_ID", value: v } });
-      setTimeout(() => platformLogin(p, main), 250);
+      save(box);
+      const s = steps[i];
+      let bad = false;
+      for (const f of s.fields || []) {
+        const v = vals[f.id] || "", errEl = $(`[data-f="${f.id}"]`, box).parentElement.querySelector(".wz-err");
+        const okv = f.re.test(v);
+        errEl.textContent = okv ? "" : (v ? f.err : "Bitte ausfüllen."); errEl.classList.toggle("hidden", okv); bad ||= !okv;
+      }
+      if (bad) throw { silent: true };
+      if (i < steps.length - 1) { i++; draw(box); throw { silent: true }; }
+      await onFinish(vals);
+    },
+  });
+  draw($("#modalBox"));
+}
+
+function setupWizard(sid, main) {
+  const c = SETUP[sid];
+  Wizard({
+    title: `${c.name} einrichten (einmalig)`, steps: c.steps, finishLabel: c.key ? "Speichern" : "Speichern & verbinden",
+    intro: `${c.why} <span class="muted">Du brauchst: ${esc(c.needs)} · Dauer: ${esc(c.time)}. Alle Angaben bleiben nur auf diesem Rechner.</span>`,
+    onFinish: async vals => {
+      for (const [k, v] of Object.entries(vals)) if (v) await api("/api/settings", { method: "POST", body: { key: k, value: v } });
+      if (c.key) { toast(`${c.name}-Key gespeichert`); setTimeout(route, 200); return; }
+      const plats = await api("/api/platforms");
+      setTimeout(() => platformLogin(plats.find(p => p.id === sid), main), 250);
     },
   });
 }
 
-const OAUTH_SETUP = {
-  youtube: {
-    title: "YouTube-Login einrichten (einmalig)", idKey: "YOUTUBE_OAUTH_CLIENT_ID", secKey: "YOUTUBE_OAUTH_CLIENT_SECRET",
-    idRe: /\.apps\.googleusercontent\.com$/, idPh: "…apps.googleusercontent.com",
-    intro: "Google erlaubt den Zugriff auf deine YouTube-Playlists nur über eine <b>eigene, kostenlose Google-App</b> – das ist der offizielle Weg. Gelesen wird nur (Berechtigung „youtube.readonly“).",
-    steps: [
-      `Öffne <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank" rel="noopener">console.cloud.google.com</a>, lege ein Projekt an und aktiviere <b>YouTube Data API v3</b>.`,
-      `„OAuth-Zustimmungsbildschirm“ / „Google Auth Platform“: Typ <b>Extern</b>, App-Name z. B. „SH-Tunebridge“, und dich selbst unter <b>Testnutzer</b> eintragen.`,
-      `„Clients“ › „Client erstellen“ › Anwendungstyp <b>Desktop-App</b>. (Die Rückleitung auf <code>http://127.0.0.1</code> erlaubt Google bei Desktop-Apps automatisch.)`,
-      `<b>Client-ID</b> und <b>Client-Secret</b> kopieren und unten einfügen.`],
-    hint: "Solange die Google-App im Testmodus ist, musst du dich alle 7 Tage neu verbinden. Das Secret ist bei Desktop-Apps laut Google kein echtes Geheimnis – es bleibt trotzdem nur auf deinem Rechner.",
-  },
-  soundcloud: {
-    title: "SoundCloud-Login einrichten (einmalig)", idKey: "SOUNDCLOUD_CLIENT_ID", secKey: "SOUNDCLOUD_CLIENT_SECRET",
-    idRe: /^[A-Za-z0-9_-]{16,64}$/, idPh: "Client ID",
-    intro: "SoundCloud gibt Zugriff nur über eine <b>eigene SoundCloud-App</b> (offizielle API). Neue Apps kann man im Entwicklerbereich selbst anlegen – dafür braucht dein Konto <b>Artist Pro</b>.",
-    steps: [
-      `Öffne <a href="https://soundcloud.com/you/apps" target="_blank" rel="noopener">soundcloud.com/you/apps</a> (bzw. developers.soundcloud.com) und lege eine neue App an.`,
-      `Bei <b>Redirect URI</b> genau eintragen: <code>http://127.0.0.1:8765/api/oauth/soundcloud/callback</code>`,
-      `<b>Client ID</b> und <b>Client Secret</b> kopieren und unten einfügen.`],
-    hint: "Gelesen werden nur deine Playlists und Likes (Titel, Künstler, Cover-Adresse) – nie Musik. Kein Server dazwischen: Login und Token bleiben auf diesem Rechner.",
-  },
-};
-function oauthSetup(p, main) {
-  const c = OAUTH_SETUP[p.id];
-  modal({
-    title: c.title, wide: true, confirm: "Speichern & verbinden",
-    body: `<div class="privacy-note"><p>${c.intro}</p>
-      <ol style="margin:6px 0 0 18px;padding:0;line-height:1.6">${c.steps.map(x => `<li>${x}</li>`).join("")}</ol>
-      <p class="cell-sub" style="white-space:normal">${c.hint}</p></div>
-      <input class="input" id="oaCid" placeholder="${esc(c.idPh)}" autocomplete="off" spellcheck="false" style="width:100%;margin-bottom:8px">
-      <input class="input" id="oaSec" type="password" placeholder="Client-Secret" autocomplete="off" spellcheck="false" style="width:100%">`,
-    onConfirm: async box => {
-      const id = $("#oaCid", box).value.trim(), sec = $("#oaSec", box).value.trim();
-      if (!c.idRe.test(id)) { toast("Das sieht nicht nach einer Client-ID aus", "err"); throw { silent: true }; }
-      if (sec.length < 8) { toast("Bitte auch das Client-Secret einfügen", "err"); throw { silent: true }; }
-      await api("/api/settings", { method: "POST", body: { key: c.idKey, value: id } });
-      await api("/api/settings", { method: "POST", body: { key: c.secKey, value: sec } });
-      setTimeout(() => platformLogin(p, main), 250);
-    },
+function importWizard(sid, main) {
+  const c = IMPORT[sid];
+  Wizard({
+    title: `${c.name}: Datenexport importieren`, steps: c.steps,
+    intro: `${c.why} <span class="muted">Gelesen werden nur Playlist-Namen, Titel, Künstler und Album – der Rest der Datei (z. B. Hörverlauf) wird nicht angefasst, die Datei selbst nicht gespeichert.</span>`,
+    onFinish: async () => {},
+    onRender: (box, s) => { if (s.drop) dropZone($("#wzDrop", box), sid, c.accept, main); },
   });
+}
+
+function dropZone(el, sid, accept, main) {
+  el.innerHTML = `<label class="wz-drop" tabindex="0">${icon("upload")}<b>Datei hier hineinziehen</b><span>oder klicken zum Auswählen (${esc(accept)})</span>
+    <input type="file" accept="${esc(accept)}" hidden></label><div class="wz-imp hidden"></div>`;
+  hydrateIcons(el);
+  const zone = $(".wz-drop", el), inp = $("input", el), out = $(".wz-imp", el);
+  const go = async f => {
+    if (!f) return;
+    zone.classList.add("hidden"); out.classList.remove("hidden");
+    out.innerHTML = `<div class="login-wait"><span class="upd-dot spin"></span><span id="impState">Lade ${esc(f.name)} …</span></div>`;
+    try {
+      const r = await fetch(`/api/services/${sid}/import?name=${encodeURIComponent(f.name)}`, { method: "POST", headers: { "Content-Type": "application/octet-stream" }, body: f });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.detail || r.statusText);
+      let st;
+      for (;;) {
+        await new Promise(res => setTimeout(res, 700));
+        st = await api(`/api/services/import/${j.job}`);
+        const lbl = $("#impState"); if (!lbl) return;
+        lbl.textContent = st.state === "titles" ? `Hole Titel bei YouTube … ${st.done} / ${st.total}` : "Lese die Datei …";
+        if (["done", "error", "cancelled"].includes(st.state)) break;
+      }
+      if (st.state !== "done") throw new Error(st.error || "Abgebrochen");
+      const res = st.result;
+      out.innerHTML = `<div class="notice ok">${icon("check")}<div><b>Fertig!</b> ${res.playlists} Playlist${res.playlists === 1 ? "" : "s"}${res.liked ? ` und ${res.liked} Lieblingssong${res.liked === 1 ? "" : "s"}` : ""} – zusammen ${res.songs} Songs.</div></div>`;
+      hydrateIcons(out);
+      const ok = $("[data-m=ok]"); ok.textContent = "Playlists ansehen"; ok.classList.remove("hidden");
+      ok.onclick = () => { $("#modal").classList.remove("open"); SideSvc.loaded = false; location.hash = `#/services?svc=${sid}`; };
+    } catch (e) {
+      out.innerHTML = `<div class="notice">${icon("info")}<div>${esc(e.message)}</div></div><button class="btn btn--sm btn--ghost wz-again">Andere Datei wählen</button>`;
+      hydrateIcons(out);
+      $(".wz-again", out).onclick = () => { out.classList.add("hidden"); zone.classList.remove("hidden"); inp.value = ""; };
+    }
+  };
+  inp.onchange = () => go(inp.files[0]);
+  zone.addEventListener("dragover", e => { e.preventDefault(); zone.classList.add("over"); });
+  zone.addEventListener("dragleave", () => zone.classList.remove("over"));
+  zone.addEventListener("drop", e => { e.preventDefault(); zone.classList.remove("over"); go(e.dataTransfer.files[0]); });
+}
+
+/* Hilfe, wenn die Anmeldung nicht zurückkommt (die Fehlermeldung zeigt der Dienst nur in seinem eigenen Fenster) */
+function loginTrouble(sid, main) {
+  const c = SETUP[sid];
+  if (!c?.trouble?.length) return "";
+  return `<div class="wz-trouble"><b>Kommt nichts zurück? Steht beim Dienst eine Fehlermeldung?</b>
+    ${c.trouble.map(([t, h]) => `<details><summary>${esc(t)}</summary><div>${h}</div></details>`).join("")}
+    <div class="btn-row"><button class="btn btn--sm btn--ghost" data-redo="${sid}">${icon("key")}Einrichtung wiederholen</button>
+    ${IMPORT[sid] ? `<button class="btn btn--sm btn--ghost" data-imp="${sid}">${icon("upload")}Stattdessen Datei importieren</button>` : ""}</div></div>`;
 }
 
 async function platformLogin(p, main) {
   let st;
   try { st = await api(`/api/platforms/${p.id}/login`, { method: "POST" }); }
   catch (e) {
-    if (/Client-ID/.test(e.message) && p.id === "spotify") return spotifySetup(p, main);
-    if (/Client-ID/.test(e.message) && OAUTH_SETUP[p.id]) return oauthSetup(p, main);
+    if (/Client-ID/.test(e.message) && SETUP[p.id]) return setupWizard(p.id, main);
     return toast(e.message, "err");
   }
   let alive = true;
@@ -1602,13 +1811,21 @@ async function platformLogin(p, main) {
                   : "Im Browser hat sich die Anmeldeseite geöffnet. Logge dich dort ein und erlaube den Zugriff – danach geht es hier automatisch weiter.",
     body: `${st.code ? `<div class="login-code">${esc(st.code)}</div>` : ""}
       <div class="login-wait"><span class="upd-dot spin"></span><span id="loginState">Warte auf Bestätigung …</span></div>
-      <div class="cell-sub" style="white-space:normal">Browser nicht aufgegangen? <a href="${esc(st.url)}" target="_blank" rel="noopener">${esc(st.url)}</a></div>`,
-    confirm: "Fertig", cancel: "Abbrechen",
+      <div class="cell-sub" style="white-space:normal">Browser nicht aufgegangen? <a href="${esc(st.url)}" target="_blank" rel="noopener">Anmeldeseite öffnen</a></div>
+      <div id="loginHelp"></div>`,
+    confirm: "Fertig", cancel: "Abbrechen", wide: !!SETUP[p.id],
     onCancel: () => { alive = false; },
     onConfirm: async () => { alive = false; route(); },
   });
   $("[data-m=ok]").disabled = true;
+  const t0 = Date.now();
   while (alive) {
+    if (Date.now() - t0 > 20000 && $("#loginHelp") && !$("#loginHelp").innerHTML) {
+      $("#loginHelp").innerHTML = loginTrouble(p.id, main); hydrateIcons($("#loginHelp"));
+      $$("#loginHelp [data-copy]").forEach(b => b.onclick = async () => { await Clip.write(b.dataset.copy); toast("Kopiert"); });
+      $$("#loginHelp [data-redo]").forEach(b => b.onclick = () => { alive = false; setupWizard(p.id, main); });
+      $$("#loginHelp [data-imp]").forEach(b => b.onclick = () => { alive = false; importWizard(p.id, main); });
+    }
     await new Promise(r => setTimeout(r, 2000));
     if (!alive) break;
     const s = await api(`/api/platforms/${p.id}/login`).catch(() => ({}));
@@ -3545,26 +3762,40 @@ Views.services = async (main, _, params) => {
       : s.kind === "none" ? `<span class="acc-badge">Nicht möglich</span>` : s.kind === "file" ? `<span class="acc-badge">Datei</span>`
       : `<span class="acc-badge">Nicht verbunden</span>`;
     let act = "";
+    const imp = s.mode === "import";
+    const impBtns = s.importable ? (s.import
+      ? `<button class="btn btn--sm btn--ghost" data-imp="${s.id}">${icon("upload")}Neu importieren</button><button class="btn btn--sm btn--ghost" data-impdel="${s.id}">Import löschen</button>`
+      : (s.kind === "account" && !s.ready) ? "" : `<button class="btn btn--sm btn--ghost" data-imp="${s.id}">${icon("upload")}Datei importieren</button>`) : "";
     if (s.kind === "account") {
-      act = s.ready ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>`
-        : `<button class="btn btn--sm" data-login="${s.id}">${icon("key")}${s.needs === "setup" ? "Einrichten & verbinden" : "Verbinden"}</button>`;
-      if (s.ready && s.mode !== "profile" && ["youtube", "soundcloud"].includes(s.id)) act += `<button class="btn btn--sm btn--ghost" data-logout="${s.id}">Trennen</button>`;
-      if (s.id === "youtube") act += s.mode === "profile" ? `<button class="btn btn--sm btn--ghost" data-login="${s.id}">${icon("key")}Mit Google anmelden</button><button class="btn btn--sm btn--ghost" data-profile="${s.id}">Kanal ändern</button>`
+      if (s.ready && !imp) act = `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>`;
+      else if (imp) act = `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>${SETUP[s.id] ? `<button class="btn btn--sm btn--ghost" data-connect="${s.id}">${icon("key")}Direkt verbinden</button>` : ""}`;
+      else act = s.needs === "connect" ? `<button class="btn btn--sm btn--primary" data-login="${s.id}">${icon("key")}Verbinden</button>`
+        : `<button class="btn btn--sm btn--primary" data-connect="${s.id}">${icon("key")}Verbinden</button>`;
+      if (s.ready && !imp && s.mode !== "profile" && ["youtube", "soundcloud"].includes(s.id)) act += `<button class="btn btn--sm btn--ghost" data-logout="${s.id}">Trennen</button>`;
+      if (s.id === "youtube" && !imp) act += s.mode === "profile" ? `<button class="btn btn--sm btn--ghost" data-login="${s.id}">${icon("key")}Mit Google anmelden</button><button class="btn btn--sm btn--ghost" data-profile="${s.id}">Kanal ändern</button>`
         : !s.ready ? `<button class="btn btn--sm btn--ghost" data-profile="${s.id}" title="Nur öffentliche Playlists, braucht einen YouTube-API-Key">Nur Kanal-Link</button>` : "";
+      if (!s.ready && s.needs === "connect" && IMPORT[s.id]) act += `<button class="btn btn--sm btn--ghost" data-imp="${s.id}">${icon("upload")}Datei importieren</button>`;
+      if (s.ready && !imp && SETUP[s.id]) act += `<button class="btn btn--sm btn--ghost" data-redo="${s.id}" title="Zugangsdaten deiner Entwickler-App ändern">Einrichtung ändern</button>`;
+      if (imp || s.ready) act += impBtns;
     }
-    else if (s.kind === "profile") act = s.needs === "key" ? `<a class="btn btn--sm" href="#/settings?tab=dienste">${icon("key")}API-Key eintragen</a>`
+    else if (s.kind === "profile") act = s.needs === "key" ? `<button class="btn btn--sm btn--primary" data-redo="${s.id}">${icon("key")}Einrichten</button>`
       : s.ready ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button><button class="btn btn--sm btn--ghost" data-profile="${s.id}">Profil ändern</button>`
       : `<button class="btn btn--sm" data-profile="${s.id}">${icon("key")}Profil verknüpfen</button>`;
-    else if (s.kind === "file") act = `<button class="btn btn--sm btn--primary" data-file="${s.id}">${icon("upload")}Export-Datei laden</button>`;
+    else if (s.kind === "file") act = s.import ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>${impBtns}`
+      : `<button class="btn btn--sm btn--primary" data-imp="${s.id}">${icon("upload")}Mediathek importieren</button>`;
     return `<div class="card platform svc-card ${off ? "planned" : ""}"><div class="p-logo" style="--pc:${c}">${m}</div>
       <div><h4>${esc(s.name)} ${badge}</h4><p>${esc(s.note)}</p><div class="btn-row">${act}</div></div></div>`;
   };
   $(".page", main).innerHTML = `<div class="page-head"><div><h1>Dienste</h1><p>Deine Playlists bei den Musikanbietern ansehen und als Vorschau sortieren lassen – vom passenden Mix bis zum Mikro-Genre. Gelesen werden nur Titel, Künstler und Album – nie Musik.</p></div></div>
-    <div class="platforms">${list.map(card).join("")}</div>
-    <input type="file" id="svcFile" accept=".xml,.txt,.csv,.m3u,.m3u8" hidden>`;
+    <div class="platforms">${list.map(card).join("")}</div>`;
   hydrateIcons(main);
   $$("[data-open]", main).forEach(b => b.onclick = () => location.hash = `#/services?svc=${b.dataset.open}`);
   $$("[data-login]", main).forEach(b => b.onclick = async () => { const plats = await api("/api/platforms"); platformLogin(plats.find(p => p.id === b.dataset.login), main); });
+  $$("[data-connect]", main).forEach(b => b.onclick = () => connectService(b.dataset.connect, main));
+  $$("[data-redo]", main).forEach(b => b.onclick = () => setupWizard(b.dataset.redo, main));
+  $$("[data-imp]", main).forEach(b => b.onclick = () => importWizard(b.dataset.imp, main));
+  $$("[data-impdel]", main).forEach(b => b.onclick = () => modal({ title: "Import löschen?", text: "Die importierten Playlists werden aus SH-Tunebridge entfernt. Bei deinem Dienst ändert sich nichts.", confirm: "Löschen", danger: true,
+    onConfirm: async () => { await api(`/api/services/${b.dataset.impdel}/import`, { method: "DELETE" }); SideSvc.loaded = false; route(); } }));
   $$("[data-logout]", main).forEach(b => b.onclick = () => modal({ title: "Verbindung trennen?", text: "Das gespeicherte Login-Token wird auf diesem Rechner gelöscht. Deine App-Daten (Client-ID) bleiben eingetragen.", confirm: "Trennen", danger: true,
     onConfirm: async () => { await api(`/api/platforms/${b.dataset.logout}/logout`, { method: "POST" }); SideSvc.loaded = false; route(); } }));
   $$("[data-profile]", main).forEach(b => b.onclick = () => {
@@ -3573,14 +3804,6 @@ Views.services = async (main, _, params) => {
       body: `<input class="input" id="pfIn" placeholder="${esc(ph)}" autocomplete="off" spellcheck="false" style="width:100%">`, confirm: "Speichern",
       onConfirm: async box => { try { await api(`/api/services/${id}/profile`, { method: "POST", body: { value: $("#pfIn", box).value } }); toast("Profil gespeichert"); route(); } catch (e) { toast(e.message, "err"); throw { silent: true }; } } });
   });
-  const fb = $("[data-file]", main);
-  if (fb) fb.onclick = () => $("#svcFile").click();
-  $("#svcFile").onchange = async e => {
-    const f = e.target.files[0]; if (!f) return;
-    const data = await new Promise(r => { const rd = new FileReader(); rd.onload = () => r(String(rd.result).split(",")[1]); rd.readAsDataURL(f); });
-    Sorter.file = { name: f.name, data };
-    location.hash = `#/services?svc=apple&pl=__file__&name=${encodeURIComponent(f.name.replace(/\.[^.]+$/, ""))}`;
-  };
 };
 
 Views.servicePlaylists = async (main, sid) => {

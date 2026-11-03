@@ -183,6 +183,10 @@ ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch 
 - **Dauer-Modus**: hört alle paar Sekunden zu und protokolliert jeden neuen Song (z.B. bei DJ-Sets).
 
 ## Dienste & Übertragen
+- **Einrichten ohne Fachwissen:** Für Spotify, YouTube, SoundCloud und Last.fm führt ein Assistent Schritt für
+  Schritt durch die Entwickler-App (Kopieren-Knöpfe, Skizzen, Hilfe bei typischen Fehlermeldungen).
+- **Ohne Login:** Spotify-Kontodaten (ZIP), Google Takeout (YouTube-Playlists + Musikbibliothek) oder die
+  Apple-Music-Mediathek (XML) importieren – alle Playlists auf einmal, kein Premium, keine Entwickler-App.
 
 | Dienst | Status | Login |
 |---|---|---|

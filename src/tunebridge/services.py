@@ -19,7 +19,7 @@ import uuid
 
 import httpx
 
-from . import config, store
+from . import config, dataexport, store
 from . import debuglog as dbg
 from .models import Track
 
@@ -43,8 +43,8 @@ NOTES = {
                "Likes aus YouTube Music. Alternativ nur öffentliche Playlists eines Kanals mit API-Key.",
     "deezer": "Öffentliches Profil: Lieblingssongs und öffentliche Playlists – ohne Login.",
     "lastfm": "Öffentliches Profil: deine Loved Tracks. Last.fm sammelt auch, was du bei Spotify/YouTube hörst.",
-    "apple": "Apple erlaubt den Zugriff nur mit kostenpflichtigem Entwicklerkonto. Lösung: in Apple Music/iTunes "
-             "„Datei › Bibliothek › Playlist exportieren“ und die Datei hier laden.",
+    "apple": "Apple erlaubt den Zugriff nur mit kostenpflichtigem Entwicklerkonto. Lösung: in der Musik-App "
+             "die Mediathek exportieren und hier laden – alle Playlists auf einmal.",
     "soundcloud": "Mit deiner eigenen SoundCloud-App anmelden (offizielle API, dafür braucht dein Konto Artist Pro): "
                   "deine Playlists und Likes. Ohne App: einzelne Songs über „Link einfügen“.",
 }
@@ -145,7 +145,13 @@ def overview(account_state) -> list[dict]:
             else:
                 st.update(ready=True, account=p[sid]["name"])
         elif kind == "file":
-            st.update(ready=True, needs=None)
+            st.update(needs="import")
+        imp = dataexport.info(sid) if sid in dataexport.IMPORT_SERVICES else None
+        st["import"] = imp
+        st["importable"] = sid in dataexport.IMPORT_SERVICES
+        if imp and not st["ready"]:
+            st.update(ready=True, needs=None, mode="import",
+                      account=f"Import vom {time.strftime('%d.%m.%Y', time.localtime(imp['imported']))}")
         out.append(st)
     return out
 
@@ -168,7 +174,19 @@ def oauth_ready(sid: str) -> bool:
     return bool(prov.tok.get("access_token")) and prov.configured()
 
 
+def _use_import(sid: str) -> bool:
+    """Datei-Import nutzen, wenn kein Konto verbunden ist (ein verbundenes Konto ist aktueller)."""
+    if sid not in dataexport.IMPORT_SERVICES or not dataexport.info(sid):
+        return False
+    if sid == "spotify":
+        from .providers import get_provider
+        return not get_provider("spotify").tok.get("access_token")
+    return sid == "apple" or not oauth_ready(sid)
+
+
 def playlists(sid: str) -> list[dict]:
+    if _use_import(sid):
+        return dataexport.playlists(sid)
     p = profiles().get(sid) or {}
     if sid in ("spotify", "tidal") or oauth_ready(sid):
         from .providers import get_provider
@@ -216,6 +234,8 @@ def playlists(sid: str) -> list[dict]:
 
 def load(sid: str, pid: str) -> tuple[str, list[Track]]:
     from . import linkimport
+    if _use_import(sid):
+        return dataexport.load(sid, pid)
     p = profiles().get(sid) or {}
     if sid in ("spotify", "tidal") or oauth_ready(sid):
         from . import transfer

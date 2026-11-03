@@ -1279,3 +1279,53 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .chip--own { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
 .chip--own i[data-icon] { width: 12px; height: 12px; }
 @media (max-width: 900px) { .gdb-row { grid-template-columns: 1fr 1fr; } .gdb-row.head { display: none; } }
+
+/* ---------- Dienste einrichten: Assistent + Datei-Import */
+.wz { display: flex; flex-direction: column; gap: 12px; }
+.wz-prog { display: flex; align-items: center; gap: 6px; }
+.wz-prog span { width: 28px; height: 4px; border-radius: 2px; background: var(--bg-4); }
+.wz-prog span.done { background: var(--accent-soft); }
+.wz-prog span.on { background: var(--accent); }
+.wz-prog em { margin-left: 8px; font-style: normal; font-size: 12px; color: var(--text-3); }
+.wz-intro { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.55; }
+.wz-intro .muted, .wz-text .muted { display: block; margin-top: 4px; color: var(--text-3); font-size: 12.5px; }
+.wz-title { margin: 4px 0 0; font-size: 16px; }
+.wz-link { align-self: flex-start; }
+.wz-text { color: var(--text-2); font-size: 13.5px; line-height: 1.6; }
+.wz-text b { color: var(--text); }
+.wz-copies { display: flex; flex-direction: column; gap: 6px; }
+.wz-copyline { display: grid; grid-template-columns: minmax(90px, auto) 1fr auto; align-items: center; gap: 10px; padding: 6px 8px 6px 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg-2); font-size: 12.5px; color: var(--text-3); }
+.wz-copyline code { font: 12.5px/1.4 ui-monospace, "JetBrains Mono", monospace; color: var(--text); overflow-wrap: anywhere; }
+.wz-copyline .btn.ok { color: var(--accent); }
+.wz-trouble .wz-copyline { grid-template-columns: 1fr auto; margin: 8px 0; }
+.wz-sketch { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--bg-1); font-size: 12px; max-width: 460px; }
+.wz-bar { display: flex; align-items: center; gap: 5px; padding: 6px 10px; background: var(--bg-3); color: var(--text-3); }
+.wz-bar i { width: 7px; height: 7px; border-radius: 50%; background: var(--bg-4); }
+.wz-bar span { margin-left: 8px; font-family: ui-monospace, monospace; font-size: 11px; }
+.wz-page { padding: 10px 12px; display: flex; flex-direction: column; gap: 7px; color: var(--text-2); }
+.wz-hl { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); font-weight: 600;
+  outline: 2px solid var(--accent); outline-offset: 1px; }
+.wz-fake { display: inline-block; padding: 2px 8px; border-radius: 6px; background: var(--bg-3); color: var(--text-3); }
+.wz-field { display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; color: var(--text-2); }
+.wz-field .input { width: 100%; }
+.wz-err { color: var(--danger); }
+.wz-back { align-self: flex-start; }
+.wz-drop { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 28px 16px; border: 2px dashed var(--line-strong);
+  border-radius: var(--radius); color: var(--text-2); cursor: pointer; text-align: center; transition: border-color .15s, background .15s; }
+.wz-drop:hover, .wz-drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.wz-drop [data-icon] { width: 26px; height: 26px; color: var(--accent); }
+.wz-drop span { font-size: 12px; color: var(--text-3); }
+.notice.ok { background: var(--accent-soft); border-color: transparent; }
+.notice.ok i[data-icon] { color: var(--accent); }
+.wz-choice { display: flex; flex-direction: column; gap: 10px; }
+.wz-opt { display: flex; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); cursor: pointer; }
+.wz-opt:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.wz-opt input { margin-top: 3px; accent-color: var(--accent); }
+.wz-opt p { margin: 6px 0 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.wz-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.wz-trouble { margin-top: 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--bg-2); font-size: 13px; }
+.wz-trouble details { border-top: 1px solid var(--line-soft); padding: 8px 0; }
+.wz-trouble summary { cursor: pointer; color: var(--text); }
+.wz-trouble details div { margin-top: 6px; color: var(--text-2); line-height: 1.55; }
+.wz-trouble .btn-row { margin-top: 10px; }
