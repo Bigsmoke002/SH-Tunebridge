@@ -51,7 +51,9 @@ TAXONOMY: dict[str, dict[str, list[str]]] = {
     "Techno": {
         "_": ["techno"],
         "Melodic Techno": ["melodic techno"],
-        "Hard Techno": ["hard techno", "industrial techno", "schranz"],
+        "Hard Techno": ["hard techno", "hardtechno", "industrial techno"],
+        # Frankfurter/Stuttgarter Szene der 2000er: verzerrte, „schranzige“ Loops, 150–160 BPM, heute wieder groß
+        "Schranz": ["schranz", "schranz techno", "hard schranz", "schranzer", "schranzig"],
         "Minimal Techno": ["minimal techno", "minimal"],
         "Peak Time": ["peak time techno", "driving techno"],
         "Hardgroove": ["hardgroove", "hard groove"],

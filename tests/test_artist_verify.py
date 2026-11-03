@@ -156,3 +156,10 @@ def test_title_names_the_genre():
     assert tt("Morning Light", "Tic-Tekk-Toe", "Dance") == {"hardtekk": 45.0}
     c = classify({"hardtekk": 80, "techno": 60}, "Dance")
     assert (c.genre, c.subgenre) == ("Techno", "Hardtekk")
+    # Schranz: eigenes Subgenre (nicht mehr unter Hard Techno versteckt)
+    assert tt("Kreissäge (Schranz Edit)", hint="Electronic") == {"schranz": 80.0}
+    assert tt("Bunker", "Schranzwerk", "Dance") == {"schranz": 45.0}
+    c = classify({"schranz": 100, "hard techno": 60, "techno": 80}, "Electronic")
+    assert (c.genre, c.subgenre) == ("Techno", "Schranz")
+    c = classify({"hard techno": 100, "techno": 80}, "Electronic")
+    assert (c.genre, c.subgenre) == ("Techno", "Hard Techno")

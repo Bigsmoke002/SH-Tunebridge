@@ -20,7 +20,7 @@ from .recognize.engines import Recognition
 
 MAX_AGE = 30 * 86400
 RETRY_INCOMPLETE = 86400
-GENRE_CHECK = 3      # 2 = geprüfter Künstler + Titel (Namensvettern), 3 = Genre aus dem Titel (Tekk). Ältere Einträge einmal neu.
+GENRE_CHECK = 4      # 2 = geprüfter Künstler + Titel (Namensvettern), 3 = Genre aus dem Titel (Tekk), 4 = Schranz. Ältere Einträge einmal neu.
 
 
 def keys(rec: Recognition | Track) -> list[str]:

@@ -210,6 +210,8 @@ def bpm_guess(bpm: float | None, coarse: list[str]) -> str | None:
 _VERSION = re.compile(r"[\(\[]([^\)\]]+)[\)\]]|\s[-–]\s(.+)$")
 _VERSION_WORDS = re.compile(r"\b(remix|edit|bootleg|version|mix|flip|rework|vip|cover|radio|extended|original|sped up|slowed)\b", re.I)
 _TEKK = re.compile(r"tekk", re.I)
+# Szene-Begriffe, die Last.fm kaum verschlagwortet, die aber im Titel/Künstlernamen eindeutig sind
+_SCENE = ((_TEKK, "hardtekk"), (re.compile(r"schranz", re.I), "schranz"))
 
 
 def title_tags(track: Track, hint: str | None = None) -> dict[str, float]:
@@ -222,8 +224,9 @@ def title_tags(track: Track, hint: str | None = None) -> dict[str, float]:
     title = track.title or ""
     for m in _VERSION.finditer(title):
         part = (m.group(1) or m.group(2) or "").strip()
-        if _TEKK.search(part):                      # „(Hardtekk Remix)“, „(TekkSchuster Remix)“, „- HardTekk“
-            out["hardtekk"] = 80.0
+        scene = next((tag for rx, tag in _SCENE if rx.search(part)), None)
+        if scene:                                   # „(Hardtekk Remix)“, „(Schranz Edit)“, „- HardTekk“
+            out[scene] = 80.0
             continue
         for chunk in re.split(r"\s*(?:&|/|,|\+| x | and | und )\s*", _VERSION_WORDS.sub(" ", part)):
             key = normalize(chunk)
@@ -234,10 +237,11 @@ def title_tags(track: Track, hint: str | None = None) -> dict[str, float]:
                 out[key] = 80.0
     fam = _family(hint)
     if not service_main(hint) or (fam and "Techno" in fam):
-        if _TEKK.search(title) and "hardtekk" not in out and "tekk" not in out and _VERSION.search(title) is None:
-            out["hardtekk"] = 80.0
-        elif any(_TEKK.search(a or "") for a in track.artists):
-            out.setdefault("hardtekk", 45.0)       # Künstlername wie „TEKKCAT“: Hinweis, kein Beweis
+        for rx, tag in _SCENE:
+            if rx.search(title) and tag not in out and _VERSION.search(title) is None:
+                out[tag] = 80.0
+            elif any(rx.search(a or "") for a in track.artists):
+                out.setdefault(tag, 45.0)          # Künstlername wie „TEKKCAT“, „Schranzwerk“: Hinweis, kein Beweis
     return out
 
 
