@@ -34,8 +34,9 @@ def run() -> None:
     os.environ["TUNEBRIDGE_PORT"] = str(PORT)
     if os.environ.get("APPIMAGE"):
         try:  # Startmenü-Eintrag anlegen/aktualisieren (Pfad kann sich nach Updates/Verschieben ändern)
-            from .update import integrate_desktop
+            from .update import heal_old_paths, integrate_desktop
             integrate_desktop()
+            heal_old_paths()      # alte Starter nach Updates bis v0.6.0 wieder lauffähig machen
         except Exception as e:
             print("Startmenü-Eintrag nicht möglich:", e)
     if not _port_open():

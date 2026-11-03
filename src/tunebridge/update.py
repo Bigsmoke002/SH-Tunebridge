@@ -263,6 +263,40 @@ def _keep_old_path(cur: Path, target: Path) -> Path:
         return cur
 
 
+_OLD_NAME = re.compile(r"(/[^\s\"'=,;]*/SH-Tunebridge-\d+\.\d+\.\d+-[A-Za-z0-9_]+\.AppImage)")
+
+
+def heal_old_paths(path: Path | None = None) -> list[str]:
+    """Bis v0.6.0 löschte das Update die alte AppImage-Datei – Starter, Panel-Pins und Autostart mit dem alten
+    Namen zeigten danach ins Leere („Programm … ist nicht auffindbar“). Fehlt eine solche Datei im Ordner der
+    laufenden Version, wird sie als Verweis auf die aktuelle Version neu angelegt. Nur dort, nur SH-Tunebridge-Namen."""
+    cur = Path(path or os.environ.get("APPIMAGE", "")).resolve()
+    if not cur.is_file():
+        return []
+    home, cfg = Path.home(), Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    files = [*(home / ".local/share/applications").glob("*.desktop"), *(cfg / "autostart").glob("*.desktop"),
+             *(home / "Desktop").glob("*.desktop"), *(home / "Schreibtisch").glob("*.desktop"),
+             cfg / "plasma-org.kde.plasma.desktop-appletsrc"]
+    made = []
+    for f in files:
+        try:
+            if not f.is_file() or f.stat().st_size > 2_000_000:
+                continue
+            text = f.read_text(encoding="utf-8", errors="ignore")
+        except OSError:
+            continue
+        for m in set(_OLD_NAME.findall(text)):
+            old = Path(m)
+            if old.parent != cur.parent or old.name == cur.name or old.exists() or old.is_symlink():
+                continue
+            try:
+                old.symlink_to(cur.name)
+                made.append(str(old))
+            except OSError:
+                pass
+    return made
+
+
 def integrate_desktop(path: Path | None = None) -> None:
     """AppImage ins Startmenü eintragen (bzw. Pfad aktualisieren)."""
     path = Path(path or os.environ.get("APPIMAGE", ""))

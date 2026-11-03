@@ -1,5 +1,6 @@
 """AppImage-Updates: nur ein mit dem Release-Schlüssel signiertes Manifest wird akzeptiert."""
 
+from pathlib import Path
 import os
 import subprocess
 
@@ -142,3 +143,25 @@ def test_appimage_install_end_to_end(tmp_path, monkeypatch):
     assert update._prepared["new_path"] == str(new)
     entry = (home / ".local/share/applications/sh-tunebridge.desktop").read_text()
     assert f'Exec="{new}"' in entry
+
+
+def test_heal_old_launchers(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    binp = home / ".local/bin"
+    binp.mkdir(parents=True)
+    cur = binp / "SH-Tunebridge-0.6.1-x86_64.AppImage"
+    cur.write_text("neu")
+    monkeypatch.setattr(update.Path, "home", classmethod(lambda cls: home))
+    monkeypatch.delenv("XDG_CONFIG_HOME", raising=False)
+    apps = home / ".local/share/applications"
+    apps.mkdir(parents=True)
+    (apps / "eigener.desktop").write_text(f'[Desktop Entry]\nExec="{binp}/SH-Tunebridge-0.5.0-x86_64.AppImage" %U\n')
+    (home / ".config").mkdir()
+    (home / ".config/plasma-org.kde.plasma.desktop-appletsrc").write_text(
+        f"launchers=applications:firefox.desktop,file://{binp}/SH-Tunebridge-0.4.1-x86_64.AppImage\n"
+        "launchers2=file:///etc/SH-Tunebridge-0.1.0-x86_64.AppImage\n")      # fremder Ordner: nicht anfassen
+    made = update.heal_old_paths(cur)
+    assert sorted(Path(m).name for m in made) == ["SH-Tunebridge-0.4.1-x86_64.AppImage",
+                                                   "SH-Tunebridge-0.5.0-x86_64.AppImage"]
+    assert (binp / "SH-Tunebridge-0.5.0-x86_64.AppImage").read_text() == "neu"
+    assert update.heal_old_paths(cur) == []                                  # nur einmal
