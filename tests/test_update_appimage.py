@@ -3,6 +3,7 @@
 from pathlib import Path
 import os
 import subprocess
+import sys
 
 import pytest
 
@@ -145,6 +146,7 @@ def test_appimage_install_end_to_end(tmp_path, monkeypatch):
     assert f'Exec="{new}"' in entry
 
 
+@pytest.mark.skipif(sys.platform == "win32", reason="AppImage gibt es nur unter Linux")
 def test_heal_old_launchers(tmp_path, monkeypatch):
     home = tmp_path / "home"
     binp = home / ".local/bin"
