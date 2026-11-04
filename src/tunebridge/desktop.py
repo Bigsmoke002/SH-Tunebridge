@@ -1,7 +1,9 @@
 """Eigenes App-Fenster über pywebview.
 
-Linux: Qt (PySide6). Windows: Edge WebView2 (ist in Windows 10/11 enthalten). macOS: WebKit (Cocoa).
-Fallback: Chromium/Brave im App-Modus, sonst der Standardbrowser."""
+Linux: Qt (PySide6). Windows: Edge WebView2 (fehlt es, wird es angeboten und von Microsoft installiert).
+macOS: WebKit (Cocoa).
+Windows ist immer eine Desktop-App: kein Browser-Ersatz – ein Fehler wird als Windows-Dialog gezeigt und
+unter <Daten>/logs/fenster-fehler.txt gespeichert. Linux/macOS: notfalls Chromium/Brave im App-Modus bzw. Browser."""
 
 from __future__ import annotations
 
@@ -59,6 +61,18 @@ def run() -> None:
     except ImportError:
         webview = None
 
+    if osutil.WINDOWS:
+        from . import winapp
+        try:
+            from importlib.metadata import version
+            winapp.register_version(version("tunebridge"))
+        except Exception:  # noqa: BLE001
+            pass
+        if webview is None:
+            _window_failed(RuntimeError("Fensterteil (pywebview) fehlt im Programm"))
+        if not winapp.ensure_webview2():
+            _quit()
+
     if webview is not None:
         webview.settings["ALLOW_DOWNLOADS"] = True
         win = webview.create_window("SH-Tunebridge", url, width=1320, height=860, min_size=(900, 620),
@@ -75,10 +89,12 @@ def run() -> None:
             except Exception:  # noqa: BLE001
                 pass
         try:
-            webview.start(gui="qt" if osutil.LINUX else None, private_mode=False, storage_path=str(store),
-                          icon=str(icon) if icon else None)
-        except Exception as e:  # noqa: BLE001 – kein Fenster möglich: im Browser weitermachen statt still zu enden
-            from . import debuglog
+            webview.start(gui="qt" if osutil.LINUX else "edgechromium" if osutil.WINDOWS else None,
+                          private_mode=False, storage_path=str(store), icon=str(icon) if icon else None)
+        except Exception as e:  # noqa: BLE001
+            if osutil.WINDOWS:
+                _window_failed(e)          # Windows: Dialog statt Browser
+            from . import debuglog         # Linux/macOS: im Browser weitermachen statt still zu enden
             debuglog.error("desktop", "App-Fenster konnte nicht starten – öffne im Browser", e)
         else:
             # Fenster zu = App zu: offene Hintergrundarbeiten (Login-Warten, Downloads) nicht abwarten.
@@ -105,6 +121,31 @@ def _window_icon() -> Path | None:
     static = Path(__file__).parent / "web" / "static"
     icon = static / "icon.svg" if osutil.LINUX else static / "icon.ico" if osutil.WINDOWS else None
     return icon if icon and icon.exists() else None
+
+
+def _window_failed(e: BaseException) -> None:
+    """Windows: Fenster ging nicht auf -> Grund immer lokal speichern, als Dialog zeigen, App beenden."""
+    import traceback
+    from datetime import datetime
+    from .web import app as web
+    web.WINDOW_STATE.update(error=f"{type(e).__name__}: {e}")
+    try:
+        log = osutil.data_dir() / "logs" / "fenster-fehler.txt"
+        log.parent.mkdir(parents=True, exist_ok=True)
+        log.write_text(f"{datetime.now():%Y-%m-%d %H:%M:%S}\n{''.join(traceback.format_exception(e))}", encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        log = None
+    try:
+        from . import debuglog
+        debuglog.error("desktop", "App-Fenster konnte nicht starten", e)
+        from . import winapp
+        winapp.message(f"Das App-Fenster konnte nicht starten:\n{type(e).__name__}: {e}\n\n"
+                       + (f"Details: {log}\n\n" if log else "")
+                       + "Hilft meist: SH-Tunebridge neu installieren (Setup) oder Microsoft Edge WebView2 neu installieren.\n"
+                       "Fehler melden: https://github.com/Bigsmoke002/SH-Tunebridge/issues",
+                       flags=winapp.MB_OK | winapp.MB_ICONERROR)
+    finally:
+        _quit()
 
 
 def _quit() -> None:
@@ -188,6 +229,7 @@ def _hooks(win) -> None:
         web.WINDOW_HOOKS.update(clipboard_get=clipboard_get, clipboard_set=clipboard_set)
     win.events.closing += closing
     win.events.loaded += loaded
+    win.events.shown += lambda: web.WINDOW_STATE.update(shown=True)
 
 
 def _companion_early() -> None:

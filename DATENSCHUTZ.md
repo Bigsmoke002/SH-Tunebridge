@@ -81,6 +81,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | TIDAL | Playlists/Songs | nur wenn du TIDAL verbindest und überträgst |
 | GitHub | deine IP-Adresse | Update-Prüfung (stündlich) |
 | Hugging Face, GitHub | deine IP-Adresse | einmalig beim Download von Modell/Laufzeit |
+| Microsoft (nur Windows) | deine IP-Adresse | nur wenn WebView2 fehlt und du der Installation zustimmst (Setup oder Dialog beim Start) |
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
 | Entwickler (`shtunebridge.bs002.de`) – Playlists teilen | nur Ende-zu-Ende-verschlüsselte Blöcke, zufällige Bereichs-Kennung, Prüfwert des Schreib-Schlüssels (technisch deine IP-Adresse) | beim Teilen, Aktualisieren und Ansehen von Freunde-Playlists, **nur mit Einwilligung** „Playlists teilen“ |
 | Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, **nur mit Einwilligung** „laden“ |

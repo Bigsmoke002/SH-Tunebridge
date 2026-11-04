@@ -31,11 +31,16 @@ oder mit `--appimage-extract-and-run` starten.
 
 ## Windows und macOS
 
-**Windows 10/11 (64 Bit):** `SH-Tunebridge-<version>-windows-x64.zip` herunterladen, entpacken (z. B. nach
-`C:\Programme\SH-Tunebridge` oder in deinen Benutzerordner) und `SH-Tunebridge.exe` starten.
+**Windows 10/11 (64 Bit):** `SH-Tunebridge-<version>-windows-setup.exe` herunterladen und starten. Das Setup
+installiert die App für deinen Benutzer (keine Adminrechte), legt Startmenü- und auf Wunsch Desktop-Verknüpfung an
+und trägt sie unter *Einstellungen → Apps* ein (dort auch deinstallieren – deine Daten bleiben erhalten).
+SH-Tunebridge ist unter Windows eine **richtige Desktop-App** (eigenes Fenster über Microsoft Edge WebView2, kein
+Browser). Fehlt WebView2, installiert das Setup es von Microsoft mit; die App selbst bietet es sonst beim Start an.
 Windows SmartScreen warnt beim ersten Start („Unbekannter Herausgeber“), weil das Programm nicht mit einem
 kostenpflichtigen Zertifikat signiert ist → „Weitere Informationen“ → „Trotzdem ausführen“.
 Desktop-Ton wird direkt über Windows (WASAPI-Loopback) aufgenommen – ohne Zusatzprogramme.
+Wer lieber ohne Installation arbeitet: `SH-Tunebridge-<version>-windows-x64.zip` entpacken und `SH-Tunebridge.exe`
+starten (dieses Paket nutzt auch der Updater).
 
 **macOS (Apple Silicon):** `SH-Tunebridge-<version>-macos-arm64.dmg` öffnen und die App in „Programme“ ziehen.
 Da die App nicht bei Apple notarisiert ist (kostet 99 $/Jahr), beim ersten Start: Rechtsklick → „Öffnen“
@@ -45,7 +50,7 @@ geht die Erkennung über das Mikrofon. Beim ersten Mal fragt macOS nach der Mikr
 
 Unterschiede zu Linux: einzelne Anwendungen lassen sich nur unter Linux getrennt aufnehmen, und „Was spielt
 gerade?“ (Player-Erkennung) gibt es vorerst nur unter Linux. Updates: Die App prüft auf neue **signierte**
-Versionen und legt sie geprüft in deinen Download-Ordner – installieren bzw. entpacken tust du sie selbst.
+Versionen und installiert sie auf Klick (Windows/macOS: Austausch beim Neustart, vorher automatische Sicherung).
 **Windows mit Version 0.6.0:** Diese Version startet nicht (Fehler im Fenstersymbol) und kann sich deshalb nicht
 selbst aktualisieren – bitte 0.6.3 oder neuer einmal von Hand laden.
 Gebaut und getestet werden diese Versionen auf GitHubs eigenen Windows- und Mac-Rechnern.

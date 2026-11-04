@@ -506,6 +506,9 @@ def _install_frozen() -> dict:
             if not exe:
                 raise RuntimeError("Update-Archiv enthält kein Programm")
             shutil.move(str(exe.parent), str(new))
+            for f in root.glob("unins*"):               # per Setup installiert: Deinstaller mitnehmen
+                if f.is_file():
+                    shutil.copy2(f, new / f.name)
         elif osutil.MACOS:
             mnt = work / "mnt"
             mnt.mkdir()

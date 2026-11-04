@@ -51,6 +51,19 @@ jobs:
           if [ "${{ matrix.target }}" = windows ]; then EXE=dist/SH-Tunebridge/SH-Tunebridge.exe
           else EXE=dist/SH-Tunebridge.app/Contents/MacOS/SH-Tunebridge; fi
           uv run python scripts/smoke_frozen.py "$EXE"
+      - name: Windows-Installer bauen und testen (still installieren, Fenster muss aufgehen, deinstallieren)
+        if: matrix.target == 'windows'
+        shell: pwsh
+        run: |
+          $ver = (Select-String -Path pyproject.toml -Pattern '^version = "(.*)"').Matches[0].Groups[1].Value
+          ./scripts/build-windows-setup.ps1 -Version $ver -OutDir out
+          $dir = Join-Path $env:RUNNER_TEMP "tb-install"
+          $p = Start-Process "out/SH-Tunebridge-$ver-windows-setup.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/CURRENTUSER","/DIR=`"$dir`"" -Wait -PassThru
+          if ($p.ExitCode) { throw "Setup fehlgeschlagen ($($p.ExitCode))" }
+          uv run python scripts/smoke_frozen.py "$dir\SH-Tunebridge.exe" --require-window
+          if ($LASTEXITCODE) { throw "Rauchtest nach Installation fehlgeschlagen" }
+          $u = Start-Process "$dir\unins000.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART" -Wait -PassThru
+          if ($u.ExitCode) { throw "Deinstallation fehlgeschlagen ($($u.ExitCode))" }
       - name: Paket schnüren
         shell: bash
         run: |

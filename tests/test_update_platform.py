@@ -61,3 +61,14 @@ def test_windows_update_rejects_path_traversal(monkeypatch, tmp_path):
         update._install_frozen()
     assert not root.with_name(".SH-Tunebridge.neu").exists()
     update._prepared.clear()
+
+
+def test_windows_update_keeps_setup_uninstaller(monkeypatch, tmp_path):
+    """Per Setup installiert: Deinstaller (unins000.exe/.dat) muss nach dem Austausch noch da sein."""
+    root = _fake_env(monkeypatch, tmp_path, {"SH-Tunebridge/SH-Tunebridge.exe": "neu"})
+    (root / "unins000.exe").write_text("deinst")
+    (root / "unins000.dat").write_text("liste")
+    update._install_frozen()
+    new = root.with_name(".SH-Tunebridge.neu")
+    assert (new / "unins000.exe").read_text() == "deinst" and (new / "unins000.dat").exists()
+    update._prepared.clear()

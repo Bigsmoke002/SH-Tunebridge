@@ -3,6 +3,16 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## 0.7.1 – 2026-11-04
+Windows: richtige Desktop-App mit Installer.
+- **Windows-Setup** (`…-windows-setup.exe`): Installation ohne Adminrechte, Startmenü- und Desktop-Verknüpfung,
+  Eintrag unter „Apps“ zum Deinstallieren (Daten bleiben). Installiert Microsoft Edge WebView2 mit, falls es fehlt.
+- **Windows öffnet nie mehr den Browser:** Fehlt WebView2, bietet die App an, es von Microsoft zu installieren
+  (Signatur wird geprüft). Andere Fensterfehler erscheinen als Windows-Dialog und werden unter
+  `logs\fenster-fehler.txt` gespeichert.
+- Updates behalten den Deinstaller; die Versionsnummer unter „Apps“ wird nachgezogen.
+- CI: Setup wird still installiert, das App-Fenster muss wirklich aufgehen, danach deinstalliert.
+
 ## 0.7.0 – 2026-11-03
 Playlists teilen, Dienste ohne Fachwissen einrichten, Datenexporte importieren.
 - **Lauf-Wellenform** im Erkennen-Kreis und im Schwebe-Icon (wie am DJ-Player, wandert von rechts nach links):

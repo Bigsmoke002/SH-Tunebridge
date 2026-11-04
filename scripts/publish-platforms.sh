@@ -30,5 +30,14 @@ for spec in "windows:SH-Tunebridge-$VER-windows-x64.zip" "macos:SH-Tunebridge-$V
   ssh-keygen -Y verify -f src/tunebridge/release_signers -I sh-tunebridge -n "$NS" -s "$M.sig" < "$M"
   UP+=("$P" "$M" "$M.sig")
 done
+# Windows-Installer (für die Erstinstallation; der Updater nimmt weiter das .zip): Prüfsumme + signiertes Manifest
+SETUP="$D/SH-Tunebridge-windows/SH-Tunebridge-$VER-windows-setup.exe"
+[[ -f "$SETUP" ]] || { echo "Fehlt: $SETUP"; exit 1; }
+(cd "$(dirname "$SETUP")" && sha256sum -c --ignore-missing "SHA256SUMS-windows.txt")
+SM="$D/SH-Tunebridge-$VER-windows-setup.manifest"
+{ echo "SH-Tunebridge-Release 1"; echo "version=$VER"; echo "file=$(basename "$SETUP")"
+  echo "size=$(stat -c%s "$SETUP")"; echo "sha256=$(sha256sum "$SETUP" | cut -d' ' -f1)"; echo; printf '%s\n' "$NOTES"; } > "$SM"
+ssh-keygen -q -Y sign -f "$KEY" -n "$NS" "$SM"
+UP+=("$SETUP" "$SM" "$SM.sig")
 gh release upload "$TAG" "${UP[@]}" --clobber -R "$REPO"
 echo "✓ Windows/macOS $VER hochgeladen: https://github.com/$REPO/releases/tag/$TAG"

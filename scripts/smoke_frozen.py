@@ -1,5 +1,6 @@
 """Rauchtest für das fertige Programm (CI auf Windows/macOS): Server starten, Oberfläche + API abfragen.
-Aufruf: python scripts/smoke_frozen.py <Pfad zur ausführbaren Datei>"""
+Aufruf: python scripts/smoke_frozen.py <Pfad zur ausführbaren Datei> [--require-window]
+--require-window: das App-Fenster muss wirklich aufgehen (Windows: kein Browser-Ersatz, /api/window meldet „shown“)."""
 
 import json
 import os
@@ -10,6 +11,7 @@ import time
 import urllib.request
 
 exe = sys.argv[1]
+need_window = "--require-window" in sys.argv
 port = "8799"
 env = {**os.environ, "TUNEBRIDGE_DATA": tempfile.mkdtemp(prefix="tb-smoke-")}
 p = subprocess.Popen([exe, "ui", "--port", port, "--no-browser"], env=env)
@@ -54,11 +56,24 @@ try:
             if q.poll() is not None:
                 break
             time.sleep(0.5)
-    time.sleep(20)                     # Fenster aufbauen lassen
+    win = {}
+    for _ in range(90 if need_window else 40):     # Fenster aufbauen lassen
+        if q.poll() is not None:
+            break
+        try:
+            win = json.load(urllib.request.urlopen(f"http://127.0.0.1:{app_port}/api/window", timeout=2))
+            if win.get("shown") or win.get("error"):
+                break
+        except OSError:
+            pass
+        time.sleep(0.5)
+    time.sleep(3)
+    if need_window and not win.get("shown"):
+        sys.exit(f"App-Fenster ist nicht aufgegangen: {win}")
     if q.poll() is not None:
         out = q.stdout.read().decode("utf-8", "replace")[-4000:]
         sys.exit(f"App-Fenster beendet sich sofort (Code {q.returncode}):\n{out}")
-    print("App-Fenster läuft – Rauchtest Fenster OK")
+    print("App-Fenster läuft – Rauchtest Fenster OK", win)
 finally:
     q.kill()
     try:

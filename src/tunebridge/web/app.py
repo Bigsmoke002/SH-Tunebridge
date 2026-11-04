@@ -1501,6 +1501,12 @@ _companion: dict = {"proc": None}
 _companion_lock = threading.Lock()
 # Vom Desktop-Fenster gesetzt (desktop.py): Fenster zeigen bzw. App beenden
 WINDOW_HOOKS: dict = {}
+WINDOW_STATE: dict = {"shown": False, "error": None}   # App-Fenster wirklich offen? (Rauchtest, Diagnose)
+
+
+@app.get("/api/window")
+def window_state():
+    return WINDOW_STATE
 
 
 def _comp_cfg() -> dict:
