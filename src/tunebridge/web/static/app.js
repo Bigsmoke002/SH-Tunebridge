@@ -1684,7 +1684,8 @@ const SETUP = {
         gate: ["Mein SoundCloud-Konto hat Artist Pro"] },
       { title: "App anlegen", link: ["https://soundcloud.com/you/apps", "SoundCloud-Apps öffnen"],
         html: `<ol class="wz-list"><li>Mit deinem SoundCloud-Konto anmelden.</li><li>Neue App anlegen (<b>„Register a new application“</b>).</li>
-          <li>Name eintragen und bei <b>Redirect URI</b> genau diese Adresse einfügen – nicht <code>localhost</code>, kein <code>/</code> am Ende.</li>
+          <li>Name eintragen und bei <b>Redirect URI</b> genau diese Adresse einfügen – <b>mit</b> <code>http://</code> vorne, nicht <code>localhost</code>, kein <code>/</code> am Ende.</li>
+          <li><b>Achtung:</b> Das Feld <b>„Website deiner App“</b> ist ein anderes Feld – dort gehört die Adresse <b>nicht</b> hin (leer lassen oder eine beliebige Website).</li>
           <li>Speichern.</li></ol>`,
         copy: [["Name", "SH-Tunebridge"], ["Redirect URI", REDIRECT("soundcloud")]],
         sketch: sketch("soundcloud.com/you/apps", [`Register a new application`, `Redirect URI ${fake("http://127.0.0.1:8765/…")}`, hl("Save")]),
@@ -1694,7 +1695,7 @@ const SETUP = {
                  { id: "SOUNDCLOUD_CLIENT_SECRET", label: "Client Secret", ph: "Client Secret", secret: true, re: /^\S{8,}$/, err: "Bitte auch das Client Secret einfügen." }] },
     ],
     trouble: [
-      ["Die SoundCloud-Seite bleibt weiß", `SoundCloud zeigt bei falschen App-Angaben keine Fehlermeldung, nur eine weiße Seite. Fast immer stimmt die <b>Redirect URI</b> in deiner SoundCloud-App nicht genau. Dort diese Adresse eintragen und speichern:<div class="wz-copyline"><code>${REDIRECT("soundcloud")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("soundcloud")}">Kopieren</button></div>Danach die weiße Seite schließen und hier „Einrichtung wiederholen“. Hilft das nicht: Werbeblocker/Tracking-Schutz für soundcloud.com kurz ausschalten (die Anmeldeseite braucht deren Skripte).`],
+      ["Die SoundCloud-Seite bleibt weiß", `SoundCloud zeigt bei falschen App-Angaben keine Fehlermeldung, nur eine weiße Seite. Fast immer stimmt die <b>Redirect URI</b> in deiner SoundCloud-App nicht genau (häufig landet sie versehentlich im Feld „Website deiner App“ oder ohne <code>http://</code>). Ins Feld <b>Redirect URI</b> genau diese Adresse eintragen und speichern:<div class="wz-copyline"><code>${REDIRECT("soundcloud")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("soundcloud")}">Kopieren</button></div>Danach die weiße Seite schließen und hier „Einrichtung wiederholen“. Hilft das nicht: Werbeblocker/Tracking-Schutz für soundcloud.com kurz ausschalten (die Anmeldeseite braucht deren Skripte).`],
       ["„invalid_client“", "Client ID oder Secret falsch – Einrichtung wiederholen."],
     ],
   },
