@@ -3,6 +3,15 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht (0.7.2)
+Anmeldung bei Spotify und SoundCloud: geführte Einrichtung, klare Fehler.
+- **Spotify-Einrichtung neu:** 7 kurze Schritte mit Häkchen-Kontrolle (Premium, Dashboard, App anlegen,
+  Redirect URI, Web API, Client ID, Schlusskontrolle). Ohne Premium direkt der Weg über den Datenexport.
+  Behebt den häufigsten Fehler „redirect_uri: Not matching configuration“ (Adresse fehlte in der Spotify-App).
+- **SoundCloud:** Client ID und Secret werden vor dem Öffnen des Browsers bei SoundCloud geprüft – statt einer
+  leeren weißen Seite kommt eine klare Meldung mit „Einrichtung wiederholen“. Einrichtung mit Häkchen-Kontrolle.
+- Fehler behoben: Nach dem letzten Einrichtungsschritt startete die Anmeldung nicht.
+
 ## 0.7.1 – 2026-11-04
 Windows: richtige Desktop-App mit Installer.
 - **Windows-Setup** (`…-windows-setup.exe`): Installation ohne Adminrechte, Startmenü- und Desktop-Verknüpfung,

@@ -1596,17 +1596,43 @@ const SETUP = {
     name: "Spotify", needs: "Spotify Premium (für den App-Besitzer, also dich)", time: "ca. 5 Minuten",
     why: "Spotify lässt andere Programme nur über eine eigene, kostenlose „Entwickler-App“ an deine Playlists. Die legst du einmal an – wir zeigen dir jeden Klick.",
     steps: [
-      { title: "Bei Spotify für Entwickler anmelden", link: ["https://developer.spotify.com/dashboard", "Spotify-Dashboard öffnen"],
-        html: "Melde dich mit deinem <b>normalen Spotify-Konto</b> an. Beim ersten Mal fragt Spotify nach den Nutzungsbedingungen – zustimmen. Falls Spotify eine Bestätigungs-Mail schickt, kurz bestätigen.",
-        sketch: sketch("developer.spotify.com/dashboard", [`<b>Dashboard</b>`, `${fake("Deine Apps")} ${hl("Create app")}`]) },
-      { title: "App anlegen", html: "Klicke auf <b>„Create app“</b> und fülle das Formular aus. Am einfachsten über die Kopieren-Knöpfe:",
-        copy: [["App name", "SH-Tunebridge"], ["App description", "Meine Playlists in SH-Tunebridge"], ["Redirect URIs", REDIRECT("spotify")]],
-        after: "Nach dem Einfügen der Redirect-URI auf <b>„Add“</b> klicken. Dann bei „Which API/SDKs are you planning to use?“ <b>„Web API“</b> anhaken, den Bedingungen zustimmen und ganz unten <b>„Save“</b>.",
-        sketch: sketch("developer.spotify.com/create", [`App name ${fake("SH-Tunebridge")}`, `Redirect URIs ${fake("http://127.0.0.1:8765/…")} ${hl("Add")}`, `☑ ${hl("Web API")}`, `${hl("Save")}`]) },
-      { title: "Client ID kopieren", html: "Du bist jetzt in deiner neuen App. Klicke oben rechts auf <b>„Settings“</b>. Ganz oben steht die <b>Client ID</b> – kopieren und hier einfügen.<br><span class=\"muted\">Nicht „View client secret“ – das Secret brauchen wir nicht.</span>",
+      { title: "Bevor es losgeht", html: `Spotify hat die Regeln 2026 verschärft. Damit es klappt, brauchst du:
+          <ul class="wz-list"><li><b>Spotify Premium</b> – Spotify lässt Entwickler-Apps nur noch für Premium-Konten zu.</li>
+          <li>Dein <b>normales Spotify-Konto</b> (Benutzername/Passwort) – kein neues Konto nötig.</li>
+          <li>Pro Konto erlaubt Spotify <b>nur eine</b> Entwickler-App. Hast du schon eine, nimm die (Schritt 4 zeigt, was rein muss).</li></ul>
+          Läuft alles nebenbei im Browser – dieses Fenster bleibt offen und führt dich.`,
+        gate: ["Ich habe Spotify Premium"],
+        alt: ["Kein Premium?", "Dann Datenexport importieren (geht immer)", () => importWizard("spotify", $("#main"))] },
+      { title: "Spotify für Entwickler öffnen", link: ["https://developer.spotify.com/dashboard", "Spotify-Dashboard öffnen"],
+        html: `Klicke auf den grünen Knopf. Es öffnet sich die Spotify-Seite für Entwickler.
+          <ol class="wz-list"><li>Mit deinem <b>normalen Spotify-Konto</b> anmelden.</li>
+          <li>Beim ersten Mal: Nutzungsbedingungen <b>„Accept the terms“</b> anhaken und bestätigen.</li>
+          <li>Kommt eine Bestätigungs-Mail von Spotify: den Link darin anklicken, dann die Seite neu laden.</li></ol>`,
+        sketch: sketch("developer.spotify.com/dashboard", [`<b>Dashboard</b>`, `${fake("Deine Apps")} ${hl("Create app")}`]),
+        gate: ["Ich sehe das Dashboard mit dem Knopf „Create app“"] },
+      { title: "Neue App anlegen", html: "Klicke auf <b>„Create app“</b>. Es öffnet sich ein Formular. Trage Name und Beschreibung ein (Kopieren-Knopf, dann im Formular einfügen):",
+        copy: [["App name", "SH-Tunebridge"], ["App description", "Meine Playlists in SH-Tunebridge"]],
+        after: "Noch <b>nicht</b> speichern – im selben Formular geht es weiter.",
+        sketch: sketch("developer.spotify.com/create", [`App name ${fake("SH-Tunebridge")}`, `App description ${fake("Meine Playlists …")}`]) },
+      { title: "Die wichtigste Zeile: Redirect URI", html: `Im selben Formular gibt es das Feld <b>„Redirect URIs“</b>. Genau diese Adresse kopieren und dort einfügen –
+          <b>dann rechts daneben auf „Add“ klicken</b>. Erst dann steht sie <b>darunter als Eintrag in der Liste</b>.`,
+        copy: [["Redirect URI", REDIRECT("spotify")]],
+        after: `<div class="notice">${icon("info")}<div>Genau so – nicht <code>localhost</code>, nicht <code>https</code>, kein <code>/</code> am Ende. Fehlt sie oder ist ein Zeichen anders, zeigt Spotify später <b>„redirect_uri: Not matching configuration“</b>.</div></div>`,
+        sketch: sketch("developer.spotify.com/create", [`Redirect URIs ${fake("http://127.0.0.1:8765/…")} ${hl("Add")}`, `${hl("✓ http://127.0.0.1:8765/api/spotify/callback")} ← steht jetzt in der Liste`]),
+        gate: ["Ich habe auf „Add“ geklickt und die Adresse steht unter dem Feld in der Liste"] },
+      { title: "Web API ankreuzen und speichern", html: `Weiter unten im Formular:
+          <ol class="wz-list"><li>Bei „Which API/SDKs are you planning to use?“ <b>„Web API“</b> anhaken.</li>
+          <li>Den Bedingungen zustimmen.</li><li>Ganz unten auf <b>„Save“</b> klicken.</li></ol>`,
+        sketch: sketch("developer.spotify.com/create", [`☑ ${hl("Web API")}`, `☑ ${fake("I understand and agree …")}`, `${hl("Save")}`]),
+        gate: ["Gespeichert – ich sehe jetzt die Seite meiner neuen App"] },
+      { title: "Client ID kopieren", html: "Auf der Seite deiner App oben rechts auf <b>„Settings“</b> klicken. Ganz oben steht die <b>Client ID</b> – kopieren und hier einfügen.<br><span class=\"muted\">Nicht „View client secret“ – das Secret brauchen wir nicht.</span>",
         sketch: sketch("developer.spotify.com/dashboard/…/settings", [`Basic Information`, `Client ID ${hl("a1b2c3…  (kopieren)")}`, `${fake("View client secret")} ← nicht nötig`]),
         fields: [{ id: "SPOTIFY_CLIENT_ID", label: "Client ID", ph: "32 Zeichen, z. B. 1a2b3c4d…", re: /^[0-9a-f]{32}$/i,
           err: "Eine Client ID besteht aus genau 32 Zeichen (Ziffern und a–f). Bitte nur die ID kopieren, ohne Leerzeichen." }] },
+      { title: "Letzte Kontrolle", html: `Auf derselben „Settings“-Seite steht weiter unten <b>„Redirect URIs“</b>. Dort muss genau das stehen:`,
+        copy: [["Redirect URI", REDIRECT("spotify")]],
+        after: "Steht dort nichts oder etwas anderes: oben auf <b>„Edit“</b>, Adresse einfügen, <b>„Add“</b>, ganz unten <b>„Save“</b>. Danach hier auf „Speichern &amp; verbinden“ – es öffnet sich die Spotify-Anmeldung.",
+        gate: ["Unter „Redirect URIs“ steht genau diese Adresse"] },
     ],
     trouble: [
       ["„redirect_uri: Not matching configuration“", `Die Redirect-URI in deiner Spotify-App stimmt nicht genau. Bei der App › Settings › Edit › Redirect URIs genau diese Adresse eintragen, „Add“ und unten „Save“ klicken:<div class="wz-copyline"><code>${REDIRECT("spotify")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("spotify")}">Kopieren</button></div>Typische Fehler: <code>localhost</code> statt <code>127.0.0.1</code>, <code>https</code>, ein <code>/</code> am Ende, „Save“ vergessen. Nach dem Speichern kann es 1–2 Minuten dauern.`],
@@ -1653,16 +1679,22 @@ const SETUP = {
     name: "SoundCloud", needs: "SoundCloud Artist Pro", time: "ca. 5 Minuten",
     why: "SoundCloud gibt Zugriff nur über eine eigene SoundCloud-App. Neue Apps können nur Konten mit Artist Pro anlegen. Einen Datenexport zum Hochladen bietet SoundCloud leider nicht an.",
     steps: [
+      { title: "Bevor es losgeht", html: `SoundCloud erlaubt eigene Apps nur mit <b>Artist Pro</b> (kostenpflichtiges SoundCloud-Abo für Künstler).
+          Ohne Artist Pro fehlt auf der Apps-Seite der Knopf zum Anlegen – dann geht SoundCloud leider nicht.`,
+        gate: ["Mein SoundCloud-Konto hat Artist Pro"] },
       { title: "App anlegen", link: ["https://soundcloud.com/you/apps", "SoundCloud-Apps öffnen"],
-        html: "Anmelden und eine neue App anlegen. Name und Redirect-URI über die Knöpfe kopieren, dann speichern.",
+        html: `<ol class="wz-list"><li>Mit deinem SoundCloud-Konto anmelden.</li><li>Neue App anlegen (<b>„Register a new application“</b>).</li>
+          <li>Name eintragen und bei <b>Redirect URI</b> genau diese Adresse einfügen – nicht <code>localhost</code>, kein <code>/</code> am Ende.</li>
+          <li>Speichern.</li></ol>`,
         copy: [["Name", "SH-Tunebridge"], ["Redirect URI", REDIRECT("soundcloud")]],
-        sketch: sketch("soundcloud.com/you/apps", [`Register a new application`, `Redirect URI ${fake("http://127.0.0.1:8765/…")}`, hl("Save")]) },
-      { title: "Zugangsdaten kopieren", html: "In deiner App stehen <b>Client ID</b> und <b>Client Secret</b> – beide kopieren und hier einfügen.",
+        sketch: sketch("soundcloud.com/you/apps", [`Register a new application`, `Redirect URI ${fake("http://127.0.0.1:8765/…")}`, hl("Save")]),
+        gate: ["Die App ist gespeichert und die Redirect URI steht genau so drin"] },
+      { title: "Zugangsdaten kopieren", html: "In deiner App stehen <b>Client ID</b> und <b>Client Secret</b>. Beide einzeln kopieren und hier einfügen – nicht vertauschen. Beim Speichern prüft SH-Tunebridge sie direkt bei SoundCloud.",
         fields: [{ id: "SOUNDCLOUD_CLIENT_ID", label: "Client ID", ph: "Client ID", re: /^[A-Za-z0-9_-]{16,64}$/, err: "Das sieht nicht nach einer Client ID aus." },
                  { id: "SOUNDCLOUD_CLIENT_SECRET", label: "Client Secret", ph: "Client Secret", secret: true, re: /^\S{8,}$/, err: "Bitte auch das Client Secret einfügen." }] },
     ],
     trouble: [
-      ["„redirect_uri“ / „invalid_request“", `Die Redirect-URI stimmt nicht genau. In deiner SoundCloud-App diese Adresse eintragen:<div class="wz-copyline"><code>${REDIRECT("soundcloud")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("soundcloud")}">Kopieren</button></div>`],
+      ["Die SoundCloud-Seite bleibt weiß", `SoundCloud zeigt bei falschen App-Angaben keine Fehlermeldung, nur eine weiße Seite. Fast immer stimmt die <b>Redirect URI</b> in deiner SoundCloud-App nicht genau. Dort diese Adresse eintragen und speichern:<div class="wz-copyline"><code>${REDIRECT("soundcloud")}</code><button class="btn btn--sm btn--ghost" data-copy="${REDIRECT("soundcloud")}">Kopieren</button></div>Danach die weiße Seite schließen und hier „Einrichtung wiederholen“. Hilft das nicht: Werbeblocker/Tracking-Schutz für soundcloud.com kurz ausschalten (die Anmeldeseite braucht deren Skripte).`],
       ["„invalid_client“", "Client ID oder Secret falsch – Einrichtung wiederholen."],
     ],
   },
@@ -1753,11 +1785,15 @@ function Wizard({ title, intro, steps, finishLabel, onFinish, onRender }) {
       ${s.sketch || ""}
       ${(s.fields || []).map(f => `<label class="wz-field"><span>${esc(f.label)}</span><input class="input" data-f="${f.id}" type="${f.secret ? "password" : "text"}" placeholder="${esc(f.ph)}" autocomplete="off" spellcheck="false" value="${esc(vals[f.id] || "")}"><small class="wz-err hidden"></small></label>`).join("")}
       ${s.drop ? `<div id="wzDrop"></div>` : ""}
+      ${(s.gate || []).length ? `<div class="wz-gate">${s.gate.map((g, k) => `<label class="cons-check"><input type="checkbox" data-gate="${k}" ${vals[`gate${i}_${k}`] ? "checked" : ""}><span>${g}</span></label>`).join("")}</div>` : ""}
+      ${s.alt ? `<div class="wz-alt">${s.alt[0]} <button class="btn btn--sm btn--ghost" data-alt>${esc(s.alt[1])}</button></div>` : ""}
       ${i > 0 ? `<button class="link-btn wz-back">← Zurück</button>` : ""}`;
     hydrateIcons(box);
     $$("[data-copy]", box).forEach(b => b.onclick = async () => { await Clip.write(b.dataset.copy); b.classList.add("ok"); toast("Kopiert"); });
     const back = $(".wz-back", box); if (back) back.onclick = () => { save(box); i--; draw(box); };
     $$("[data-f]", box).forEach(inp => inp.addEventListener("input", () => { inp.value = inp.value.trim(); }));
+    $$("[data-gate]", box).forEach(c => c.onchange = () => { vals[`gate${i}_${c.dataset.gate}`] = c.checked; });
+    const alt = $("[data-alt]", box); if (alt) alt.onclick = () => { $("#modal").classList.remove("open"); delete $("#modal").dataset.sticky; setTimeout(s.alt[2], 60); };
     const ok = $("[data-m=ok]"); if (ok) { ok.textContent = i === steps.length - 1 ? (finishLabel || "Fertig") : "Weiter"; ok.classList.toggle("hidden", !!s.drop); }
     onRender?.(box, s);
   };
@@ -1774,6 +1810,10 @@ function Wizard({ title, intro, steps, finishLabel, onFinish, onRender }) {
         errEl.textContent = okv ? "" : (v ? f.err : "Bitte ausfüllen."); errEl.classList.toggle("hidden", okv); bad ||= !okv;
       }
       if (bad) throw { silent: true };
+      if ((s.gate || []).some((_, k) => !vals[`gate${i}_${k}`])) {
+        toast("Bitte erst die Punkte abhaken – genau hier hakt es sonst später", "err");
+        $(".wz-gate", box)?.classList.add("wz-gate--warn"); throw { silent: true };
+      }
       if (i < steps.length - 1) { i++; draw(box); throw { silent: true }; }
       await onFinish(vals);
     },
@@ -1787,7 +1827,8 @@ function setupWizard(sid, main) {
     title: `${c.name} einrichten (einmalig)`, steps: c.steps, finishLabel: c.key ? "Speichern" : "Speichern & verbinden",
     intro: `${c.why} <span class="muted">Du brauchst: ${esc(c.needs)} · Dauer: ${esc(c.time)}. Alle Angaben bleiben nur auf diesem Rechner.</span>`,
     onFinish: async vals => {
-      for (const [k, v] of Object.entries(vals)) if (v) await api("/api/settings", { method: "POST", body: { key: k, value: v } });
+      const ids = new Set(c.steps.flatMap(st => (st.fields || []).map(f => f.id)));
+      for (const [k, v] of Object.entries(vals)) if (v && ids.has(k)) await api("/api/settings", { method: "POST", body: { key: k, value: String(v).trim() } });
       if (c.key) { toast(`${c.name}-Key gespeichert`); setTimeout(route, 200); return; }
       const plats = await api("/api/platforms");
       setTimeout(() => platformLogin(plats.find(p => p.id === sid), main), 250);
@@ -1849,7 +1890,7 @@ function loginTrouble(sid, main) {
   const c = SETUP[sid];
   if (!c?.trouble?.length) return "";
   return `<div class="wz-trouble"><b>Kommt nichts zurück? Steht beim Dienst eine Fehlermeldung?</b>
-    ${c.trouble.map(([t, h]) => `<details><summary>${esc(t)}</summary><div>${h}</div></details>`).join("")}
+    ${c.trouble.map(([t, h], k) => `<details ${k === 0 && ["spotify", "soundcloud"].includes(sid) ? "open" : ""}><summary>${esc(t)}</summary><div>${h}</div></details>`).join("")}
     <div class="btn-row"><button class="btn btn--sm btn--ghost" data-redo="${sid}">${icon("key")}Einrichtung wiederholen</button>
     ${IMPORT[sid] ? `<button class="btn btn--sm btn--ghost" data-imp="${sid}">${icon("upload")}Stattdessen Datei importieren</button>` : ""}</div></div>`;
 }
@@ -1859,6 +1900,8 @@ async function platformLogin(p, main) {
   try { st = await api(`/api/platforms/${p.id}/login`, { method: "POST" }); }
   catch (e) {
     if (/Client-ID/.test(e.message) && SETUP[p.id]) return setupWizard(p.id, main);
+    if (SETUP[p.id]) return modal({ title: `${p.name}: Anmeldung nicht möglich`, text: e.message, confirm: "Einrichtung wiederholen", cancel: "Schließen",
+      onConfirm: () => { setTimeout(() => setupWizard(p.id, main), 60); } });
     return toast(e.message, "err");
   }
   let alive = true;
@@ -1877,7 +1920,7 @@ async function platformLogin(p, main) {
   $("[data-m=ok]").disabled = true;
   const t0 = Date.now();
   while (alive) {
-    if (Date.now() - t0 > 20000 && $("#loginHelp") && !$("#loginHelp").innerHTML) {
+    if (Date.now() - t0 > (["spotify", "soundcloud"].includes(p.id) ? 0 : 20000) && $("#loginHelp") && !$("#loginHelp").innerHTML) {
       $("#loginHelp").innerHTML = loginTrouble(p.id, main); hydrateIcons($("#loginHelp"));
       $$("#loginHelp [data-copy]").forEach(b => b.onclick = async () => { await Clip.write(b.dataset.copy); toast("Kopiert"); });
       $$("#loginHelp [data-redo]").forEach(b => b.onclick = () => { alive = false; setupWizard(p.id, main); });

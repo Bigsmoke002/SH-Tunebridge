@@ -41,6 +41,14 @@ def test_soundcloud_login_flow(monkeypatch, tmp_path):
         sc.login()
     monkeypatch.setenv("SOUNDCLOUD_CLIENT_ID", "abcdefghijklmnop")
     monkeypatch.setenv("SOUNDCLOUD_CLIENT_SECRET", "geheim123")
+    # Vorab-Prüfung der Zugangsdaten: falsch -> klare Meldung statt weißer SoundCloud-Seite
+    class _R:
+        def __init__(self, code, body): self.status_code, self._b = code, body
+        def json(self): return self._b
+    monkeypatch.setattr("tunebridge.providers.soundcloud.httpx.post", lambda *a, **k: _R(401, {"error": "invalid_client"}))
+    with pytest.raises(OAuthError, match="Zugangsdaten"):
+        sc.login()
+    monkeypatch.setattr("tunebridge.providers.soundcloud.httpx.post", lambda *a, **k: _R(200, {"access_token": "x"}))
     st = sc.login()
     q = parse_qs(urlparse(st["url"]).query)
     assert st["url"].startswith("https://secure.soundcloud.com/authorize")

@@ -44,6 +44,29 @@ class SoundCloud(OAuthProvider):
     CLIENT_SECRET_KEY = "SOUNDCLOUD_CLIENT_SECRET"
     SECRET_REQUIRED = True
 
+    def check_credentials(self) -> None:
+        """Client-ID/Secret vorab bei SoundCloud prüfen. Mit falschen Daten zeigt SoundClouds Anmeldeseite nur
+        eine leere weiße Seite – deshalb vor dem Öffnen des Browsers klar melden, was nicht stimmt."""
+        try:
+            r = httpx.post(self.TOKEN_URL, timeout=15, auth=(self.client_id() or "", self.client_secret() or ""),
+                           headers={"Accept": "application/json"}, data={"grant_type": "client_credentials"})
+        except httpx.HTTPError:
+            return                      # SoundCloud nicht erreichbar: Anmeldung trotzdem versuchen
+        if r.status_code in (400, 401, 403):
+            try:
+                err = (r.json() or {}).get("error", "")
+            except ValueError:
+                err = ""
+            if err in ("invalid_client", "unauthorized_client") or r.status_code == 401:
+                raise OAuthError("SoundCloud kennt diese Zugangsdaten nicht: Client ID oder Client Secret stimmt nicht "
+                                 "(vertauscht, unvollständig kopiert oder Leerzeichen dabei). Bitte in deiner SoundCloud-App "
+                                 "neu kopieren – „Einrichtung wiederholen“.")
+
+    def login(self) -> dict:
+        if self.configured():
+            self.check_credentials()
+        return super().login()
+
     def _get(self, url: str, **params) -> dict | list:
         if not url.startswith("http"):
             url = API + url
