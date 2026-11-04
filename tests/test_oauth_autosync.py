@@ -201,3 +201,26 @@ def test_autosync_budget_and_disabled_service(monkeypatch):
     assert autosync.run_once()["found"] == 3
     assert autosync.run_once()["found"] == 2         # Rest beim nächsten Mal
     assert all(x["sid"] == "spotify" for x in autosync.inbox())
+
+
+def test_spotify_premium_block_is_reported(monkeypatch, tmp_path):
+    """Login ok, aber Spotify sperrt (App-Besitzer ohne Premium) -> nicht „verbunden“ melden, Grund anzeigen."""
+    import tunebridge.providers.spotify as sp
+    from tunebridge import config
+    monkeypatch.setattr(config, "DATA", tmp_path)
+    monkeypatch.setenv("SPOTIFY_CLIENT_ID", "0123456789abcdef0123456789abcdef")
+    prov = sp.Spotify()
+    st = prov.login()
+    csrf = parse_qs(urlparse(st["url"]).query)["state"][0]
+
+    class R:
+        def __init__(self, code, body): self.status_code, self._b, self.content, self.headers = code, body, b"x", {}
+        def json(self): return self._b
+    monkeypatch.setattr(sp.httpx, "post", lambda *a, **k: R(200, {"access_token": "AT", "refresh_token": "RT", "expires_in": 3600}))
+    monkeypatch.setattr(sp.httpx, "request", lambda *a, **k: R(403, {"error": {"message": "Active premium subscription required for the owner of the app."}}))
+    with pytest.raises(sp.SpotifyError, match="Premium"):
+        prov.finish_login("code", csrf)
+    assert prov.login_state()["state"] == "failed" and "Premium" in prov.login_state()["error"]
+    assert prov.connected() is False and "Premium" in prov.last_error
+    monkeypatch.setattr(sp.httpx, "request", lambda *a, **k: R(200, {"id": "me"}))
+    assert prov.connected() is True and prov.last_error is None

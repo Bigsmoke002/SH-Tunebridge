@@ -11,6 +11,8 @@ Anmeldung bei Spotify und SoundCloud: geführte Einrichtung, klare Fehler.
 - **SoundCloud:** Client ID und Secret werden vor dem Öffnen des Browsers bei SoundCloud geprüft – statt einer
   leeren weißen Seite kommt eine klare Meldung mit „Einrichtung wiederholen“. Einrichtung mit Häkchen-Kontrolle.
 - Fehler behoben: Nach dem letzten Einrichtungsschritt startete die Anmeldung nicht.
+- Fehler behoben: Spotify meldete „verbunden“, obwohl Spotify den Zugriff sperrte (z. B. App-Besitzer ohne
+  Premium). Jetzt wird nach der Anmeldung geprüft, und die Dienste-Karte zeigt den Grund an.
 
 ## 0.7.1 – 2026-11-04
 Windows: richtige Desktop-App mit Installer.

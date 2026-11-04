@@ -4012,7 +4012,7 @@ Views.services = async (main, _, params) => {
     const off = !s.ready;
     const badge = s.ready && s.account ? `<span class="acc-badge ok">${icon("check")}${esc(s.account)}</span>`
       : s.kind === "none" ? `<span class="acc-badge">Nicht möglich</span>` : s.kind === "file" ? `<span class="acc-badge">Datei</span>`
-      : `<span class="acc-badge">Nicht verbunden</span>`;
+      : s.error ? `<span class="acc-badge warn">Angemeldet, aber gesperrt</span>` : `<span class="acc-badge">Nicht verbunden</span>`;
     let act = "";
     const imp = s.mode === "import";
     const impBtns = s.importable ? (s.import
@@ -4036,7 +4036,7 @@ Views.services = async (main, _, params) => {
     else if (s.kind === "file") act = s.import ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>${impBtns}`
       : `<button class="btn btn--sm btn--primary" data-imp="${s.id}">${icon("upload")}Mediathek importieren</button>`;
     return `<div class="card platform svc-card ${off ? "planned" : ""}"><div class="p-logo" style="--pc:${c}">${m}</div>
-      <div><h4>${esc(s.name)} ${badge}</h4><p>${esc(s.note)}</p><div class="btn-row">${act}</div></div></div>`;
+      <div><h4>${esc(s.name)} ${badge}</h4><p>${esc(s.note)}</p>${s.error && !s.ready ? `<p class="svc-err">${icon("info")}${esc(s.error)}</p>` : ""}<div class="btn-row">${act}</div></div></div>`;
   };
   $(".page", main).innerHTML = `<div class="page-head"><div><h1>Dienste</h1><p>Deine Playlists bei den Musikanbietern ansehen und als Vorschau sortieren lassen – vom passenden Mix bis zum Mikro-Genre. Gelesen werden nur Titel, Künstler und Album – nie Musik.</p></div></div>
     <div class="platforms">${list.map(card).join("")}</div>`;

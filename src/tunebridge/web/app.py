@@ -686,6 +686,7 @@ def discover(req: DiscoverReq):
 
 # ------------------------------------------------------------------ Plattformen
 _conn_cache: dict[str, tuple[float, bool, str | None]] = {}
+_conn_err: dict[str, str | None] = {}          # warum ein angemeldeter Dienst gerade nicht antwortet (für die Karte)
 
 
 def _platform_state(pid: str, fresh: bool = False) -> tuple[bool, str | None]:
@@ -698,6 +699,7 @@ def _platform_state(pid: str, fresh: bool = False) -> tuple[bool, str | None]:
     ok = prov.connected()
     acc = prov.account() if ok else None
     _conn_cache[pid] = (time.time(), ok, acc)
+    _conn_err[pid] = None if ok else getattr(prov, "last_error", None)
     return ok, acc
 
 
@@ -706,7 +708,7 @@ async def platforms():
     out = []
     for pid, (name, info, avail) in PROVIDERS.items():
         ok, acc = (await asyncio.to_thread(_platform_state, pid)) if avail else (False, None)
-        out.append({"id": pid, "name": name, "info": info, "available": avail, "connected": ok, "account": acc})
+        out.append({"id": pid, "name": name, "info": info, "available": avail, "connected": ok, "account": acc, "error": _conn_err.get(pid)})
     return out
 
 
@@ -1803,7 +1805,11 @@ async def services_overview():
             states[pid] = await asyncio.to_thread(_platform_state, pid)
         except Exception:  # noqa: BLE001
             states[pid] = (False, None)
-    return services.overview(lambda pid: states.get(pid, (False, None)))
+    out = services.overview(lambda pid: states.get(pid, (False, None)))
+    for row in out:
+        if isinstance(row, dict) and _conn_err.get(row.get("id")):
+            row["error"] = _conn_err[row["id"]]
+    return out
 
 
 class ProfileReq(BaseModel):

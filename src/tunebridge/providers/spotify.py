@@ -32,6 +32,9 @@ API = "https://api.spotify.com/v1"
 REDIRECT = "http://127.0.0.1:8765/api/spotify/callback"
 SCOPES = ("playlist-read-private playlist-read-collaborative user-library-read user-library-modify "
           "playlist-modify-private playlist-modify-public")
+PREMIUM_MSG = ("Spotify sperrt den Zugriff: Das Spotify-Konto, mit dem du die Entwickler-App angelegt hast, braucht ein "
+               "aktives Premium-Abo. Hast du Premium gerade erst abgeschlossen, gibt Spotify den Zugriff erst nach ein "
+               "paar Stunden frei – danach klappt es von allein, du musst dich nicht neu anmelden.")
 _TOKEN = lambda: config.DATA / "tokens" / "spotify.json"  # noqa: E731
 
 
@@ -101,10 +104,17 @@ class Spotify(Provider):
         self.tok = {"access_token": d["access_token"], "refresh_token": d.get("refresh_token"),
                     "expires": time.time() + d.get("expires_in", 3600) - 60}
         self._save()
+        try:                                      # Anmeldung ok heißt nicht, dass Spotify Zugriff erlaubt (z. B. Premium)
+            self._req("GET", "/me")
+        except SpotifyError as e:
+            self.last_error = str(e).removeprefix("Spotify: ")
+            self._login = {"state": "failed", "error": self.last_error}
+            raise SpotifyError(self.last_error) from None
+        self.last_error = None
         self._login = {"state": "connected"}
 
     def login_state(self) -> dict:
-        st = {k: v for k, v in self._login.items() if k in ("state", "url")} or {"state": "idle"}
+        st = {k: v for k, v in self._login.items() if k in ("state", "url", "error")} or {"state": "idle"}
         if st.get("state") == "waiting" and time.time() > self._login.get("expires", 0):
             st["state"] = "expired"
         return st
@@ -141,7 +151,9 @@ class Spotify(Provider):
                     msg = r.json().get("error", {}).get("message")
                 except ValueError:
                     msg = r.text[:200]
-                if r.status_code == 403:
+                if r.status_code == 403 and msg and "premium" in msg.lower():
+                    msg = PREMIUM_MSG
+                elif r.status_code == 403:
                     msg = f"{msg} – Spotify erlaubt das im Development Mode nur für eigene Playlists"
                 raise SpotifyError(f"Spotify: {msg or r.status_code}")
             return r.json() if r.content else {}
@@ -155,10 +167,18 @@ class Spotify(Provider):
             url = d.get("next")
         return out
 
+    last_error: str | None = None
+
     def connected(self) -> bool:
+        if not self.tok.get("access_token"):
+            self.last_error = None
+            return False
         try:
-            return bool(self.tok.get("access_token")) and bool(self._req("GET", "/me").get("id"))
-        except Exception:
+            ok = bool(self._req("GET", "/me").get("id"))
+            self.last_error = None
+            return ok
+        except Exception as e:  # noqa: BLE001
+            self.last_error = str(e).removeprefix("Spotify: ")
             return False
 
     def account(self) -> str | None:
