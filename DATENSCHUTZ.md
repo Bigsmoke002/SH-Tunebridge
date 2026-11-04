@@ -76,7 +76,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer (offizielle Player) | IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters | **erst nach deinem Klick** auf „Player laden“ (siehe unten) |
 | Webseiten, die du über „Öffnen“ oder „Kaufen“ aufrufst | IP-Adresse (dein Standard-Browser) | erst beim Klick |
 | Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud | Abruf deiner Playlists und Lieblingssongs; bei Spotify/TIDAL auf Wunsch neue Playlists anlegen | unter „Dienste“ und beim automatischen Abgleich – nur mit deinem verbundenen Konto bzw. deinem öffentlichen Profil |
-| Google (YouTube), SoundCloud | Anmeldung über deine **eigene** App (Client-ID/-Secret); Login-Token | nur wenn du den Login einrichtest – direkt zwischen deinem Rechner und dem Dienst, kein Server dazwischen |
+| Google (YouTube), SoundCloud, Last.fm | Anmeldung über deine **eigene** App (Client-ID/-Secret bzw. API key/Shared secret); Login-Token bzw. Sitzungsschlüssel und dein Last.fm-Benutzername | nur wenn du den Login einrichtest – direkt zwischen deinem Rechner und dem Dienst, kein Server dazwischen |
 | Deezer, Apple; bei verbundenen Diensten auch deren Bild-Server | deine IP-Adresse | beim Anzeigen von Covern und Abspielen von Hörproben (direkt vom Anbieter) |
 | TIDAL | Playlists/Songs | nur wenn du TIDAL verbindest und überträgst |
 | GitHub | deine IP-Adresse | Update-Prüfung (stündlich) |

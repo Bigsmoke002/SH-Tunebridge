@@ -80,7 +80,7 @@ Marken gehören ihren jeweiligen Inhabern und dienen nur der Beschreibung, womit
 | YouTube | offiziell (YouTube Data API: Google-Login mit deiner eigenen OAuth-App, nur Lesen; oEmbed für Links) | Playlists und „Mag ich“ lesen, Links einlesen |
 | SoundCloud | offiziell (SoundCloud API mit deiner eigenen App – Konto braucht Artist Pro; oEmbed für Links) | Playlists und Likes lesen, Links einlesen |
 | AudD, ACRCloud | offiziell (dein eigener API-Key) | optionale Erkennung mit Audio-Ausschnitt |
-| Last.fm | offiziell (dein eigener API-Key) | Genre-Tags |
+| Last.fm | offiziell (dein eigenes API-Konto; Login über die Last.fm-Web-Anmeldung) | Genre-Tags, Loved Tracks |
 | Deezer | offiziell (öffentliche API ohne Login) | Cover, Hörprobe, BPM, Genre |
 | iTunes-Suche (Apple) | offiziell (öffentliche Such-API) | Links, Cover |
 | GitHub | offiziell | Update-Prüfung und -Download |
@@ -189,7 +189,9 @@ ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch 
 
 ## Dienste & Übertragen
 - **Einrichten ohne Fachwissen:** Für Spotify, YouTube, SoundCloud und Last.fm führt ein Assistent Schritt für
-  Schritt durch die Entwickler-App (Kopieren-Knöpfe, Skizzen, Hilfe bei typischen Fehlermeldungen).
+  Schritt durch die Entwickler-App (Kopieren-Knöpfe, Skizzen, Häkchen-Kontrollen, Hilfe bei typischen Fehlermeldungen)
+  und meldet dich danach an. Deezer: Login nicht möglich (Deezer nimmt keine neuen Entwickler-Apps an) – der
+  Assistent hilft, das öffentliche Profil zu verknüpfen.
 - **Ohne Login:** Spotify-Kontodaten (ZIP), Google Takeout (YouTube-Playlists + Musikbibliothek) oder die
   Apple-Music-Mediathek (XML) importieren – alle Playlists auf einmal, kein Premium, keine Entwickler-App.
 - **Playlists teilen:** eigene Playlists per Schlüssel mit Freunden teilen – privater Schlüssel (lesen +

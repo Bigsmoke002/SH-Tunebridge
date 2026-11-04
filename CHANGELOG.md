@@ -10,6 +10,10 @@ Anmeldung bei Spotify und SoundCloud: geführte Einrichtung, klare Fehler.
   Behebt den häufigsten Fehler „redirect_uri: Not matching configuration“ (Adresse fehlte in der Spotify-App).
 - **SoundCloud:** Client ID und Secret werden vor dem Öffnen des Browsers bei SoundCloud geprüft – statt einer
   leeren weißen Seite kommt eine klare Meldung mit „Einrichtung wiederholen“. Einrichtung mit Häkchen-Kontrolle.
+- **Last.fm-Login:** Anleitung für das kostenlose API-Konto und danach richtige Anmeldung über Last.fm
+  (offizielle Web-Anmeldung) – kein Benutzername-Eintippen mehr. „Nur Benutzername“ geht weiterhin.
+- **Deezer-Anleitung:** Profil öffentlich machen und Profil-Link finden, mit Prüfung. Ein Deezer-Login ist nicht
+  möglich, weil Deezer keine neuen Entwickler-Apps mehr annimmt – das steht jetzt auch so in der App.
 - Fehler behoben: Nach dem letzten Einrichtungsschritt startete die Anmeldung nicht.
 - Fehler behoben: Spotify meldete „verbunden“, obwohl Spotify den Zugriff sperrte (z. B. App-Besitzer ohne
   Premium). Jetzt wird nach der Anmeldung geprüft, und die Dienste-Karte zeigt den Grund an.

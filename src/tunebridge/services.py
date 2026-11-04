@@ -120,6 +120,13 @@ def set_profile(svc: str, value: str) -> dict:
     return p
 
 
+def set_profile_direct(svc: str, pid: str, name: str) -> None:
+    """Profil ohne Prüfung setzen – nur nach erfolgreichem Login (Name kommt vom Dienst selbst)."""
+    p = profiles()
+    p[svc] = {"id": pid, "name": name}
+    store.meta_set(_PROFILES, json.dumps(p))
+
+
 # ------------------------------------------------------------------ Übersicht
 def overview(account_state) -> list[dict]:
     """account_state(pid) -> (verbunden, Kontoname) – kommt aus der Web-App (zwischengespeichert)."""
@@ -144,6 +151,11 @@ def overview(account_state) -> list[dict]:
                 st["needs"] = "profile"
             else:
                 st.update(ready=True, account=p[sid]["name"])
+            if sid == "lastfm":
+                from .lastfm_auth import LOGIN
+                sess = LOGIN.session()
+                st["login"] = bool(sess and st["ready"] and sess.get("name") == p.get(sid, {}).get("id"))
+                st["login_ready"] = LOGIN.configured()
         elif kind == "file":
             st.update(needs="import")
         imp = dataexport.info(sid) if sid in dataexport.IMPORT_SERVICES else None

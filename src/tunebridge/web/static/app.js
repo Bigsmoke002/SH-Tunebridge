@@ -1587,6 +1587,7 @@ const Transfer = { job: null };
    einer kleinen Skizze und typischen Fehlern. Wer keine Entwickler-App will (oder kein Premium hat), nimmt den
    offiziellen Datenexport des Dienstes (DSGVO-Auskunft) und zieht die Datei einfach rein. */
 const REDIRECT = sid => `http://127.0.0.1:8765/api/${sid === "spotify" ? "spotify" : `oauth/${sid}`}/callback`;
+const LFM_CB = "http://127.0.0.1:8765/api/lastfm/callback";
 const sketch = (url, rows) => `<div class="wz-sketch" aria-hidden="true"><div class="wz-bar"><i></i><i></i><i></i><span>${esc(url)}</span></div>
   <div class="wz-page">${rows.map(r => `<div class="wz-row">${r}</div>`).join("")}</div></div>`;
 const hl = t => `<span class="wz-hl">${esc(t)}</span>`, fake = t => `<span class="wz-fake">${esc(t)}</span>`;
@@ -1700,16 +1701,48 @@ const SETUP = {
     ],
   },
   lastfm: {
-    name: "Last.fm", needs: "ein Last.fm-Konto", time: "ca. 2 Minuten", key: true,
-    why: "Last.fm liefert Genre-Angaben und deine Loved Tracks. Dafür braucht es einen kostenlosen API-Key.",
+    name: "Last.fm", needs: "ein kostenloses Last.fm-Konto", time: "ca. 3 Minuten", login: true,
+    why: "Last.fm liefert Genre-Angaben und deine Loved Tracks. Dafür legst du einmal ein kostenloses API-Konto an – danach meldest du dich ganz normal mit Last.fm an.",
     steps: [
-      { title: "API-Konto anlegen", link: ["https://www.last.fm/api/account/create", "Last.fm öffnen"],
-        html: "Mit deinem Last.fm-Konto anmelden. Im Formular reichen Name und Beschreibung – „Callback URL“ und „Application homepage“ leer lassen › <b>„Submit“</b>.",
-        copy: [["Application name", "SH-Tunebridge"], ["Application description", "Genres und Loved Tracks für SH-Tunebridge"]],
-        sketch: sketch("last.fm/api/account/create", [`Application name ${fake("SH-Tunebridge")}`, `Callback URL ${fake("(leer lassen)")}`, hl("Submit")]) },
-      { title: "API-Key kopieren", html: "Last.fm zeigt jetzt <b>API key</b> und <b>Shared secret</b>. Nur den <b>API key</b> kopieren und hier einfügen.",
-        sketch: sketch("last.fm/api/account/create", [`API key ${hl("0123abcd…  (kopieren)")}`, `Shared secret ${fake("…")} ← nicht nötig`]),
-        fields: [{ id: "LASTFM_API_KEY", label: "API key", ph: "32 Zeichen", re: /^[0-9a-f]{32}$/i, err: "Der API key besteht aus 32 Zeichen (Ziffern und a–f)." }] },
+      { title: "Bei Last.fm anmelden", link: ["https://www.last.fm/login", "Last.fm öffnen"],
+        html: `Im Browser bei Last.fm anmelden. Noch kein Konto? Dort über <b>„Registrieren“</b> kostenlos eins anlegen.
+          <p class="muted">Tipp: Verbinde Last.fm in Spotify/YouTube Music mit „Scrobbeln“ – dann landet auch dort Gehörtes bei Last.fm.</p>`,
+        gate: ["Ich bin im Browser bei Last.fm angemeldet"] },
+      { title: "API-Konto anlegen", link: ["https://www.last.fm/api/account/create", "API-Konto anlegen"],
+        html: `<ol class="wz-list"><li>Bei <b>„Contact email“</b> deine E-Mail-Adresse eintragen, die Felder unten <b>einzeln kopieren</b> und einfügen.</li>
+          <li>Bei <b>„Callback URL“</b> genau diese Adresse eintragen.</li><li>„Application homepage“ darf leer bleiben.</li>
+          <li>Auf <b>„Submit“</b> klicken.</li></ol>`,
+        copy: [["Application name", "SH-Tunebridge"], ["Application description", "Genres und Loved Tracks für SH-Tunebridge"], ["Callback URL", LFM_CB]],
+        sketch: sketch("last.fm/api/account/create", [`Application name ${fake("SH-Tunebridge")}`, `Callback URL ${fake("http://127.0.0.1:8765/…")}`, hl("Submit")]),
+        gate: ["Ich habe auf „Submit“ geklickt und sehe jetzt „API key“ und „Shared secret“"] },
+      { title: "Beide Schlüssel kopieren", html: `Last.fm zeigt jetzt zwei Zeilen. <b>Beide</b> einzeln kopieren – nicht vertauschen:
+          <ul class="wz-list"><li><b>API key</b> → erstes Feld</li><li><b>Shared secret</b> → zweites Feld</li></ul>
+          <p class="muted">Diese Seite findest du später wieder unter last.fm/api/accounts. Die Schlüssel bleiben nur auf diesem Rechner.</p>`,
+        sketch: sketch("last.fm/api/account/create", [`API key ${hl("0123abcd…")}`, `Shared secret ${hl("4567ef01…")}`]),
+        fields: [{ id: "LASTFM_API_KEY", label: "API key", ph: "32 Zeichen", re: /^[0-9a-f]{32}$/i, err: "Der API key besteht aus 32 Zeichen (Ziffern und a–f)." },
+                 { id: "LASTFM_SHARED_SECRET", label: "Shared secret", ph: "32 Zeichen", secret: true, re: /^[0-9a-f]{32}$/i, err: "Das Shared secret besteht aus 32 Zeichen (Ziffern und a–f)." }] },
+    ],
+    trouble: [
+      ["Last.fm meldet einen Fehler mit Token oder Signatur", "Fast immer ist das <b>Shared secret</b> falsch kopiert oder mit dem API key vertauscht. Unter <a href=\"https://www.last.fm/api/accounts\" target=\"_blank\" rel=\"noopener\">last.fm/api/accounts</a> nachsehen und „Einrichtung wiederholen“."],
+      ["Nach dem Erlauben passiert nichts", `Prüfe, ob SH-Tunebridge noch läuft. Die Adresse im Browser muss mit <code>${LFM_CB}</code> beginnen.`],
+    ],
+  },
+  deezer: {
+    name: "Deezer", needs: "ein Deezer-Konto (auch kostenlos)", time: "ca. 2 Minuten", profile: true,
+    why: "Ein richtiger Deezer-Login ist leider nicht möglich: Deezer nimmt seit 2026 keine neuen Entwickler-Apps mehr an. SH-Tunebridge liest deshalb dein <b>öffentliches</b> Deezer-Profil – Lieblingssongs und öffentliche Playlists, ohne Passwort.",
+    steps: [
+      { title: "Profil öffentlich machen", link: ["https://www.deezer.com/account/settings", "Deezer-Einstellungen öffnen"],
+        html: `<ol class="wz-list"><li>Bei Deezer anmelden.</li>
+          <li>In den Einstellungen den Bereich zur <b>Privatsphäre</b> öffnen und <b>„Privates Profil“ ausschalten</b> (die Bezeichnung kann je nach Deezer-Version leicht abweichen).</li>
+          <li>Playlists, die SH-Tunebridge sehen soll, müssen <b>öffentlich</b> sein (in der Playlist: „Öffentlich“ bzw. Schloss-Symbol aus).</li></ol>
+          <p class="muted">Öffentlich heißt: Auch andere könnten dein Profil ansehen. Willst du das nicht, nutze stattdessen „Link einfügen“ für einzelne Playlists.</p>`,
+        gate: ["Mein Deezer-Profil ist nicht mehr privat"] },
+      { title: "Profil-Link kopieren", link: ["https://www.deezer.com/", "deezer.com öffnen"],
+        html: `<ol class="wz-list"><li>Auf deezer.com oben auf dein <b>Profilbild</b> klicken › <b>„Mein Profil“</b> (oder links „Favoriten“).</li>
+          <li>Die Adresse oben in der Adresszeile kopieren – sie enthält <code>/profile/</code> und eine Zahl.</li>
+          <li>In der Deezer-App: Profil › Teilen › „Link kopieren“ geht auch.</li></ol>`,
+        sketch: sketch("deezer.com/de/profile/123456789", [`${hl("deezer.com/de/profile/123456789")} ← diese Adresse kopieren`]),
+        fields: [{ id: "DEEZER_PROFILE", label: "Profil-Link", ph: "https://www.deezer.com/de/profile/123456789", re: /(profile|user)\/\d+|^\d{3,}$|deezer\.page\.link|link\.deezer\.com/, err: "Der Link muss /profile/ und eine Zahl enthalten." }] },
     ],
     trouble: [],
   },
@@ -1825,12 +1858,18 @@ function Wizard({ title, intro, steps, finishLabel, onFinish, onRender }) {
 function setupWizard(sid, main) {
   const c = SETUP[sid];
   Wizard({
-    title: `${c.name} einrichten (einmalig)`, steps: c.steps, finishLabel: c.key ? "Speichern" : "Speichern & verbinden",
+    title: `${c.name} einrichten (einmalig)`, steps: c.steps, finishLabel: c.key ? "Speichern" : c.profile ? "Prüfen & speichern" : "Speichern & verbinden",
     intro: `${c.why} <span class="muted">Du brauchst: ${esc(c.needs)} · Dauer: ${esc(c.time)}. Alle Angaben bleiben nur auf diesem Rechner.</span>`,
     onFinish: async vals => {
+      if (c.profile) {                       // öffentliches Profil (Deezer): beim Dienst prüfen, dann speichern
+        try { await api(`/api/services/${sid}/profile`, { method: "POST", body: { value: vals.DEEZER_PROFILE } }); }
+        catch (e) { toast(e.message, "err"); throw { silent: true }; }
+        toast(`${c.name}-Profil verknüpft`); setTimeout(route, 200); return;
+      }
       const ids = new Set(c.steps.flatMap(st => (st.fields || []).map(f => f.id)));
       for (const [k, v] of Object.entries(vals)) if (v && ids.has(k)) await api("/api/settings", { method: "POST", body: { key: k, value: String(v).trim() } });
       if (c.key) { toast(`${c.name}-Key gespeichert`); setTimeout(route, 200); return; }
+      if (c.login) { setTimeout(() => platformLogin({ id: sid, name: c.name }, main), 250); return; }
       const plats = await api("/api/platforms");
       setTimeout(() => platformLogin(plats.find(p => p.id === sid), main), 250);
     },
@@ -1891,16 +1930,17 @@ function loginTrouble(sid, main) {
   const c = SETUP[sid];
   if (!c?.trouble?.length) return "";
   return `<div class="wz-trouble"><b>Kommt nichts zurück? Steht beim Dienst eine Fehlermeldung?</b>
-    ${c.trouble.map(([t, h], k) => `<details ${k === 0 && ["spotify", "soundcloud"].includes(sid) ? "open" : ""}><summary>${esc(t)}</summary><div>${h}</div></details>`).join("")}
+    ${c.trouble.map(([t, h], k) => `<details ${k === 0 && ["spotify", "soundcloud", "lastfm"].includes(sid) ? "open" : ""}><summary>${esc(t)}</summary><div>${h}</div></details>`).join("")}
     <div class="btn-row"><button class="btn btn--sm btn--ghost" data-redo="${sid}">${icon("key")}Einrichtung wiederholen</button>
     ${IMPORT[sid] ? `<button class="btn btn--sm btn--ghost" data-imp="${sid}">${icon("upload")}Stattdessen Datei importieren</button>` : ""}</div></div>`;
 }
 
 async function platformLogin(p, main) {
   let st;
-  try { st = await api(`/api/platforms/${p.id}/login`, { method: "POST" }); }
+  const lapi = p.id === "lastfm" ? "/api/lastfm/login" : `/api/platforms/${p.id}/login`;
+  try { st = await api(lapi, { method: "POST" }); }
   catch (e) {
-    if (/Client-ID/.test(e.message) && SETUP[p.id]) return setupWizard(p.id, main);
+    if (/Client-ID|Shared secret/.test(e.message) && SETUP[p.id]) return setupWizard(p.id, main);
     if (SETUP[p.id]) return modal({ title: `${p.name}: Anmeldung nicht möglich`, text: e.message, confirm: "Einrichtung wiederholen", cancel: "Schließen",
       onConfirm: () => { setTimeout(() => setupWizard(p.id, main), 60); } });
     return toast(e.message, "err");
@@ -1921,7 +1961,7 @@ async function platformLogin(p, main) {
   $("[data-m=ok]").disabled = true;
   const t0 = Date.now();
   while (alive) {
-    if (Date.now() - t0 > (["spotify", "soundcloud"].includes(p.id) ? 0 : 20000) && $("#loginHelp") && !$("#loginHelp").innerHTML) {
+    if (Date.now() - t0 > (["spotify", "soundcloud", "lastfm"].includes(p.id) ? 0 : 20000) && $("#loginHelp") && !$("#loginHelp").innerHTML) {
       $("#loginHelp").innerHTML = loginTrouble(p.id, main); hydrateIcons($("#loginHelp"));
       $$("#loginHelp [data-copy]").forEach(b => b.onclick = async () => { await Clip.write(b.dataset.copy); toast("Kopiert"); });
       $$("#loginHelp [data-redo]").forEach(b => b.onclick = () => { alive = false; setupWizard(p.id, main); });
@@ -1929,7 +1969,7 @@ async function platformLogin(p, main) {
     }
     await new Promise(r => setTimeout(r, 2000));
     if (!alive) break;
-    const s = await api(`/api/platforms/${p.id}/login`).catch(() => ({}));
+    const s = await api(lapi).catch(() => ({}));
     if (s.state === "connected") {
       alive = false; $("#modal").classList.remove("open");
       toast(`${p.name} verbunden`); route(); break;
@@ -4031,6 +4071,16 @@ Views.services = async (main, _, params) => {
       if (s.ready && !imp && SETUP[s.id]) act += `<button class="btn btn--sm btn--ghost" data-redo="${s.id}" title="Zugangsdaten deiner Entwickler-App ändern">Einrichtung ändern</button>`;
       if (imp || s.ready) act += impBtns;
     }
+    else if (s.id === "lastfm") {
+      if (s.ready) act = `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>`
+        + (s.login ? `<button class="btn btn--sm btn--ghost" data-lfout>Abmelden</button>` : `<button class="btn btn--sm btn--ghost" data-lflogin>${icon("key")}Mit Last.fm anmelden</button>`);
+      else act = `<button class="btn btn--sm btn--primary" data-lflogin>${icon("key")}Mit Last.fm anmelden</button>`
+        + (s.needs === "profile" ? `<button class="btn btn--sm btn--ghost" data-profile="${s.id}" title="Ohne Anmeldung: nur öffentliche Loved Tracks">Nur Benutzername</button>` : "");
+      if (s.needs !== "key") act += `<button class="btn btn--sm btn--ghost" data-redo="${s.id}" title="API key und Shared secret ändern">Einrichtung ändern</button>`;
+    }
+    else if (s.id === "deezer") act = s.ready
+      ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button><button class="btn btn--sm btn--ghost" data-redo="${s.id}">Profil ändern</button><button class="btn btn--sm btn--ghost" data-unprofile="${s.id}">Trennen</button>`
+      : `<button class="btn btn--sm btn--primary" data-redo="${s.id}">${icon("key")}Einrichten</button>`;
     else if (s.kind === "profile") act = s.needs === "key" ? `<button class="btn btn--sm btn--primary" data-redo="${s.id}">${icon("key")}Einrichten</button>`
       : s.ready ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button><button class="btn btn--sm btn--ghost" data-profile="${s.id}">Profil ändern</button>`
       : `<button class="btn btn--sm" data-profile="${s.id}">${icon("key")}Profil verknüpfen</button>`;
@@ -4051,6 +4101,13 @@ Views.services = async (main, _, params) => {
     onConfirm: async () => { await api(`/api/services/${b.dataset.impdel}/import`, { method: "DELETE" }); SideSvc.loaded = false; route(); } }));
   $$("[data-logout]", main).forEach(b => b.onclick = () => modal({ title: "Verbindung trennen?", text: "Das gespeicherte Login-Token wird auf diesem Rechner gelöscht. Deine App-Daten (Client-ID) bleiben eingetragen.", confirm: "Trennen", danger: true,
     onConfirm: async () => { await api(`/api/platforms/${b.dataset.logout}/logout`, { method: "POST" }); SideSvc.loaded = false; route(); } }));
+  $$("[data-lflogin]", main).forEach(b => b.onclick = () => {
+    const s = list.find(x => x.id === "lastfm");
+    if (!s.login_ready) return setupWizard("lastfm", main);
+    platformLogin({ id: "lastfm", name: "Last.fm" }, main);
+  });
+  $$("[data-lfout]", main).forEach(b => b.onclick = async () => { await api("/api/lastfm/logout", { method: "POST" }); toast("Bei Last.fm abgemeldet"); route(); });
+  $$("[data-unprofile]", main).forEach(b => b.onclick = async () => { await api(`/api/services/${b.dataset.unprofile}/profile`, { method: "POST", body: { value: "" } }); toast("Getrennt"); route(); });
   $$("[data-profile]", main).forEach(b => b.onclick = () => {
     const id = b.dataset.profile, ph = { deezer: "https://www.deezer.com/de/profile/123456", lastfm: "Benutzername oder last.fm/user/…", youtube: "https://www.youtube.com/@deinkanal" }[id];
     modal({ title: `${list.find(x => x.id === id).name}: Profil verknüpfen`, text: id === "deezer" ? "Dein Profil muss in Deezer öffentlich sein (Einstellungen › Datenschutz)." : id === "youtube" ? "Es werden nur die öffentlichen Playlists des Kanals gelesen." : "Es werden nur deine öffentlichen Loved Tracks gelesen.",

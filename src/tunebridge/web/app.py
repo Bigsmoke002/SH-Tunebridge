@@ -809,9 +809,11 @@ SETTINGS = {
     "YOUTUBE_OAUTH_CLIENT_SECRET": "YouTube-Login – Client-Secret",
     "SOUNDCLOUD_CLIENT_ID": "SoundCloud-Login – Client-ID deiner App",
     "SOUNDCLOUD_CLIENT_SECRET": "SoundCloud-Login – Client-Secret",
+    "LASTFM_SHARED_SECRET": "Last.fm-Login – Shared secret deines API-Kontos",
 }
 _SECRET = {"LASTFM_API_KEY", "AUDD_API_TOKEN", "ACRCLOUD_ACCESS_KEY", "ACRCLOUD_ACCESS_SECRET", "YOUTUBE_API_KEY",
-           "YOUTUBE_OAUTH_CLIENT_SECRET", "SOUNDCLOUD_CLIENT_SECRET"}
+           "YOUTUBE_OAUTH_CLIENT_SECRET", "SOUNDCLOUD_CLIENT_SECRET",
+           "LASTFM_SHARED_SECRET"}
 
 
 def _mask(k: str, v: str | None) -> str:
@@ -2217,6 +2219,53 @@ async def platform_playlist_tracks(pid: str, plid: str):
 @app.get("/api/spotify/callback")
 def spotify_callback(code: str = "", state: str = "", error: str = ""):
     return _oauth_done("spotify", code, state, error)
+
+
+# ------------------------------------------------------------------ Last.fm-Login (offizielle Web-Anmeldung)
+@app.post("/api/lastfm/login")
+def lastfm_login():
+    import webbrowser
+    from ..lastfm_auth import LOGIN, LastfmError
+    try:
+        st = LOGIN.login()
+    except LastfmError as e:
+        raise HTTPException(400, str(e))
+    threading.Thread(target=webbrowser.open, args=(st["url"],), daemon=True).start()
+    return st
+
+
+@app.get("/api/lastfm/login")
+def lastfm_login_state():
+    from ..lastfm_auth import LOGIN
+    return LOGIN.login_state()
+
+
+@app.get("/api/lastfm/callback/{state}")
+def lastfm_callback(state: str, token: str = ""):
+    from .. import services
+    from ..lastfm_auth import LOGIN
+    from fastapi.responses import HTMLResponse as _H
+    import html as _html
+    try:
+        name = LOGIN.finish_login(token, state)
+        services.set_profile_direct("lastfm", name, name)
+        _SVC_RAM.clear()
+        msg = f"Last.fm ist verbunden ({name}). Du kannst dieses Fenster schließen."
+    except Exception as e:  # noqa: BLE001
+        msg = f"Fehler: {e}"
+    return _H(f"<!doctype html><meta charset=utf-8><title>SH-Tunebridge</title>"
+              f"<body style='font-family:sans-serif;background:#111;color:#eee;padding:40px'>"
+              f"<h2>SH-Tunebridge</h2><p>{_html.escape(msg)}</p></body>")
+
+
+@app.post("/api/lastfm/logout")
+def lastfm_logout():
+    from .. import services
+    from ..lastfm_auth import LOGIN
+    LOGIN.logout()
+    services.set_profile("lastfm", "")
+    _SVC_RAM.clear()
+    return {"ok": True}
 
 
 @app.get("/api/oauth/{pid}/callback")
