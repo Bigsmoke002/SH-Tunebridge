@@ -3,6 +3,10 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht (0.8.1)
+- Fehler behoben: Playlists mit „/“ im Namen (z. B. „Ambient / Chill“, „Rock / Metal“) ließen sich nicht öffnen,
+  umbenennen oder löschen – es kam nur „Da ist etwas schiefgelaufen – Not Found“.
+
 ## 0.8.0 – 2026-11-05
 DJ-Werkzeuge (Set-Planer, „Passt dazu“, Mix-Tracklists), Statistik, doppelte Songs, lernendes Sortieren,
 einstellbare Auto-Sicherung; geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer.

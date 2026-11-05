@@ -558,7 +558,7 @@ def _dist(tracks: list[Track]) -> list[dict]:
     return [{"label": sub or g or "Unsortiert", "genre": g, "subgenre": sub, "count": n} for (g, sub), n in c.most_common()]
 
 
-@app.get("/api/playlists/{name}")
+@app.get("/api/playlists/{name:path}")
 def playlist_detail(name: str):
     entries = store.playlist_entries(name)
     return {"name": name, "entries": entries, "dist": _dist([Track(**e["track"]) for e in entries])}
@@ -690,7 +690,7 @@ class RenameReq(BaseModel):
     new: str
 
 
-@app.post("/api/playlists/{name}/rename")
+@app.post("/api/playlists/{name:path}/rename")
 def rename(name: str, req: RenameReq):
     if not req.new.strip():
         raise HTTPException(400)
@@ -698,7 +698,7 @@ def rename(name: str, req: RenameReq):
     return {"ok": True}
 
 
-@app.delete("/api/playlists/{name}")
+@app.delete("/api/playlists/{name:path}")
 def delete_playlist(name: str):
     store.delete_playlist(name)
     return {"ok": True}
