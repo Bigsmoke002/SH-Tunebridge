@@ -76,3 +76,39 @@ def test_invalid_file(env):
     bad.write_text("kaputt")
     with pytest.raises(ValueError):
         backup.inspect(bad)
+
+
+def test_auto_settings_interval_keep_and_folder(tmp_path, monkeypatch):
+    """Auto-Sicherung: aus/täglich/wöchentlich, Anzahl behalten, eigener Ordner (geprüft)."""
+    import time as _t
+
+    from tunebridge import backup, config, store
+    from tunebridge.models import Track
+    monkeypatch.delenv("TUNEBRIDGE_BACKUP_DIR", raising=False)
+    assert backup.auto_settings() == {"interval": "daily", "keep": 14}
+    assert backup.auto_backup() is None                       # leere Datenbank -> nichts zu sichern
+    store.add_to_playlist("P", Track("S", ["K"]))             # nur Playlists, kein Verlauf -> trotzdem sichern
+    target = tmp_path / "zweite-platte" / "tb"
+    (tmp_path / "zweite-platte").mkdir()
+    backup.save_auto_settings(folder=str(target), keep=2)
+    assert backup.backup_dir() == target and target.is_dir() and config.opt("TUNEBRIDGE_BACKUP_DIR") == str(target)
+    made = []
+    for _ in range(3):
+        store.meta_set("last_auto_backup", "0")
+        made.append(backup.auto_backup())
+        _t.sleep(1.05)                                        # Dateiname hat Sekunden
+    assert all(made) and len(list(target.glob("*-auto.tbbackup"))) == 2
+    assert backup.auto_backup() is None                       # gerade erst gesichert
+    backup.save_auto_settings(interval="weekly")
+    assert backup.next_auto() - float(store.meta_get("last_auto_backup")) == 7 * 86400
+    backup.save_auto_settings(interval="off")
+    store.meta_set("last_auto_backup", "0")
+    assert backup.auto_backup() is None and backup.next_auto() is None
+    for bad in ("relativ/pfad", str(tmp_path / "gibt" / "es" / "nicht")):
+        try:
+            backup.save_auto_settings(folder=bad)
+            raise AssertionError("hätte abgelehnt werden müssen")
+        except ValueError:
+            pass
+    backup.save_auto_settings(folder="")
+    assert not config.opt("TUNEBRIDGE_BACKUP_DIR")

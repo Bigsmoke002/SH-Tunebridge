@@ -169,14 +169,71 @@ def restore(path: Path, mode: str = "replace", restore_keys: bool = False) -> di
             "keys_restored": keys_restored, "stats": store.stats()}
 
 
+INTERVALS = {"off": None, "daily": AUTO_INTERVAL, "weekly": 7 * AUTO_INTERVAL}
+
+
+def auto_settings() -> dict:
+    """Automatische Sicherung: wie oft (aus/täglich/wöchentlich) und wie viele behalten. Ordner = backup_dir()."""
+    try:
+        cur = json.loads(store.meta_get("backup_auto") or "{}")
+    except ValueError:
+        cur = {}
+    iv = cur.get("interval") if cur.get("interval") in INTERVALS else "daily"
+    keep = cur.get("keep") if isinstance(cur.get("keep"), int) else AUTO_KEEP
+    return {"interval": iv, "keep": max(1, min(100, keep))}
+
+
+def check_dir(path: str) -> Path:
+    """Zielordner prüfen: absolut, vorhanden (oder anlegbar) und beschreibbar. -> Path oder ValueError."""
+    p = Path(path).expanduser()
+    if not p.is_absolute():
+        raise ValueError("Bitte einen vollständigen Pfad angeben (z. B. /mnt/backup/tunebridge)")
+    if not p.exists():
+        if not p.parent.is_dir():
+            raise ValueError(f"Ordner {p.parent} gibt es nicht – ist die Platte eingehängt?")
+        p.mkdir()
+    if not p.is_dir():
+        raise ValueError("Das ist kein Ordner")
+    try:
+        with tempfile.NamedTemporaryFile(dir=p, prefix=".tb-schreibtest-"):
+            pass
+    except OSError as e:
+        raise ValueError(f"In diesen Ordner darf SH-Tunebridge nicht schreiben ({e.strerror})") from e
+    return p
+
+
+def save_auto_settings(interval: str | None = None, keep: int | None = None, folder: str | None = None) -> dict:
+    s = auto_settings()
+    if interval is not None:
+        if interval not in INTERVALS:
+            raise ValueError("Unbekannter Abstand")
+        s["interval"] = interval
+    if keep is not None:
+        s["keep"] = max(1, min(100, int(keep)))
+    if folder is not None:
+        config.set_value("TUNEBRIDGE_BACKUP_DIR", str(check_dir(folder)) if folder.strip() else "")
+    store.meta_set("backup_auto", json.dumps(s))
+    return s
+
+
+def next_auto() -> float | None:
+    iv = INTERVALS[auto_settings()["interval"]]
+    if not iv:
+        return None
+    return float(store.meta_get("last_auto_backup") or 0) + iv
+
+
 def auto_backup() -> Path | None:
-    """Einmal pro Tag automatisch sichern (ohne Keys) und alte Auto-Backups aufräumen."""
+    """Automatisch sichern (ohne Keys), wenn fällig, und alte Auto-Backups aufräumen. Wird stündlich geprüft."""
+    s = auto_settings()
+    iv = INTERVALS[s["interval"]]
     last = float(store.meta_get("last_auto_backup") or 0)
-    if time.time() - last < AUTO_INTERVAL or store.stats()["recognitions"] == 0:
+    st = store.stats()
+    if not iv or time.time() - last < iv or (st["recognitions"] == 0 and st["entries"] == 0):
         return None
     out = create(kind="auto")
     store.meta_set("last_auto_backup", str(time.time()))
     autos = sorted(backup_dir().glob(f"*-auto{SUFFIX}"), key=lambda p: p.stat().st_mtime, reverse=True)
-    for old in autos[AUTO_KEEP:]:
+    for old in autos[s["keep"]:]:
         old.unlink(missing_ok=True)
     return out

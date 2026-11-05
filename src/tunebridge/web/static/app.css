@@ -1486,3 +1486,12 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .mx-text { width: 100%; min-height: 260px; font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.5; resize: vertical; }
 .mx-save { display: flex; gap: 8px; margin-top: 12px; }
 .mx-save .input { flex: 1; }
+
+/* Automatische Sicherung */
+.ba-card { padding: 14px 16px; margin: 14px 0 4px; }
+.ba-card h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 15px; }
+.ba-grid { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+.ba-grid .field.grow { flex: 1; min-width: 280px; }
+.ba-dir { display: flex; gap: 8px; }
+.ba-dir .input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 12.5px; }
+.ba-state { margin-top: 10px; white-space: normal; }

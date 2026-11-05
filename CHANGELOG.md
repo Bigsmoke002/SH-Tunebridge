@@ -3,8 +3,9 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.7.2)
-Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit Reinhören und für große Listen.
+## Unveröffentlicht (0.8.0)
+DJ-Werkzeuge (Set-Planer, „Passt dazu“, Mix-Tracklists), Statistik, doppelte Songs, lernendes Sortieren,
+einstellbare Auto-Sicherung; geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer.
 - **Spotify-Einrichtung neu:** 7 kurze Schritte mit Häkchen-Kontrolle (Premium, Dashboard, App anlegen,
   Redirect URI, Web API, Client ID, Schlusskontrolle). Ohne Premium direkt der Weg über den Datenexport.
   Behebt den häufigsten Fehler „redirect_uri: Not matching configuration“ (Adresse fehlte in der Spotify-App).
@@ -47,8 +48,13 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
   DJ-Mix im Dauer-Modus) werden zur Tracklist mit Zeitstempeln – ab Start (00:00, passt als YouTube-Kapitel),
   mit Uhrzeit oder nur nummeriert, wahlweise mit Genre. Mehrfach erkannte Songs zählen einmal. Kopieren oder als
   Playlist speichern.
+- **Automatische Sicherung einstellbar** (Sicherung): aus / täglich / wöchentlich, wie viele behalten, eigener Ordner
+  (z. B. eine zweite Platte, wird vor dem Speichern geprüft). Geprüft wird beim Start und danach stündlich – auch
+  wenn nur Playlists da sind.
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
+- Fehler behoben: Nach „Übernehmen“ in der Sortier-Vorschau kam beim Klick auf OK „onConfirm is not a function“
+  (die Playlists wurden trotzdem angelegt). Betraf auch zwei Info-Dialoge unter „Nicht erkannt“.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren
   gelikte Videos ohne Musik (Shorts, Gaming, Dokus). Die App fragt jetzt die YouTube-Kategorie ab: Solche Videos
   kommen in eine eigene Gruppe „Keine Musik“ (standardmäßig nicht übernommen) und werden nicht mehr bei Last.fm & Co.

@@ -991,7 +991,8 @@ async function scanDevices(kind, onPick) {
 }
 
 /* ================================================================= Modal */
-function modal({ title, text = "", body = "", confirm = "OK", cancel = "Abbrechen", danger = false, onConfirm, onCancel, sticky = false, wide = false }) {
+// onConfirm fehlt (reine Info-Dialoge wie „Fertig“) -> OK schließt nur
+function modal({ title, text = "", body = "", confirm = "OK", cancel = "Abbrechen", danger = false, onConfirm = () => {}, onCancel, sticky = false, wide = false }) {
   const m = $("#modal");
   $("#modalBox").classList.toggle("modal--wide", !!wide);
   m.dataset.sticky = sticky ? "1" : "";
@@ -2612,7 +2613,18 @@ Views.backup = async (main) => {
           <button class="btn btn--ghost" id="bFolder">${icon("folder")}Ordner öffnen</button></div>
       </div>
     </div>
-    <div class="cell-sub auto-note">${icon("repeat")}Automatisch: einmal täglich beim Start, die letzten ${d.keep} bleiben erhalten${d.last_auto ? ` · zuletzt ${relTime(d.last_auto)}` : ""}.</div>
+    <div class="card ba-card">
+      <h3>${icon("repeat")}Automatisch sichern</h3>
+      <div class="ba-grid">
+        <div class="field"><label>Wie oft</label><div class="segmented" id="baInt">${[["off", "Aus"], ["daily", "Täglich"], ["weekly", "Wöchentlich"]].map(([v, l]) => `<button data-v="${v}" class="${d.auto.interval === v ? "on" : ""}">${l}</button>`).join("")}</div></div>
+        <div class="field"><label>Behalten</label><select class="select" id="baKeep">${[3, 5, 7, 14, 30, 60].concat([d.auto.keep]).filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => a - b).map(n => `<option value="${n}" ${n === d.auto.keep ? "selected" : ""}>die letzten ${n}</option>`).join("")}</select></div>
+        <div class="field grow"><label>Ordner (z. B. eine zweite Platte)</label>
+          <div class="ba-dir"><input class="input" id="baDir" value="${esc(d.dir)}" spellcheck="false" autocomplete="off">
+            <button class="btn btn--sm" id="baDirSave">Übernehmen</button>${d.custom_dir ? `<button class="btn btn--sm btn--ghost" id="baDirReset" title="Zurück zum Standard-Ordner im Datenordner">Standard</button>` : ""}</div></div>
+      </div>
+      <div class="cell-sub ba-state">${d.auto.interval === "off" ? "Automatische Sicherung ist aus." : `Ohne API-Keys · geprüft wird beim Start und danach stündlich${d.last_auto ? ` · zuletzt ${relTime(d.last_auto)}` : ""}${d.next_auto && d.last_auto ? ` · nächste ${fmtDate(d.next_auto)}` : ""}`}
+        · Neuer Ordner gilt für neue Sicherungen; vorhandene bleiben im alten Ordner.</div>
+    </div>
     <div class="section-title">Vorhandene Sicherungen · ${d.items.length}</div>
     ${d.items.length ? `<div class="rows">${d.items.map(b => { const [kn, kc, ki] = KIND[b.kind] || KIND.manuell; return `
       <div class="row row--backup">
@@ -2635,6 +2647,11 @@ Views.backup = async (main) => {
     catch (e) { toast(e.message, "err"); $("#bCreate").disabled = false; }
   };
   $("#bFolder").onclick = () => api("/api/backups/open-folder", { method: "POST" }).catch(e => toast(e.message, "err"));
+  const baSave = async (body, msg) => { try { await api("/api/backups/auto", { method: "POST", body }); toast(msg); Views.backup(main); } catch (e) { toast(e.message, "err"); } };
+  $$("#baInt button").forEach(b => b.onclick = () => baSave({ interval: b.dataset.v }, b.dataset.v === "off" ? "Automatische Sicherung aus" : `Automatisch ${b.textContent.toLowerCase()} sichern`));
+  $("#baKeep").onchange = e => baSave({ keep: +e.target.value }, `Es bleiben die letzten ${e.target.value} automatischen Sicherungen`);
+  $("#baDirSave").onclick = () => baSave({ folder: $("#baDir").value.trim() }, "Sicherungsordner gespeichert");
+  $("#baDirReset")?.addEventListener("click", () => baSave({ folder: "" }, "Standard-Ordner"));
   $("#bImport").onclick = () => $("#fileInput").click();
   $("#fileInput").onchange = async e => {
     const f = e.target.files[0]; e.target.value = "";

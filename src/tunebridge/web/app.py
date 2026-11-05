@@ -88,10 +88,12 @@ async def _songcache_backfill():
 @app.on_event("startup")
 async def _auto_backup():
     async def run():
-        try:
-            await asyncio.to_thread(backup.auto_backup)
-        except Exception as e:  # Backup darf den Start nie verhindern
-            print("Auto-Backup fehlgeschlagen:", e)
+        while True:          # beim Start und danach stündlich prüfen, ob eine Sicherung fällig ist
+            try:
+                await asyncio.to_thread(backup.auto_backup)
+            except Exception as e:  # Backup darf nie etwas anderes stören (z. B. Platte nicht eingehängt)
+                dbg.error("sicherung", "Automatische Sicherung fehlgeschlagen", e)
+            await asyncio.sleep(3600)
     asyncio.get_running_loop().create_task(run())
 _WEB = files("tunebridge.web")
 app.mount("/static", StaticFiles(directory=str(_WEB / "static")), name="static")
@@ -1017,7 +1019,23 @@ def _backup_path(name: str):
 def backups():
     last = store.meta_get("last_auto_backup")
     return {"dir": str(backup.backup_dir()), "items": backup.list_backups(),
-            "last_auto": float(last) if last else None, "keep": backup.AUTO_KEEP}
+            "last_auto": float(last) if last else None, "auto": backup.auto_settings(), "next_auto": backup.next_auto(),
+            "custom_dir": bool(config.opt("TUNEBRIDGE_BACKUP_DIR"))}
+
+
+class BackupAutoReq(BaseModel):
+    interval: str | None = None
+    keep: int | None = None
+    folder: str | None = None
+
+
+@app.post("/api/backups/auto")
+def backup_auto_set(req: BackupAutoReq):
+    try:
+        s = backup.save_auto_settings(req.interval, req.keep, req.folder)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {**s, "dir": str(backup.backup_dir()), "next_auto": backup.next_auto()}
 
 
 class BackupReq(BaseModel):
