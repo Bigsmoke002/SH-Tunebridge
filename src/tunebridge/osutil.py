@@ -37,6 +37,8 @@ def data_dir() -> Path:
 
 
 def downloads_dir() -> Path:
+    if os.environ.get("TUNEBRIDGE_DOWNLOADS"):          # Tests / eigener Export-Ordner
+        return Path(os.environ["TUNEBRIDGE_DOWNLOADS"])
     if LINUX:
         try:
             out = subprocess.run(["xdg-user-dir", "DOWNLOAD"], capture_output=True, text=True, timeout=3).stdout.strip()

@@ -1499,6 +1499,116 @@ Views.playlist = async (main, name) => {
   };
 };
 
+/* ---------- Set-Planer: Reihenfolge nach Tempo, Tonart (Camelot) und Energie-Kurve */
+const SetPlan = { job: null, curve: "peak", order: null, desc: null, items: null };
+Views.setplan = async (main, _, params) => {
+  await refreshMeta();
+  const local = S.playlists.filter(p => p.origin === "lokal" && p.count);
+  const curves = await api("/api/setplan/curves");
+  const pre = params?.get("pl") || SetPlan.playlist || local[0]?.name;
+  main.innerHTML = `<div class="page view-enter">
+    <div class="page-head"><div><h1>Set-Planer</h1><p>Baut aus einer Playlist eine DJ-Reihenfolge: passende Tonarten (Camelot), kleine Tempo-Sprünge und der Energie-Verlauf, den du willst.</p></div></div>
+    ${local.length ? `<div class="card sp-form">
+      <div class="field"><label>Playlist</label><select class="select" id="spPl">${local.map(p => `<option ${p.name === pre ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></div>
+      <div class="field grow"><label>Energie-Verlauf</label><div class="segmented" id="spCurve">${curves.map(c => `<button data-c="${c.id}" title="${esc(c.hint)}" class="${c.id === SetPlan.curve ? "on" : ""}">${esc(c.name)}</button>`).join("")}</div>
+        <div class="cell-sub" id="spHint">${esc(curves.find(c => c.id === SetPlan.curve)?.hint || "")}</div></div>
+      <button class="btn btn--primary" id="spGo">${icon("sparkle")}Set planen</button></div>
+      <div id="spJob"></div><div id="spOut"></div>`
+    : `<div class="empty">${icon("stack")}<h3>Keine Playlist</h3><p>Lege zuerst eine lokale Playlist an (z. B. über „Erkennen“ oder „Aufteilen“).</p></div>`}</div>`;
+  hydrateIcons(main);
+  if (!local.length) return;
+  $$("#spCurve button").forEach(b => b.onclick = () => {
+    SetPlan.curve = b.dataset.c; $$("#spCurve button").forEach(x => x.classList.toggle("on", x === b));
+    $("#spHint").textContent = curves.find(c => c.id === SetPlan.curve).hint;
+    if (SetPlan.items && SetPlan.playlist === $("#spPl").value) spOrder();
+  });
+  $("#spGo").onclick = async () => {
+    try { SetPlan.playlist = $("#spPl").value; SetPlan.job = (await api("/api/setplan/start", { method: "POST", body: { playlist: SetPlan.playlist } })).job; SetPlan.items = null; spPoll(); }
+    catch (e) { toast(e.message, "err"); }
+  };
+  if (SetPlan.items && SetPlan.desc && SetPlan.playlist === $("#spPl").value) spRender();
+};
+async function spPoll() {
+  const jid = SetPlan.job, box = $("#spJob"); $("#spOut").innerHTML = "";
+  while (SetPlan.job === jid && document.body.contains(box)) {
+    let j; try { j = await api(`/api/setplan/${jid}`); } catch (e) { return toast(e.message, "err"); }
+    if (j.state === "done") { box.innerHTML = j.cut ? `<div class="notice">${icon("info")}<div>Nur die ersten ${j.total} Songs – ${j.cut} weitere passen nicht in ein Set.</div></div>` : ""; hydrateIcons(box); SetPlan.items = j.items; return spOrder(); }
+    if (j.state !== "analysing") { box.innerHTML = `<div class="notice">${icon("info")}<div>${j.state === "error" ? esc(j.error) : "Abgebrochen."}</div></div>`; return hydrateIcons(box); }
+    box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>Messe Tempo, Tonart und Energie …</b><span class="cell-sub">${j.done}/${j.total}</span>
+      <button class="btn btn--xs btn--ghost" id="spCancel">Abbrechen</button></div><div class="llm-bar"><div style="width:${Math.round(j.done / (j.total || 1) * 100)}%"></div></div>
+      <div class="cell-sub" style="margin-top:6px">Aus der offiziellen 30-s-Hörprobe – bekannte Songs kommen sofort aus dem Speicher.</div></div>`;
+    $("#spCancel").onclick = () => api(`/api/setplan/${jid}/cancel`, { method: "POST" });
+    await new Promise(r => setTimeout(r, 1000));
+  }
+}
+async function spOrder() {
+  try { SetPlan.desc = await api(`/api/setplan/${SetPlan.job}/order`, { method: "POST", body: { curve: SetPlan.curve } }); SetPlan.order = SetPlan.desc.order; spRender(); }
+  catch (e) { toast(e.message, "err"); }
+}
+async function spMove(k, dir) {
+  const o = [...SetPlan.order], m = k + dir; if (m < 0 || m >= o.length) return;
+  [o[k], o[m]] = [o[m], o[k]];
+  SetPlan.desc = await api(`/api/setplan/${SetPlan.job}/describe?curve=${SetPlan.curve}`, { method: "POST", body: { order: o } });
+  SetPlan.order = SetPlan.desc.order; spRender();
+}
+function spChart(d) {
+  const st = d.steps, hasT = st.some(s => s.target != null), n = st.length;
+  const line = hasT ? st.map((s, k) => `${n === 1 ? 50 : (k + .5) / n * 100},${100 - s.target * 100}`).join(" ") : "";
+  return `<div class="sp-chart-wrap"><div class="sp-legend"><span><i class="sw sw-bar"></i>Energie je Song</span>${hasT ? `<span><i class="sw sw-line"></i>gewünschter Verlauf</span>` : ""}</div>
+    <div class="sp-chart" id="spChart" role="img" aria-label="Energie je Song in Set-Reihenfolge">
+      <div class="sp-grid"><i style="bottom:25%"></i><i style="bottom:50%"></i><i style="bottom:75%"></i></div>
+      <div class="sp-bars">${st.map((s, k) => `<b data-k="${k}" style="height:${Math.max(3, s.energy * 100)}%"></b>`).join("")}</div>
+      ${hasT ? `<svg class="sp-line" viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points="${line}" fill="none" vector-effect="non-scaling-stroke"/></svg>` : ""}
+      <div class="sp-tip hidden" id="spTip"></div></div>
+    <div class="sp-axis"><span>Anfang</span><span>${d.minuten ? `~${d.minuten} Min.` : ""}</span><span>Ende</span></div></div>`;
+}
+function spRender() {
+  const d = SetPlan.desc, it = SetPlan.items, out = $("#spOut"); if (!out || !d) return;
+  const chip = s => s.key_d == null ? "" : `<span class="sp-tr ${s.key_d <= 1 ? "ok" : s.key_d === 2 ? "mid" : "bad"}">${esc(s.key)}${s.tempo != null ? ` · ${s.tempo < 0.5 ? "gleiches Tempo" : `${String(s.tempo).replace(".", ",")} % Tempo`}` : ""}</span>`;
+  out.innerHTML = `<div class="sp-stats cell-sub">${d.order.length} Songs${d.minuten ? ` · ~${d.minuten} Min.` : ""} · ${d.bekannt ? `${d.harmonisch} von ${d.bekannt} Übergängen harmonisch` : "Tonarten unbekannt"} · mit ▲▼ von Hand umstellen</div>
+    ${spChart(d)}
+    <div class="sp-actions">
+      <button class="btn btn--sm btn--primary" id="spSave">${icon("plus")}Als Playlist speichern</button>
+      <button class="btn btn--sm btn--ghost" data-exp="m3u8">${icon("download")}M3U8</button>
+      <button class="btn btn--sm btn--ghost" data-exp="csv">${icon("download")}CSV (BPM, Tonart)</button>
+      <button class="btn btn--sm btn--ghost" id="spCopy">${icon("copy")}Tracklist kopieren</button>
+      <button class="btn btn--sm btn--ghost" id="spPlay">${icon("play")}Alles anhören</button></div>
+    <div class="card sp-list">${d.steps.map((s, k) => { const t = it[s.i]; const pv = withPreview({ ...t });
+      return `${k ? `<div class="sp-step">${chip(s)}</div>` : ""}<div class="sp-row" data-k="${k}"><span class="sp-n num">${k + 1}</span>
+        <button class="icon-btn" ${playAttr(pv)} title="Reinhören">${icon("play")}</button>
+        ${t.cover ? `<img src="${esc(t.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
+        <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em>${esc(t.subgenre || t.genre || "")}</em></div>
+        <span class="sp-v num">${t.bpm ? Math.round(t.bpm) + " BPM" : "– BPM"}</span><span class="sp-v sp-cam">${esc(t.camelot || "–")}</span>
+        <span class="sp-v num" title="Energie">${Math.round(s.energy * 100)} %</span>
+        <span class="sp-mv"><button class="icon-btn" data-up="${k}" ${k ? "" : "disabled"} title="Nach oben">▲</button><button class="icon-btn" data-dn="${k}" ${k < d.steps.length - 1 ? "" : "disabled"} title="Nach unten">▼</button></span></div>`; }).join("")}</div>`;
+  hydrateIcons(out); Player.sync();
+  $$("[data-up]", out).forEach(b => b.onclick = () => spMove(+b.dataset.up, -1));
+  $$("[data-dn]", out).forEach(b => b.onclick = () => spMove(+b.dataset.dn, 1));
+  const tip = $("#spTip");
+  $$(".sp-bars b", out).forEach(b => {
+    b.onmouseenter = () => { const k = +b.dataset.k, s = d.steps[k], t = it[s.i];
+      tip.innerHTML = `<b>${k + 1}. ${esc(t.artist)} – ${esc(t.title)}</b><span>Energie ${Math.round(s.energy * 100)} %${s.target != null ? ` · Ziel ${Math.round(s.target * 100)} %` : ""}${t.bpm ? ` · ${Math.round(t.bpm)} BPM` : ""}${t.camelot ? ` · ${esc(t.camelot)}` : ""}</span>`;
+      tip.classList.remove("hidden"); const r = b.getBoundingClientRect(), c = $("#spChart").getBoundingClientRect();
+      tip.style.left = `${Math.min(c.width - tip.offsetWidth, Math.max(0, r.left - c.left + r.width / 2 - tip.offsetWidth / 2))}px`;
+      $$(".sp-row", out).forEach(x => x.classList.toggle("hl", +x.dataset.k === k)); };
+    b.onmouseleave = () => { tip.classList.add("hidden"); $$(".sp-row.hl", out).forEach(x => x.classList.remove("hl")); };
+    b.onclick = () => $(`.sp-row[data-k="${b.dataset.k}"]`, out)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  });
+  const order = () => ({ order: SetPlan.order });
+  $$("[data-exp]", out).forEach(b => b.onclick = async () => {
+    try { const r = await api(`/api/setplan/${SetPlan.job}/export`, { method: "POST", body: { ...order(), fmt: b.dataset.exp } });
+      toast(`Gespeichert: ${r.name}`); modal({ title: "Exportiert", text: `${esc(r.name)} liegt in ${esc(r.folder)}.<br>Enthält Titel, Künstler, Tempo, Tonart und Links – keine Musikdateien.`, confirm: "Ordner öffnen", cancel: "Schließen",
+        onConfirm: () => api("/api/debug/open-folder", { method: "POST", body: { folder: r.folder } }) }); }
+    catch (e) { toast(e.message, "err"); }
+  });
+  $("#spCopy").onclick = async () => { const r = await api(`/api/setplan/${SetPlan.job}/export`, { method: "POST", body: { ...order(), fmt: "txt", name: "clipboard" } });
+    toast(await Clip.write(r.text) ? "Tracklist kopiert" : "Kopieren nicht möglich", "ok"); };
+  $("#spPlay").onclick = () => { Player.playList(SetPlan.order.map(i => withPreview({ ...it[i] }))); toast("Alle Hörproben in Set-Reihenfolge – unten im Player weiter/stoppen"); };
+  $("#spSave").onclick = () => modal({ title: "Als Playlist speichern", body: `<input class="input" id="spName" value="${esc(SetPlan.playlist)} – Set" style="width:100%">`, confirm: "Speichern",
+    onConfirm: async box => { const r = await api(`/api/setplan/${SetPlan.job}/save`, { method: "POST", body: { ...order(), name: $("#spName", box).value } });
+      toast(`„${r.name}“ mit ${r.count} Songs angelegt`); refreshMeta(); } });
+}
+
 /* ---------- Doppelte Songs (nur lokale Playlists) */
 Views.dupes = async (main) => {
   main.innerHTML = `<div class="page view-enter">

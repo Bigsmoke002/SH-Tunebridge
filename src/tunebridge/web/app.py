@@ -397,6 +397,86 @@ def history(limit: int = 200):
              "bpm": h["extra"].get("bpm")} for h in store.history(limit)]
 
 
+# ------------------------------------------------------------------ Set-Planer
+def _sp(fn, *a):
+    try:
+        return fn(*a)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+class SetStartReq(BaseModel):
+    playlist: str
+
+
+class SetOrderReq(BaseModel):
+    curve: str = "peak"
+
+
+class SetOutReq(BaseModel):
+    order: list[int]
+    fmt: str = "m3u8"
+    name: str = ""
+
+
+@app.get("/api/setplan/curves")
+def setplan_curves():
+    from .. import setplan
+    return [{"id": k, "name": v[0], "hint": v[1]} for k, v in setplan.CURVES.items()]
+
+
+@app.post("/api/setplan/start")
+def setplan_start(req: SetStartReq):
+    from .. import setplan
+    return {"job": _sp(setplan.start, req.playlist)}
+
+
+@app.get("/api/setplan/{jid}")
+def setplan_job(jid: str):
+    from .. import setplan
+    j = _sp(setplan.job, jid)
+    return {k: v for k, v in j.items() if k != "cancel"}
+
+
+@app.post("/api/setplan/{jid}/cancel")
+def setplan_cancel(jid: str):
+    from .. import setplan
+    _sp(setplan.job, jid)["cancel"] = True
+    return {"ok": True}
+
+
+@app.post("/api/setplan/{jid}/order")
+def setplan_order(jid: str, req: SetOrderReq):
+    from .. import setplan
+    j = _sp(setplan.job, jid)
+    if j["state"] != "done":
+        raise HTTPException(400, "Analyse läuft noch")
+    curve = req.curve if req.curve in setplan.CURVES else "peak"
+    return setplan.describe(j["items"], setplan.order(j["items"], curve), curve)
+
+
+@app.post("/api/setplan/{jid}/describe")
+def setplan_describe(jid: str, req: SetOutReq, curve: str = "peak"):
+    """Eigene Reihenfolge (nach Verschieben von Hand) neu bewerten."""
+    from .. import setplan
+    j = _sp(setplan.job, jid)
+    return setplan.describe(j["items"], _sp(setplan._checked_order, j, req.order), curve if curve in setplan.CURVES else "peak")
+
+
+@app.post("/api/setplan/{jid}/export")
+def setplan_export(jid: str, req: SetOutReq):
+    from .. import setplan
+    if req.fmt == "txt" and req.name == "clipboard":
+        return {"text": _sp(setplan.render, _sp(setplan.job, jid), req.order, "txt")}
+    return _sp(setplan.export, jid, req.order, req.fmt)
+
+
+@app.post("/api/setplan/{jid}/save")
+def setplan_save(jid: str, req: SetOutReq):
+    from .. import setplan
+    return _sp(setplan.save, jid, req.order, req.name)
+
+
 # ------------------------------------------------------------------ Doppelte Songs
 @app.get("/api/dupes")
 def dupes_find():

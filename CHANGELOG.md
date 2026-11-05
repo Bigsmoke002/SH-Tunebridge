@@ -33,6 +33,10 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
 - **Neue Likes automatisch einsortieren** („Neu für dich“, Schalter „Automatisch einsortieren ab … %“, Standard aus):
   passt ein neuer Song sicher genug zu einer deiner Playlists, landet er selbst dort. In der Liste steht
   „Automatisch in X einsortiert“ mit „Passt“ und „Rückgängig“.
+- **Set-Planer** (neue Seite): baut aus einer Playlist eine DJ-Reihenfolge – harmonische Tonarten (Camelot),
+  kleine Tempo-Sprünge (halbes/doppeltes Tempo zählt als passend) und ein Energie-Verlauf nach Wahl (Aufbauen, Peak
+  in der Mitte, Gleichmäßig, Runterfahren). Energie-Kurve mit Ziel-Verlauf, jeder Übergang bewertet, von Hand
+  umstellbar. Als Playlist speichern, als M3U8/CSV (BPM, Tonart) in den Download-Ordner oder als Tracklist kopieren.
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren
