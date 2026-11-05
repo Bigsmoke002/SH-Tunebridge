@@ -281,7 +281,21 @@ def _analyse_one(t: Track) -> dict:
             "preview_url": track.preview_url or t.preview_url, "genre": track.genre, "subgenre": track.subgenre,
             "niche": track.niche, "confidence": extra.get("confidence"), "bpm": extra.get("bpm"),
             "deezer": (extra.get("links") or {}).get("deezer", "").rsplit("/", 1)[-1] or None,
-            "tags": list((track.tags or {}).keys())[:20], "ai": extra.get("ai")}
+            "tags": list((track.tags or {}).keys())[:20], "ai": extra.get("ai"), "why": why_no_genre(track, extra)}
+
+
+def why_no_genre(track: Track, extra: dict) -> str | None:
+    """Kurzer Grund, warum ein Song kein Genre bekam (für „Unsortiert“). None = hat ein Genre."""
+    if track.genre:
+        return None
+    if extra.get("incomplete"):
+        return "Ein Dienst bat um eine Pause – beim nächsten Sortieren wird neu nachgeschlagen"
+    tags = [t for t in (track.tags or {}) if not t.startswith("_")]
+    if tags:
+        return "Tags passen zu keinem bekannten Genre: " + ", ".join(tags[:4])
+    if not (extra.get("links") or {}).get("deezer") and not extra.get("cover") and not track.isrc:
+        return "Bei Deezer und Last.fm nicht gefunden (Schreibweise? Nur auf YouTube/SoundCloud?)"
+    return "Gefunden, aber nirgends mit Genre-Angaben"
 
 
 def _run(job: dict) -> None:

@@ -2178,6 +2178,25 @@ def sort_cancel(jid: str):
     return {"ok": True}
 
 
+class SortGenreReq(BaseModel):
+    i: int
+    genre: str
+    subgenre: str | None = None
+    learn: bool = True
+
+
+@app.post("/api/sort/{jid}/genre")
+def sort_genre(jid: str, req: SortGenreReq):
+    from .. import services
+    return _svc_call(services.set_genre, jid, req.i, req.genre, req.subgenre, req.learn)
+
+
+@app.post("/api/sort/{jid}/ai-unsorted")
+def sort_ai_unsorted(jid: str):
+    from .. import services
+    return {"songs": _svc_call(services.ai_unsorted, jid)}
+
+
 class SortGroupsReq(BaseModel):
     level: int = 6
     min_size: int = 3

@@ -24,6 +24,12 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
 - **Doppelte Songs** (neue Seite unter Werkzeuge): findet Songs, die in einer Playlist mehrfach stehen (z. B. einmal
   mit, einmal ohne ISRC – mit einem Klick entfernen, der älteste Eintrag bleibt), Songs in mehreren Playlists und
   Original + Remix/Edit/Slowed desselben Songs. Mit Reinhören, alles lokal.
+- **Sortieren lernt aus deinen Korrekturen:** Verschiebst du in der Vorschau einen Song in eine Gruppe mit eindeutigem
+  Genre, bietet die App an, das zu merken („Als Techno merken“). Oder „Genre selbst festlegen“ – beides gilt künftig
+  beim Erkennen und Sortieren (eigene Einordnung in der Genre-Datenbank) und der Song wandert in die passende Gruppe.
+- **„Unsortiert“ erklärt sich:** Jeder Song zeigt, warum er kein Genre bekam (nicht gefunden, keine Genre-Angaben,
+  Tags passen zu keinem Genre …). Die Gruppe hat „Mit KI prüfen“ – die KI ordnet nur unsortierte Songs ein, die sie
+  wirklich kennt; deine bisherigen Verschiebungen bleiben erhalten.
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren

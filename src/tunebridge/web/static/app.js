@@ -4246,6 +4246,21 @@ Views.sortPreview = async (main, sid, pid, name) => {
   if (same) pollSort(main);
 };
 
+async function sortAiWait() {
+  const jid = Sorter.job;
+  for (;;) {
+    await new Promise(r => setTimeout(r, 1500));
+    if (Sorter.job !== jid || !$(".sort-grid")) return;
+    let j; try { j = await api(`/api/sort/${jid}`); } catch (e) { toast(e.message, "err"); return; }
+    if (j.state !== "done") continue;
+    const box = $("#srtJob"); if (box) box.innerHTML = "";
+    if (j.ai_error) return toast(`KI-Prüfung fehlgeschlagen: ${j.ai_error}`, "err");
+    (j.ai_new || []).forEach(n => { Sorter.items[n] = j.items[n]; sortPlace(n); });
+    sortRedraw();
+    return toast((j.ai_new || []).length ? `KI hat ${j.ai_new.length} Songs eingeordnet (mit „KI“ markiert)` : "Die KI kannte keinen der unsortierten Songs sicher genug");
+  }
+}
+
 async function pollSort(main) {
   const jid = Sorter.job;
   while (Sorter.job === jid && document.body.contains($("#srtJob"))) {
@@ -4323,18 +4338,57 @@ function sortCard(g, gi) {
     <div class="sort-card-head"><label class="check"><input type="checkbox" data-keep="${gi}" ${g.keep ? "checked" : ""}></label>
       <span class="dot" style="background:${genreColor(first.genre, first.subgenre)}"></span>
       <input class="sort-name" data-rename="${gi}" value="${esc(g.name)}" spellcheck="false">
+      ${!g.nomusic && g.items.length && g.items.every(n => !it[n].genre) ? `<button class="btn btn--xs btn--ghost" data-aiuns title="Die eingestellte KI ordnet nur Songs ein, die sie wirklich kennt">${icon("sparkle")}Mit KI prüfen</button>` : ""}
       <button class="btn btn--xs btn--ghost" data-listen="${gi}" title="Alle Songs dieser Playlist nacheinander anhören (je 30 s Hörprobe)">${icon("play")}Anhören</button></div>
+    ${!g.nomusic && g.items.length && g.items.every(n => !it[n].genre) ? `<div class="cell-sub sort-hint">Song anklicken → „Genre selbst festlegen“. Was du festlegst, merkt sich die App für die Zukunft.</div>` : ""}
     <div class="cnt">${esc(meta)}</div>
     <ul>${g.items.map(n => { const t = it[n];
-      const sub = [t.ki ? "KI" : "", Sorter.level <= 4 ? (t.subgenre || t.genre || "") : "", t.bpm ? `${Math.round(t.bpm)} BPM` : "", t.camelot || ""].filter(Boolean);
+      const sub = [t.ki ? "KI" : "", t.own ? "von dir" : "", Sorter.level <= 4 ? (t.subgenre || t.genre || "") : "", !t.genre && !t.nomusic && t.why ? t.why : "",
+        t.bpm ? `${Math.round(t.bpm)} BPM` : "", t.camelot || ""].filter(Boolean);
       const pv = sortPrev(t);
       return `<li data-i="${n}" title="Klicken zum Verschieben${t.ki ? ` · KI: vorher ${esc(t.ki.vorher.filter(Boolean).join(" / ") || "?")} – ${esc(t.ki.grund || "")}` : ""}">
       <button class="icon-btn sort-play" ${playAttr(pv)} title="Reinhören">${icon(Player.isPlaying(pv.preview_url) ? "pause" : "play")}</button>
       ${t.cover ? `<img src="${esc(t.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
-      <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em>${sub.map(x => x === "KI" ? `<b class="chip chip--ai">KI</b>` : esc(x)).join(" · ")}</em></div></li>`; }).join("")}</ul></div>`;
+      <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em title="${esc(sub.join(" · "))}">${sub.map(x => x === "KI" ? `<b class="chip chip--ai">KI</b>` : x === "von dir" ? `<b class="chip">von dir</b>` : esc(x)).join(" · ")}</em></div></li>`; }).join("")}</ul></div>`;
+}
+
+// Häufigstes Genre einer Gruppe (ohne Song „skip“) – nur wenn eindeutig (≥ 60 %)
+function sortDominant(g, skip = -1) {
+  const c = {}; let n = 0;
+  g.items.forEach(i => { if (i === skip) return; const t = Sorter.items[i]; if (!t.genre) return; n++; const k = `${t.genre}|${t.subgenre || ""}`; c[k] = (c[k] || 0) + 1; });
+  const best = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+  if (best && best[1] / n >= .6) { const [genre, sub] = best[0].split("|"); return { genre, subgenre: sub || null }; }
+  const gc = {}; g.items.forEach(i => { const t = Sorter.items[i]; if (i !== skip && t.genre) gc[t.genre] = (gc[t.genre] || 0) + 1; });
+  const bg = Object.entries(gc).sort((a, b) => b[1] - a[1])[0];
+  return bg && bg[1] / n >= .6 ? { genre: bg[0], subgenre: null } : null;
+}
+const sortRedraw = () => { Sorter.groups = Sorter.groups.filter(g => g.items.length); const grid = $(".sort-grid"); grid.innerHTML = Sorter.groups.map((g, gi) => sortCard(g, gi)).join(""); hydrateIcons(grid); bindSortCards(grid); };
+// Song mit (neuem) Genre in die passende Gruppe legen – sonst neue Gruppe mit dem Genre-Namen
+function sortPlace(n) {
+  const t = Sorter.items[n], from = Sorter.groups.findIndex(g => g.items.includes(n));
+  let to = Sorter.groups.findIndex((g, gi) => gi !== from && !g.nomusic && (d => d && d.genre === t.genre && (!t.subgenre || !d.subgenre || d.subgenre === t.subgenre))(sortDominant(g)));
+  if (to < 0) { Sorter.groups.push({ name: t.subgenre || t.genre, items: [], info: {}, keep: true }); to = Sorter.groups.length - 1; }
+  if (from >= 0) Sorter.groups[from].items = Sorter.groups[from].items.filter(x => x !== n);
+  Sorter.groups[to].items.push(n);
+  return Sorter.groups[to].name;
+}
+async function sortSetGenre(n) {
+  const t = Sorter.items[n];
+  await GenreDB.pick(t.genre, t.subgenre, `${esc(t.artist)} – ${esc(t.title)}`, async (g, sg) => {
+    Sorter.items[n] = await api(`/api/sort/${Sorter.job}/genre`, { method: "POST", body: { i: n, genre: g, subgenre: sg, learn: true } });
+    const name = sortPlace(n); sortRedraw(); toast(`Gemerkt: ${sg || g} – liegt jetzt in „${name}“`);
+  });
 }
 
 function bindSortCards(root) {
+  $$("[data-aiuns]", root).forEach(b => b.onclick = async () => {
+    try {
+      const r = await api(`/api/sort/${Sorter.job}/ai-unsorted`, { method: "POST" });
+      Sorter.aiUnsorted = true; toast(`KI prüft ${r.songs} unsortierte Songs …`);
+      const box = $("#srtJob"); box.innerHTML = `<div class="card t-job"><b>KI prüft die unsortierten Songs …</b><div class="cell-sub">Nur Songs, die die KI wirklich kennt, werden eingeordnet. Deine Verschiebungen bleiben.</div></div>`;
+      sortAiWait();
+    } catch (e) { toast(e.message, "err"); }
+  });
   $$("[data-keep]", root).forEach(c => c.onchange = () => { const g = Sorter.groups[+c.dataset.keep]; g.keep = c.checked; c.closest(".sort-card").classList.toggle("off", !c.checked); });
   $$("[data-rename]", root).forEach(inp => inp.onchange = () => { Sorter.groups[+inp.dataset.rename].name = inp.value.trim() || Sorter.groups[+inp.dataset.rename].name; });
   $$("[data-listen]", root).forEach(b => b.onclick = () => {
@@ -4345,19 +4399,35 @@ function bindSortCards(root) {
   $$(".sort-card li[data-i]", root).forEach(li => li.onclick = e => {
     if (e.target.closest("[data-play]")) return;          // Play-Knopf: nur reinhören, nicht verschieben
     const n = +li.dataset.i, t = Sorter.items[n], from = +li.closest(".sort-card").dataset.g;
-    modal({ title: "Verschieben nach …", text: `${t.artist} – ${t.title}${t.genre ? ` · ${t.genre}${t.subgenre ? " / " + t.subgenre : ""}` : ""}`,
+    modal({ title: "Verschieben nach …", text: esc(`${t.artist} – ${t.title}${t.genre ? ` · ${t.genre}${t.subgenre ? " / " + t.subgenre : ""}` : ""}`),
       body: `<select class="select" id="mvTo" style="width:100%">${Sorter.groups.map((g, gi) => `<option value="${gi}" ${gi === from ? "selected" : ""}>${esc(g.name)}</option>`).join("")}<option value="new">+ Neue Playlist …</option></select>
-        <input class="input hidden" id="mvNew" placeholder="Name der neuen Playlist" style="width:100%;margin-top:8px">`,
-      confirm: "Verschieben", onConfirm: box => {
+        <input class="input hidden" id="mvNew" placeholder="Name der neuen Playlist" style="width:100%;margin-top:8px">
+        <label class="check hidden" id="mvLearnRow" style="margin-top:12px;display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="mvLearn" checked><span id="mvLearnTxt"></span></label>
+        <button class="link-btn" id="mvGenre" style="margin-top:12px">${icon("pencil")}Genre selbst festlegen …</button>`,
+      confirm: "Verschieben", onConfirm: async box => {
         let to = $("#mvTo", box).value;
         if (to === "new") { const nm = $("#mvNew", box).value.trim(); if (!nm) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; }
           Sorter.groups.push({ name: nm, items: [], info: {}, keep: true }); to = Sorter.groups.length - 1; }
         to = +to; if (to === from) return;
+        const d = sortDominant(Sorter.groups[to], n);
+        if (d && $("#mvLearn", box).checked && !$("#mvLearnRow", box).classList.contains("hidden")) {
+          Sorter.items[n] = await api(`/api/sort/${Sorter.job}/genre`, { method: "POST", body: { i: n, genre: d.genre, subgenre: d.subgenre, learn: true } });
+          toast(`Gemerkt: ${d.subgenre || d.genre}`);
+        }
         Sorter.groups[from].items = Sorter.groups[from].items.filter(x => x !== n);
         Sorter.groups[to].items.push(n);
-        const grid = $(".sort-grid"); grid.innerHTML = Sorter.groups.map((g, gi) => sortCard(g, gi)).join(""); hydrateIcons(grid); bindSortCards(grid);
+        sortRedraw();
       } });
-    const sel = $("#mvTo"); sel.onchange = () => $("#mvNew").classList.toggle("hidden", sel.value !== "new");
+    const sel = $("#mvTo");
+    const learnInfo = () => {    // Ziel hat ein eindeutiges Genre, das vom Song abweicht -> „merken“ anbieten
+      const d = sel.value === "new" ? null : sortDominant(Sorter.groups[+sel.value], n);
+      const show = d && +sel.value !== from && (d.genre !== t.genre || (d.subgenre || null) !== (t.subgenre || null));
+      $("#mvLearnRow").classList.toggle("hidden", !show);
+      if (show) $("#mvLearnTxt").innerHTML = `Als <b>${esc(d.subgenre ? `${d.genre} / ${d.subgenre}` : d.genre)}</b> merken – gilt künftig beim Erkennen und Sortieren`;
+    };
+    sel.onchange = () => { $("#mvNew").classList.toggle("hidden", sel.value !== "new"); learnInfo(); };
+    learnInfo(); hydrateIcons($("#modalBox"));
+    $("#mvGenre").onclick = () => sortSetGenre(n);
   });
 }
 

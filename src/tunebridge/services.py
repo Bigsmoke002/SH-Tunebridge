@@ -373,6 +373,67 @@ def cancel(jid: str) -> None:
         _jobs[jid]["cancel"] = True
 
 
+def set_genre(jid: str, i: int, genre: str, subgenre: str | None, learn: bool) -> dict:
+    """Genre eines Songs in der Sortier-Vorschau setzen. learn=True: als eigene Einordnung merken
+    (gilt künftig beim Erkennen und Sortieren, siehe Genre-Datenbank)."""
+    from . import genredb
+    j = _jobs.get(jid)
+    if not j:
+        raise ServiceError("Auftrag nicht gefunden (abgelaufen?) – bitte neu starten")
+    if not (0 <= i < len(j["items"])):
+        raise ServiceError("Song nicht gefunden")
+    g, sg = genredb._valid(genre, subgenre)
+    if not g:
+        raise ServiceError("Unbekanntes Genre")
+    it = j["items"][i]
+    if learn:
+        try:
+            genredb.vote(it.get("artists") or [it.get("artist", "")], it["title"], it.get("isrc"), g, sg, "korrektur")
+        except ValueError as e:
+            raise ServiceError(str(e)) from e
+    if it.get("genre") != g:
+        it["niche"] = None
+    it.update(genre=g, subgenre=sg, why=None, nomusic=False, own=bool(learn))
+    return it
+
+
+def _ai_unsorted(job: dict) -> None:
+    from . import ai
+    idx = [n for n, it in enumerate(job["items"]) if not it.get("genre") and not it.get("nomusic")]
+    try:
+        fixes = ai.review_genres([job["items"][n] for n in idx])
+        for f in fixes:
+            it = job["items"][idx[f["i"]]]
+            it["ki"] = {"vorher": [None, None], "grund": f.get("grund")}
+            it.update(genre=f["genre"], subgenre=f.get("subgenre"), why=None)
+        job["ai_fixes"] = (job.get("ai_fixes") or 0) + len(fixes)
+        job["ai_new"] = [idx[f["i"]] for f in fixes]
+        job.pop("ai_error", None)
+    except Exception as e:  # noqa: BLE001
+        job["ai_error"] = str(e)
+        job["ai_new"] = []
+        dbg.error("sortieren", "KI-Prüfung (Unsortiert) fehlgeschlagen", e)
+    job["state"] = "done"
+
+
+def ai_unsorted(jid: str) -> int:
+    from . import ai
+    j = _jobs.get(jid)
+    if not j:
+        raise ServiceError("Auftrag nicht gefunden (abgelaufen?) – bitte neu starten")
+    if j["state"] != "done":
+        raise ServiceError("Die Vorschau ist noch nicht fertig")
+    ok, why = ai.ready()
+    if not ok:
+        raise ServiceError(f"KI nicht bereit: {why} – einrichten unter Einstellungen › KI & API-Keys")
+    n = sum(1 for it in j["items"] if not it.get("genre") and not it.get("nomusic"))
+    if not n:
+        raise ServiceError("Keine unsortierten Songs")
+    j.update(state="ai", ai_new=None)
+    threading.Thread(target=_ai_unsorted, args=(j,), daemon=True).start()
+    return n
+
+
 def groups(jid: str, level: int, min_size: int) -> list[dict]:
     from . import sorter
     j = _jobs.get(jid)
