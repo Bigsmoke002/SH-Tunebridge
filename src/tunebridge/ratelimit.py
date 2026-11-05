@@ -47,6 +47,37 @@ LIMITS: dict[str, _Limit] = {
     "acrcloud": _Limit("ACRCloud", 10, 60, gap=1.0, pause=120),
 }
 _lock = threading.Lock()
+_tl = threading.local()          # pro Thread: geduldiger Modus (Sortier-Aufträge) und „etwas wurde übersprungen“
+
+
+class patient:
+    """Für lange Aufträge (Playlist sortieren): Pausen und volle Budgets abwarten statt den Song ohne Genre
+    durchzuwinken. Nur im eigenen Thread wirksam – die Oberfläche bleibt schnell."""
+    def __init__(self, max_wait: float = 180.0):
+        self.max_wait = max_wait
+
+    def __enter__(self):
+        self.prev = getattr(_tl, "patient", 0.0)
+        _tl.patient = self.max_wait
+        return self
+
+    def __exit__(self, *exc):
+        _tl.patient = self.prev
+        return False
+
+
+def is_patient() -> bool:
+    return bool(getattr(_tl, "patient", 0.0))
+
+
+def reset_skipped() -> None:
+    _tl.skipped = False
+
+
+def skipped() -> bool:
+    """Wurde seit reset_skipped() in diesem Thread eine Anfrage wegen eines Limits übersprungen?"""
+    return bool(getattr(_tl, "skipped", False))
+
 
 
 def _delay(lim: _Limit, now: float) -> float:
@@ -65,15 +96,21 @@ def _delay(lim: _Limit, now: float) -> float:
 
 def _reserve(name: str, max_wait: float) -> float:
     lim = LIMITS[name]
-    with _lock:
-        now = time.time()
-        d = _delay(lim, now)
-        if lim.paused_until > now:
-            raise LimitReached(name, d, f"{lim.label}: Limit erreicht – Pause noch {round(d)} s")
-        if d > max_wait:
-            raise LimitReached(name, d, f"{lim.label}: zu viele Anfragen – nächste in {round(d)} s möglich")
-        lim.hits.append(now + d)   # Platz reservieren
-        return d
+    pat = getattr(_tl, "patient", 0.0)
+    while True:
+        with _lock:
+            now = time.time()
+            d = _delay(lim, now)
+            paused = lim.paused_until > now
+            if not paused and d <= max(max_wait, pat):
+                lim.hits.append(now + d)   # Platz reservieren
+                return d
+            if not (pat and d <= pat):
+                _tl.skipped = True
+                if paused:
+                    raise LimitReached(name, d, f"{lim.label}: Limit erreicht – Pause noch {round(d)} s")
+                raise LimitReached(name, d, f"{lim.label}: zu viele Anfragen – nächste in {round(d)} s möglich")
+        time.sleep(min(d, 5.0))            # geduldig: Pause abwarten, in Schritten (neue Sperren zählen mit)
 
 
 def wait_sync(name: str, max_wait: float = 10.0) -> None:
@@ -148,3 +185,4 @@ def httpx_hooks(name: str, max_wait: float = 10.0) -> dict:
         if response.status_code == 429:
             blocked(name, retry_after(response.headers), "HTTP 429")
     return {"request": [before], "response": [after]}
+

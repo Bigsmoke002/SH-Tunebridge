@@ -247,15 +247,21 @@ def title_tags(track: Track, hint: str | None = None) -> dict[str, float]:
 
 def enrich(rec: Recognition, fresh: bool = False) -> tuple[Track, dict]:
     """-> (Track mit Genre, Zusatzinfos für die Anzeige). Bekannte Songs kommen aus dem Speicher."""
-    from . import aidetect, consent, songcache
+    from . import aidetect, consent, ratelimit, songcache
     use_cache = consent.local("cache")
     if use_cache and not fresh and (hit := songcache.lookup(rec)):
-        hit[1]["ai"] = aidetect.check(*hit)
-        _known(*hit)
-        return hit
+        # Beim Sortieren (geduldiger Modus) Einträge ohne Genre neu nachschlagen – sie können aus einer
+        # Limit-Pause stammen (früher wurden solche unvollständigen Ergebnisse mitgespeichert)
+        if hit[0].genre or not ratelimit.is_patient():
+            hit[1]["ai"] = aidetect.check(*hit)
+            _known(*hit)
+            return hit
+    ratelimit.reset_skipped()
     track, extra = _enrich_online(rec)
     extra["ai"] = aidetect.check(track, extra)
-    if use_cache:
+    if ratelimit.skipped():
+        extra["incomplete"] = True                 # wegen Limit nicht alles gefragt -> nicht speichern
+    if use_cache and not extra.get("incomplete"):
         try:
             songcache.save(rec, track, extra)      # gespeichert wird das eigene Ergebnis der App
         except Exception as e:

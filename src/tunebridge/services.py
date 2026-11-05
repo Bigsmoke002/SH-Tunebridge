@@ -269,7 +269,7 @@ def load(sid: str, pid: str) -> tuple[str, list[Track]]:
 
 # ------------------------------------------------------------------ Sortier-Aufträge
 _jobs: dict[str, dict] = {}
-MAX_TRACKS = 1000
+MAX_TRACKS = 5000      # Lieblingssongs können groß sein; Bekanntes kommt aus dem Song-Speicher
 
 
 def _item(t: Track, a: dict) -> dict:
@@ -277,6 +277,12 @@ def _item(t: Track, a: dict) -> dict:
 
 
 def _run(job: dict) -> None:
+    from . import ratelimit
+    with ratelimit.patient():               # Limit-Pausen abwarten statt Songs ohne Genre durchzuwinken
+        _run_inner(job)
+
+
+def _run_inner(job: dict) -> None:
     from . import audiofeat, linkimport
     try:
         job["state"] = "loading"
@@ -285,6 +291,7 @@ def _run(job: dict) -> None:
         else:
             name, tracks = load(job["service"], job["playlist"])
         job["name"] = job.get("name") or name
+        job["cut"] = max(0, len(tracks) - MAX_TRACKS)
         tracks = tracks[:MAX_TRACKS]
         job["total"] = len(tracks)
         job["state"] = "analysing"
@@ -343,8 +350,14 @@ def start(service: str, playlist: str, name: str = "", ai_check: bool = False,
 
 
 def job(jid: str) -> dict | None:
+    from . import ratelimit
     j = _jobs.get(jid)
-    return {k: v for k, v in j.items() if k not in ("cancel", "preset")} if j else None
+    if not j:
+        return None
+    out = {k: v for k, v in j.items() if k not in ("cancel", "preset")}
+    if j.get("state") == "analysing":
+        out["pausen"] = [{"label": x["label"], "s": x["paused"]} for x in ratelimit.state() if x["paused"]]
+    return out
 
 
 def cancel(jid: str) -> None:

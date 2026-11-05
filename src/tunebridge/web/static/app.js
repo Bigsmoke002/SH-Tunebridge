@@ -4208,8 +4208,11 @@ async function pollSort(main) {
     if (j.state === "done") { box.innerHTML = ""; Sorter.items = j.items; Sorter.meta = j; return renderSort(main); }
     if (["error", "cancelled"].includes(j.state)) { box.innerHTML = `<div class="notice">${icon("info")}<div>${j.state === "error" ? esc(j.error) : "Abgebrochen."}</div></div>`; hydrateIcons(box); return; }
     const pct = j.total ? Math.round(j.done / j.total * 100) : 0;
+    const pause = (j.pausen || []).map(p => `${esc(p.label)} (noch ${p.s} s)`).join(", ");
     box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>${esc(SORT_STATE[j.state] || j.state)}</b><span class="cell-sub">${j.done}/${j.total || "?"}</span>
-      <button class="btn btn--xs btn--ghost" id="srtCancel">Abbrechen</button></div><div class="llm-bar"><div style="width:${pct}%"></div></div></div>`;
+      <button class="btn btn--xs btn--ghost" id="srtCancel">Abbrechen</button></div><div class="llm-bar"><div style="width:${pct}%"></div></div>
+      ${pause ? `<div class="cell-sub" style="margin-top:6px">Kurze Pause, weil ${pause} um Geduld bittet – danach geht es automatisch weiter. So bekommt jeder Song sein Genre.</div>` : ""}
+      ${j.cut ? `<div class="cell-sub" style="margin-top:6px">Sehr große Liste: analysiert werden die ersten ${j.total} Songs, ${j.cut} bleiben außen vor.</div>` : ""}</div>`;
     $("#srtCancel").onclick = () => api(`/api/sort/${jid}/cancel`, { method: "POST" });
     await new Promise(r => setTimeout(r, 1200));
   }
@@ -4232,7 +4235,8 @@ async function renderSort(main) {
         <div class="field grow"><label>Analyse</label><div class="cell-sub" style="padding-top:8px">${it.length} Songs · ${sub} mit Mikro-Genre · ${known} mit Tempo/Tonart${meta.ai_fixes != null ? ` · KI hat ${meta.ai_fixes} korrigiert` : ""}${meta.ai_error ? ` · KI-Prüfung fehlgeschlagen: ${esc(meta.ai_error)}` : ""}</div></div>
       </div>
     </div>
-    <div class="section-title">Vorschau · ${groups.length} Playlists</div>
+    ${meta.cut ? `<div class="notice">${icon("info")}<div>Nur die ersten ${it.length} Songs wurden sortiert – ${meta.cut} weitere passen nicht in einen Durchgang.</div></div>` : ""}
+    <div class="section-title">Vorschau · ${groups.length} Playlists <span class="cell-sub" style="font-weight:400">· Mit ▶ reinhören, Song anklicken zum Verschieben</span></div>
     <div class="split-grid sort-grid">${Sorter.groups.map((g, gi) => sortCard(g, gi)).join("")}</div>
     <div class="card sort-apply">
       <div class="field"><label>Anlegen in</label><select class="select" id="srtTarget">${targets.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join("")}</select></div>
@@ -4259,6 +4263,10 @@ async function renderSort(main) {
   };
 }
 
+// Hörprobe für einen Song der Sortier-Vorschau (offizielle 30-s-Hörprobe; fehlt sie, sucht der Server bei Deezer)
+const sortPrev = t => ({ title: t.title, artists: t.artists?.length ? t.artists : [t.artist || ""], cover: t.cover, isrc: t.isrc || null,
+  ids: t.ids || {}, preview_url: t.preview_url || `deezer:${(t.artists || [])[0] || t.artist || ""}|${t.title}` });
+
 function sortCard(g, gi) {
   const it = Sorter.items, i = g.info || {};
   const meta = [`${g.items.length} ${g.items.length === 1 ? "Song" : "Songs"}`, i.bpm ? `${i.bpm[0]}–${i.bpm[1]} BPM` : "", i.minuten ? `~${i.minuten} Min.` : "",
@@ -4267,11 +4275,14 @@ function sortCard(g, gi) {
   return `<div class="card split-card sort-card ${g.keep ? "" : "off"}" data-g="${gi}">
     <div class="sort-card-head"><label class="check"><input type="checkbox" data-keep="${gi}" ${g.keep ? "checked" : ""}></label>
       <span class="dot" style="background:${genreColor(first.genre, first.subgenre)}"></span>
-      <input class="sort-name" data-rename="${gi}" value="${esc(g.name)}" spellcheck="false"></div>
+      <input class="sort-name" data-rename="${gi}" value="${esc(g.name)}" spellcheck="false">
+      <button class="btn btn--xs btn--ghost" data-listen="${gi}" title="Alle Songs dieser Playlist nacheinander anhören (je 30 s Hörprobe)">${icon("play")}Anhören</button></div>
     <div class="cnt">${esc(meta)}</div>
     <ul>${g.items.map(n => { const t = it[n];
       const sub = [t.ki ? "KI" : "", Sorter.level <= 4 ? (t.subgenre || t.genre || "") : "", t.bpm ? `${Math.round(t.bpm)} BPM` : "", t.camelot || ""].filter(Boolean);
+      const pv = sortPrev(t);
       return `<li data-i="${n}" title="Klicken zum Verschieben${t.ki ? ` · KI: vorher ${esc(t.ki.vorher.filter(Boolean).join(" / ") || "?")} – ${esc(t.ki.grund || "")}` : ""}">
+      <button class="icon-btn sort-play" ${playAttr(pv)} title="Reinhören">${icon(Player.isPlaying(pv.preview_url) ? "pause" : "play")}</button>
       ${t.cover ? `<img src="${esc(t.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
       <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em>${sub.map(x => x === "KI" ? `<b class="chip chip--ai">KI</b>` : esc(x)).join(" · ")}</em></div></li>`; }).join("")}</ul></div>`;
 }
@@ -4279,7 +4290,13 @@ function sortCard(g, gi) {
 function bindSortCards(root) {
   $$("[data-keep]", root).forEach(c => c.onchange = () => { const g = Sorter.groups[+c.dataset.keep]; g.keep = c.checked; c.closest(".sort-card").classList.toggle("off", !c.checked); });
   $$("[data-rename]", root).forEach(inp => inp.onchange = () => { Sorter.groups[+inp.dataset.rename].name = inp.value.trim() || Sorter.groups[+inp.dataset.rename].name; });
-  $$(".sort-card li[data-i]", root).forEach(li => li.onclick = () => {
+  $$("[data-listen]", root).forEach(b => b.onclick = () => {
+    const g = Sorter.groups[+b.dataset.listen];
+    Player.playList(g.items.map(n => sortPrev(Sorter.items[n])));
+    toast(`„${g.name}“: ${g.items.length} Hörproben nacheinander – unten im Player weiter/stoppen`);
+  });
+  $$(".sort-card li[data-i]", root).forEach(li => li.onclick = e => {
+    if (e.target.closest("[data-play]")) return;          // Play-Knopf: nur reinhören, nicht verschieben
     const n = +li.dataset.i, t = Sorter.items[n], from = +li.closest(".sort-card").dataset.g;
     modal({ title: "Verschieben nach …", text: `${t.artist} – ${t.title}${t.genre ? ` · ${t.genre}${t.subgenre ? " / " + t.subgenre : ""}` : ""}`,
       body: `<select class="select" id="mvTo" style="width:100%">${Sorter.groups.map((g, gi) => `<option value="${gi}" ${gi === from ? "selected" : ""}>${esc(g.name)}</option>`).join("")}<option value="new">+ Neue Playlist …</option></select>

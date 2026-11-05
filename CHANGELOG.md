@@ -4,7 +4,7 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.7.2)
-Anmeldung bei Spotify und SoundCloud: geführte Einrichtung, klare Fehler.
+Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit Reinhören und für große Listen.
 - **Spotify-Einrichtung neu:** 7 kurze Schritte mit Häkchen-Kontrolle (Premium, Dashboard, App anlegen,
   Redirect URI, Web API, Client ID, Schlusskontrolle). Ohne Premium direkt der Weg über den Datenexport.
   Behebt den häufigsten Fehler „redirect_uri: Not matching configuration“ (Adresse fehlte in der Spotify-App).
@@ -14,6 +14,13 @@ Anmeldung bei Spotify und SoundCloud: geführte Einrichtung, klare Fehler.
   (offizielle Web-Anmeldung) – kein Benutzername-Eintippen mehr. „Nur Benutzername“ geht weiterhin.
 - **Deezer-Anleitung:** Profil öffentlich machen und Profil-Link finden, mit Prüfung. Ein Deezer-Login ist nicht
   möglich, weil Deezer keine neuen Entwickler-Apps mehr annimmt – das steht jetzt auch so in der App.
+- **Sortieren: in jede Playlist reinhören.** In der Vorschau hat jede Playlist „Anhören“ (alle Songs nacheinander,
+  je 30 s offizielle Hörprobe) und jeder Song einen eigenen Play-Knopf – vor dem Übernehmen prüfen, ob alles passt.
+- **Sortieren: große Listen bis 5000 Songs** (vorher 1000). Wird es mehr, zeigt die Vorschau, wie viele fehlen.
+- Fehler behoben: Bei großen Listen landeten ab einigen hundert Songs die meisten unter „Unsortiert“. Grund: Bat
+  Last.fm & Co. um eine Pause, bekamen die Songs in dieser Zeit kein Genre – und das wurde sogar gespeichert.
+  Jetzt wartet das Sortieren die Pause ab (mit Hinweis im Fortschritt), Unvollständiges wird nicht gespeichert,
+  und früher so gespeicherte Songs ohne Genre werden beim nächsten Sortieren neu nachgeschlagen.
 - Fehler behoben: Nach dem letzten Einrichtungsschritt startete die Anmeldung nicht.
 - Fehler behoben: Spotify meldete „verbunden“, obwohl Spotify den Zugriff sperrte (z. B. App-Besitzer ohne
   Premium). Jetzt wird nach der Anmeldung geprüft, und die Dienste-Karte zeigt den Grund an.

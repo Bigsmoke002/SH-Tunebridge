@@ -1371,3 +1371,8 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .acc-badge.warn{color:#e0b46a;border-color:color-mix(in srgb,#e0b46a 50%,transparent)}
 .svc-err{display:flex;gap:6px;align-items:flex-start;margin-top:6px;padding:8px 10px;font-size:13px;color:var(--text);border-left:3px solid #e0b46a;background:color-mix(in srgb,#e0b46a 8%,transparent)}
 .svc-err svg{flex:none;width:15px;height:15px;margin-top:2px;color:#e0b46a}
+.sort-card li { display: flex; align-items: center; gap: 6px; }
+.sort-card li .sort-play { width: 26px; height: 26px; flex: none; opacity: .55; }
+.sort-card li:hover .sort-play, .sort-card li .sort-play.playing { opacity: 1; }
+.sort-card li .sort-play.playing { color: var(--accent); }
+.sort-card-head .btn { flex: none; }

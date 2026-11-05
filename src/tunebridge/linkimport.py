@@ -283,6 +283,12 @@ def _analyse_one(t: Track) -> dict:
 
 
 def _run(job: dict) -> None:
+    from . import ratelimit
+    with ratelimit.patient():
+        _run_inner(job)
+
+
+def _run_inner(job: dict) -> None:
     from collections import Counter
     from . import debuglog as dbg
     try:
