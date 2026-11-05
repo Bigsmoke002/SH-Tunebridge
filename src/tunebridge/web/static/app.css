@@ -632,7 +632,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .signal[data-state="off"] .sig-dot { background: var(--text-3); }
 .signal[data-state="off"] #sigText { color: var(--text-3); }
 .mic-test { margin-top: 8px; }
-.opt-hint { display: flex; gap: 6px; align-items: flex-start; line-height: 1.4; }
+.opt-hint { display: flex; gap: 6px; align-items: flex-start; line-height: 1.4; white-space: normal; }
 .opt-hint i[data-icon] { width: 14px; height: 14px; flex: none; margin-top: 2px; }
 .chip--niche { color: var(--g, var(--text-2)); background: transparent; border: 1px dashed color-mix(in srgb, var(--g, #888) 45%, transparent); }
 .dbg-pre { max-height: 55vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11.5px/1.5 var(--mono, ui-monospace, monospace); background: var(--bg-2, rgba(0,0,0,.25)); padding: 12px; border-radius: 8px; margin: 0; }
@@ -649,7 +649,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .gt-row + .gt-row { border-top: 1px solid var(--line, rgba(255, 255, 255, .06)); }
 .gt-main { display: flex; flex-direction: column; min-width: 0; }
 .gt-main b { font-weight: 600; }
-.select--sm { padding: 4px 8px; font-size: 12.5px; max-width: 220px; }
+.select--sm { padding: 4px 26px 4px 8px; font-size: 12.5px; max-width: 220px; }
 .gt-rej { margin-top: 12px; }
 .gt-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .gt-chips .chip { cursor: pointer; border: 0; }
@@ -1082,11 +1082,35 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 }
 @media (prefers-reduced-motion: reduce) { .pl-fab, .pl-art .mosaic { transition: none; } }
 
-/* niedrige Fenster: ganze Leiste scrollt, damit „Deine Playlists“ nie auf null schrumpft */
-.app:not(.side-min) .sidebar { overflow-y: auto; scrollbar-width: none; }
-.app:not(.side-min) .side-playlists { min-height: 132px; }
-.app:not(.side-min) .sidebar > * { flex-shrink: 0; }
-.app:not(.side-min) .sidebar > .side-playlists { flex-shrink: 1; }
+/* Leiste: Mitte scrollt, Fuß (Einstellungen, Datenverbrauch) bleibt immer unten sichtbar */
+.sidebar { overflow: hidden; }
+.side-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column;
+               scrollbar-width: thin; scrollbar-color: var(--bg-4) transparent; margin: 0 -4px; padding: 0 4px; }
+.side-scroll > * { flex-shrink: 0; }
+.side-scroll .side-playlists, .side-scroll .side-services { flex: none; overflow: visible; min-height: 0; max-height: none; }
+.sidebar-foot { flex: none; }
+/* einklappbare Bereiche */
+.nav-fold { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; font: inherit; font-size: 11px;
+            font-weight: 600; color: var(--text-3); text-align: left; cursor: pointer; border-radius: var(--radius-sm); }
+.nav-fold:hover { color: var(--text-2); }
+.nav-fold:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.nav-fold i[data-icon] { width: 14px; height: 14px; margin-left: auto; opacity: .55; transform: rotate(90deg); transition: transform .18s ease; }
+.nav-fold:hover i[data-icon] { opacity: 1; }
+.nav-fold.folded i[data-icon] { transform: rotate(0deg); }
+.nav-fold.hidden { display: none; }
+.fold-body { display: flex; flex-direction: column; gap: 1px; }
+.fold-body.folded { display: none; }
+/* schmale/eingeklappte Leiste: Bereiche immer offen (nur Symbole) */
+.app.side-min .nav .fold-body.folded { display: flex; }
+.app.side-min .nav-fold i[data-icon] { display: none; }
+.app.side-min .side-scroll { width: 100%; align-items: center; margin: 0; padding: 0; scrollbar-width: none; }
+.app.side-min .fold-body { width: 100%; align-items: center; }
+@media (max-width: 860px) {
+  .nav .fold-body.folded { display: flex; }
+  .nav-fold { display: none; }
+  .side-scroll { width: 100%; align-items: center; margin: 0; padding: 0; }
+  .fold-body { width: 100%; align-items: center; }
+}
 
 /* ================================================================= Song-Details: Öffnen & Kaufen */
 .det-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; margin-top: 22px; align-items: start; }
@@ -1203,7 +1227,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .ib-bar .grow { flex: 1; min-width: 180px; display: inline-flex; align-items: center; gap: 8px; }
 .switch-row { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); cursor: pointer; }
 .switch-row input[type=checkbox] { accent-color: var(--accent, #7c9cff); width: 15px; height: 15px; }
-.select--sm { height: 30px; padding: 0 8px; font-size: 13px; }
+.select--sm { height: 30px; padding: 0 26px 0 10px; font-size: 13px; }
 .ib-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 8px; color: var(--text-3); font-size: 12.5px; }
 .ib-list { display: flex; flex-direction: column; gap: 8px; }
 .ib-row { border: 1px solid var(--line-soft); border-radius: var(--radius); background: var(--bg-2); padding: 6px 12px 10px; }

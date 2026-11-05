@@ -61,7 +61,7 @@ def test_job_save_and_export(monkeypatch, tmp_path):
     j = setplan.job(jid)
     assert j["state"] == "done" and j["items"][0]["bpm"] == 124
     r = setplan.export(jid, [2, 1, 0], "txt")
-    assert (tmp_path / r["name"]).read_text().startswith("01. K – z")
+    assert (tmp_path / r["name"]).read_text(encoding="utf-8").startswith("01. K – z")
     assert setplan.save(jid, [2, 1, 0], "Quelle Set")["count"] == 3
     assert [t.title for t in next(p for p in store.local_playlists() if p.name == "Quelle Set").tracks] == ["z", "y", "x"]
     with pytest.raises(ValueError):

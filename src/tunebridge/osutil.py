@@ -55,12 +55,19 @@ def downloads_dir() -> Path:
 def open_path(path: str | Path) -> None:
     """Ordner/Datei im Dateimanager bzw. Standardprogramm öffnen."""
     p = str(path)
-    if WINDOWS:
-        os.startfile(p)  # noqa: S606  (nur lokale Pfade aus der App)
-    elif MACOS:
-        subprocess.Popen(["open", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    else:
-        subprocess.Popen(["xdg-open", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        if WINDOWS:
+            os.startfile(p)  # noqa: S606  (nur lokale Pfade aus der App)
+        elif MACOS:
+            subprocess.Popen(["open", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            subprocess.Popen(["xdg-open", p], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as e:   # z. B. kein Dateimanager / Explorer startet nicht – verständlich melden statt Serverfehler
+        raise OpenError(f"Ordner ließ sich nicht öffnen – du findest ihn hier: {p}") from e
+
+
+class OpenError(RuntimeError):
+    """Dateimanager/Browser konnte nicht gestartet werden."""
 
 
 def ram_gb() -> dict:

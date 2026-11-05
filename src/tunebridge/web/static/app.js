@@ -1536,11 +1536,14 @@ Views.playlist = async (main, name) => {
       openDrawer(() => api(`/api/track`, { method: "POST", body: { key: row.dataset.key } }));
     });
   } });
-  $("#plDelete").onclick = async () => {
-    if (!confirm(`Playlist „${name}“ wirklich löschen? Die Songs bleiben im Verlauf.`)) return;
-    await api(`/api/playlists/${enc(name)}`, { method: "DELETE" });
-    toast("Playlist gelöscht"); await refreshMeta(); location.hash = "#/playlists";
-  };
+  // App-eigener Dialog statt confirm(): der native Dialog kann das App-Fenster (pywebview) blockieren
+  $("#plDelete").onclick = () => modal({
+    title: "Playlist löschen?", text: `„${esc(name)}“ wird gelöscht. Die Songs bleiben im Verlauf.`, confirm: "Löschen", danger: true,
+    onConfirm: async () => {
+      await api(`/api/playlists/${enc(name)}`, { method: "DELETE" });
+      toast("Playlist gelöscht"); await refreshMeta(); location.hash = "#/playlists";
+    },
+  });
   $("#plRename").onclick = () => {
     const h = $("#plTitle");
     h.contentEditable = "true"; h.focus();
@@ -1765,10 +1768,10 @@ Views.dupes = async (main) => {
     toast(`${r.removed} ${r.removed === 1 ? "Eintrag" : "Einträge"} entfernt`); refreshMeta(); Views.dupes(main);
   };
   $$("[data-rm]", main).forEach(b => b.onclick = () => remove([JSON.parse(b.dataset.rm)]));
-  $("#dpAll")?.addEventListener("click", () => {
-    if (confirm(`${z.doppelt} doppelte Einträge entfernen? Von jedem Song bleibt der älteste Eintrag in der Playlist.`))
-      remove(d.doppelt.flatMap(g => g.remove.map(o => ({ playlist: o.playlist, key: o.key }))));
-  });
+  $("#dpAll")?.addEventListener("click", () => modal({
+    title: `${z.doppelt} doppelte Einträge entfernen?`, text: "Von jedem Song bleibt der älteste Eintrag in der Playlist.", confirm: "Entfernen",
+    onConfirm: () => remove(d.doppelt.flatMap(g => g.remove.map(o => ({ playlist: o.playlist, key: o.key })))),
+  }));
 };
 
 /* ---------- Entdecken */
@@ -2594,10 +2597,11 @@ const fmtSize = b => b > 1048576 ? `${(b / 1048576).toFixed(1)} MB` : `${Math.ma
 const fmtDate = ts => new Date(ts * 1000).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const KIND = { manuell: ["Manuell", "manual", "archive"], auto: ["Automatisch", "auto", "repeat"], "vor-wiederherstellung": ["Vor Wiederherstellung", "auto", "restore"] };
 
+// Sicherung lebt unter Einstellungen › Sicherung (#backupBox); alte Links #/backup leiten dorthin um
 Views.backup = async (main) => {
+  if (main.id === "main") { location.replace("#/settings?tab=sicherung"); return; }
   const d = await api("/api/backups");
-  main.innerHTML = `<div class="page view-enter">
-    <div class="page-head"><div><h1>Sicherung</h1><p>Alles steckt in einer SQLite-Datenbank – hier sicherst du sie und holst sie auf einem neuen Rechner zurück.</p></div></div>
+  main.innerHTML = `<div class="backup-embed">
     <div class="backup-hero">
       <div class="card bh-card">
         <h3>${icon("archive")}Jetzt sichern</h3>
@@ -3794,7 +3798,7 @@ const Privacy = {
         <button class="btn btn--sm btn--danger" data-clear="history" ${d.history ? "" : "disabled"}>${icon("trash")}Löschen</button></div>
       <div class="set-row"><div><div class="lbl">Zwischenspeicher</div><div class="hint">Song-Speicher, Fingerabdrücke, Hörproben, Tags – siehe „Speicher &amp; Cache“ weiter unten.</div></div><div></div><div></div></div>
     </div>
-    <div class="cell-sub" style="white-space:normal;margin:10px 2px 0">Hinweis: Ältere Stände stecken auch in deinen Sicherungen – die löschst du unter „Sicherung“.</div>`;
+    <div class="cell-sub" style="white-space:normal;margin:10px 2px 0">Hinweis: Ältere Stände stecken auch in deinen Sicherungen – die löschst du unter Einstellungen › Sicherung.</div>`;
     const embBox = $("#embedConsents", box);
     const drawEmb = () => {
       const ok = Embeds.ok(), ids = Object.keys(ok);
@@ -4086,7 +4090,7 @@ const DiscordUI = {
 const SETTING_GROUPS = [
   ["Allgemein", [["allgemein", "Version & Rechner", "sliders"], ["darstellung", "Darstellung", "palette"], ["dienste", "Konten & Dienste", "key"], ["discord", "Discord-Status", "chat"]]],
   ["Analyse", [["ki", "KI & API-Keys", "sparkle"], ["genres", "Genres", "disc"], ["erkennung", "Erkennung", "wave"]]],
-  ["Daten", [["datenschutz", "Datenschutz", "info"], ["traffic", "Datenverbrauch", "transfer"], ["speicher", "Speicher & Cache", "archive"],
+  ["Daten", [["sicherung", "Sicherung", "archive"], ["datenschutz", "Datenschutz", "info"], ["traffic", "Datenverbrauch", "transfer"], ["speicher", "Speicher & Cache", "archive"],
              ["nichterkannt", "Nicht erkannt", "search"], ["debug", "Debug-Protokoll", "pencil"]]],
 ];
 const SETTING_TABS = SETTING_GROUPS.flatMap(g => g[1]);
@@ -4126,6 +4130,7 @@ Views.settings = async (main) => {
       ${sec("Shazam")}<div class="card set-group"><div class="set-row"><div><div class="lbl"><span class="status-dot on"></span>Shazam</div><div class="hint">Immer aktiv, braucht keinen Schlüssel.</div></div><div></div><div></div></div></div>
       ${sec("Weitere Erkennungsdienste", "Optional – nur mit deinem eigenen Schlüssel. Ob Audio dorthin gesendet werden darf, legst du unter Datenschutz fest.")}${keys(["AUDD_API_TOKEN", "ACRCLOUD_HOST", "ACRCLOUD_ACCESS_KEY", "ACRCLOUD_ACCESS_SECRET"])}`,
     datenschutz: () => `${sec("Datenschutz")}<div id="privacyBox"></div>`,
+    sicherung: () => `<div class="cell-sub set-sub">Alles steckt in einer SQLite-Datenbank – hier sicherst du sie und holst sie auf einem neuen Rechner zurück.</div><div id="backupBox"></div>`,
     traffic: () => `${sec("Datenverbrauch", "Wie viel SH-Tunebridge über das Internet lädt und sendet – gerade, heute und insgesamt, aufgeteilt nach Dienst.")}<div id="trafficBox"></div>`,
     discord: () => `${sec("Discord-Status", "Zeig deinen Freunden in Discord, was gerade läuft – du bestimmst genau, was zu sehen ist.")}<div id="discordBox"></div>`,
     speicher: () => `${sec("Speicher &amp; Cache", "Was SH-Tunebridge auf deinem Rechner ablegt – und wie viele Online-Abfragen das schon erspart hat.")}<div id="storageBox"></div>`,
@@ -4153,6 +4158,7 @@ Views.settings = async (main) => {
   if (tab === "datenschutz") Privacy.render($("#privacyBox"));
   if (tab === "speicher") Storage.render($("#storageBox"));
   if (tab === "traffic") Traffic.render($("#trafficBox"));
+  if (tab === "sicherung") await Views.backup($("#backupBox"));
   if (tab === "discord") DiscordUI.render($("#discordBox"));
   if (tab === "nichterkannt") Misses.render($("#missBox"));
   if (tab === "debug") Debug.render($("#debugBox"));
@@ -4720,7 +4726,7 @@ document.addEventListener("keydown", e => {
     // Datenschutz: Leertaste startet KEINE Erkennung (nur der Klick auf den Kreis), sie steuert nur die Hörprobe
     if (!e.target.closest("button, a")) Player.toggle();
   }
-  const nav = { "1": "listen", "2": "history", "3": "playlists", "4": "discover", "5": "split", "6": "transfer", "7": "backup", ",": "settings" };
+  const nav = { "1": "listen", "2": "history", "3": "playlists", "4": "discover", "5": "split", "6": "transfer", "7": "settings?tab=sicherung", ",": "settings" };
   if ((e.ctrlKey || e.metaKey) && nav[e.key]) { e.preventDefault(); location.hash = "#/" + nav[e.key]; }
 });
 
@@ -4736,6 +4742,24 @@ const Side = {
   },
 };
 Side.set(!!store.get("sideMin", false));
+/* Bereiche der Leiste (Bibliothek, Werkzeuge, Deine Dienste, Deine Playlists) einzeln einklappbar – gemerkt pro Rechner */
+const Fold = {
+  state: store.get("navFold", {}),
+  apply() {
+    $$("[data-fold]").forEach(b => {
+      const shut = !!this.state[b.dataset.fold];
+      b.classList.toggle("folded", shut); b.setAttribute("aria-expanded", String(!shut));
+      $(`[data-fold-body="${b.dataset.fold}"]`)?.classList.toggle("folded", shut);
+    });
+  },
+  init() {
+    $$("[data-fold]").forEach(b => b.onclick = () => {
+      this.state[b.dataset.fold] = !this.state[b.dataset.fold]; store.set("navFold", this.state); this.apply();
+    });
+    this.apply();
+  },
+};
+Fold.init();
 Look.load();   // Darstellung vom Server (falls auf einem anderen Weg geändert)
 $("#sideToggle").onclick = () => Side.set(!$(".app").classList.contains("side-min"));
 Player.init();

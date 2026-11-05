@@ -210,7 +210,7 @@ def _install_download() -> dict:
         raise
     try:
         osutil.open_path(dest_dir)
-    except OSError:
+    except (OSError, osutil.OpenError):
         pass
     store.cache_set("update", "latest", {"tag": info["tag"], "checked": time.time(), "error": None})
     return {"installed": info["tag"], "safety_backup": safety.name, "downloaded": str(target), "manual": True}

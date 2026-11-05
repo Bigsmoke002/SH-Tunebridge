@@ -1097,7 +1097,10 @@ def delete_backup(name: str):
 @app.post("/api/backups/open-folder")
 def open_backup_folder():
     from .. import osutil
-    osutil.open_path(backup.backup_dir())
+    try:
+        osutil.open_path(backup.backup_dir())
+    except osutil.OpenError as e:
+        raise HTTPException(400, str(e)) from e
     return {"ok": True}
 
 
@@ -1445,7 +1448,10 @@ def debug_open_folder(req: dict):
     folder = Path(req.get("folder") or dbg.downloads_dir())
     if folder.is_dir():
         from .. import osutil
-        osutil.open_path(folder)
+        try:
+            osutil.open_path(folder)
+        except osutil.OpenError as e:
+            raise HTTPException(400, str(e)) from e
     return {"ok": True}
 
 
@@ -1833,7 +1839,17 @@ async def ai_models(provider: str, refresh: bool = False):
     try:
         return {"models": await asyncio.to_thread(ai.refresh_models, provider, refresh)}
     except Exception as e:
-        raise HTTPException(502, f"Modelle nicht abrufbar: {e}")
+        raise HTTPException(502, f"Modelle nicht abrufbar: {_friendly_net_error(e)}")
+
+
+def _friendly_net_error(e: Exception) -> str:
+    """Netzwerkfehler verständlich machen (statt „[WinError 10061] …“ / „Errno 111 Connection refused“)."""
+    txt = str(e)
+    if isinstance(e, ConnectionRefusedError) or "10061" in txt or "Connection refused" in txt or "Errno 111" in txt:
+        return "keine Verbindung – das Programm läuft gerade nicht oder die Adresse stimmt nicht"
+    if isinstance(e, TimeoutError) or "timed out" in txt.lower() or "10060" in txt:
+        return "keine Antwort (Zeitüberschreitung) – Adresse und Netzwerk prüfen"
+    return txt
 
 
 @app.post("/api/ai/test")

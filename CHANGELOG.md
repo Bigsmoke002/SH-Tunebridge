@@ -51,8 +51,19 @@ einstellbare Auto-Sicherung; geführte Anmeldung bei Spotify, SoundCloud, Last.f
 - **Automatische Sicherung einstellbar** (Sicherung): aus / täglich / wöchentlich, wie viele behalten, eigener Ordner
   (z. B. eine zweite Platte, wird vor dem Speichern geprüft). Geprüft wird beim Start und danach stündlich – auch
   wenn nur Playlists da sind.
+- **Seitenleiste aufgeräumt:** Bibliothek, Werkzeuge, Deine Dienste und Deine Playlists lassen sich einzeln
+  einklappen (Pfeil am Abschnitt, wird gemerkt). Einstellungen und Datenverbrauch stehen fest unten und bleiben
+  immer sichtbar; nur die Mitte scrollt.
+- **Sicherung ist jetzt unter Einstellungen › Sicherung** (alte Links und Strg+7 führen dorthin).
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
+- Fehler behoben: „Playlist löschen“ und „Doppelte entfernen“ nutzten einen Browser-Dialog, der das App-Fenster
+  einfrieren konnte – jetzt der App-eigene Dialog.
+- Fehler behoben: „Ordner öffnen“ meldete unter Windows nur „Internal Server Error“, wenn der Explorer nicht startet –
+  jetzt mit verständlicher Meldung und dem Pfad. KI-Server nicht erreichbar: verständlicher Text statt
+  „[WinError 10061] …“.
+- Kleinigkeiten: Hinweistexte auf der Erkennen-Seite werden nicht mehr abgeschnitten; bei kleinen Auswahlfeldern
+  (z. B. „alle 6 h“) liegt der Pfeil nicht mehr über dem Text.
 - Fehler behoben: Nach „Übernehmen“ in der Sortier-Vorschau kam beim Klick auf OK „onConfirm is not a function“
   (die Playlists wurden trotzdem angelegt). Betraf auch zwei Info-Dialoge unter „Nicht erkannt“.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren
