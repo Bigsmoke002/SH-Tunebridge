@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.8.0)
+## 0.8.0 – 2026-11-05
 DJ-Werkzeuge (Set-Planer, „Passt dazu“, Mix-Tracklists), Statistik, doppelte Songs, lernendes Sortieren,
 einstellbare Auto-Sicherung; geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer.
 - **Spotify-Einrichtung neu:** 7 kurze Schritte mit Häkchen-Kontrolle (Premium, Dashboard, App anlegen,
