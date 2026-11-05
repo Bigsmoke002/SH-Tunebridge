@@ -1032,12 +1032,11 @@ Views.listen = async (main, _, params) => {
             </select>
             ${L.mode === "desktop" ? `<div class="cell-sub opt-hint">${icon("info")}Anwendung wählen, um nur z. B. den Browser oder Spotify zu hören – Sprachchats (Discord, Teams …) werden nie angeboten.</div>` : ""}</div>
           <div class="scan-wrap"><button class="link-btn" id="scanBtn">${icon("search")}Gerät mit Signal finden</button><div id="scanOut"></div></div>
-          <div><div class="opt-label">Anzeige im Kreis</div>
-            <div class="segmented" id="vizSeg">${VIZ.map(([v, l, t]) => `<button data-viz="${v}" title="${t}" class="${Meter.viz === v ? "on" : ""}">${l}</button>`).join("")}</div></div>
           <div><div class="opt-label">Aufnahmedauer</div>
             <div class="segmented" id="secSeg">${[6, 10, 15, 20].map(s => `<button data-s="${s}" class="${L.seconds === s ? "on" : ""}">${s} s</button>`).join("")}</div></div>
           <label class="switch"><input type="checkbox" id="autoSw" ${L.auto ? "checked" : ""}><span class="track"></span>Dauer-Modus – erkennt jeden neuen Song</label>
           <div class="cell-sub opt-hint">${icon("info")}Gesendet wird erst, wenn du auf den Kreis klickst – im Dauer-Modus bis zum nächsten Klick.</div>
+          <a class="link-btn" href="#/settings?tab=erkennung">${icon("sliders")}Anzeige im Kreis: ${esc((VIZ.find(x => x[0] === Meter.viz) || VIZ[0])[1])} – ändern</a>
         </div>
       </div>
       <div class="listen-main">
@@ -1045,10 +1044,6 @@ Views.listen = async (main, _, params) => {
       </div>
     </div></div>`;
 
-  $$("#vizSeg button").forEach(b => b.onclick = () => {
-    Meter.setViz(b.dataset.viz);
-    $$("#vizSeg button").forEach(x => x.classList.toggle("on", x === b));
-  });
   $$("#modeSeg button").forEach(b => b.onclick = () => {
     L.mode = b.dataset.mode; L.running = false; stopHold();
     // gespeichertes Gerät dieses Modus wiederherstellen (nicht auf Standard zurückfallen)
@@ -3823,7 +3818,10 @@ Views.settings = async (main) => {
     genres: () => `${sec("Quellen", "Genres kommen aus Last.fm (Tags), MusicBrainz (offene Datenbank, CC0 – liefert oft das Mikro-Genre), dem Genre von Apple/Shazam und Deezer. Tempo, Tonart und Energie misst SH-Tunebridge selbst an der 30-s-Hörprobe.")}
       ${keys(["LASTFM_API_KEY"])}
       ${sec("Gelernte Genres", "Fehlt ein Genre, lernt SH-Tunebridge es aus den Tags deiner Songs selbst dazu – nur auf deinem Rechner.")}<div id="genreBox"></div>`,
-    erkennung: () => `${sec("Shazam")}<div class="card set-group"><div class="set-row"><div><div class="lbl"><span class="status-dot on"></span>Shazam</div><div class="hint">Immer aktiv, braucht keinen Schlüssel.</div></div><div></div><div></div></div></div>
+    erkennung: () => `${sec("Anzeige im Kreis", "Was der Erkennen-Kreis und das Schwebe-Icon zeigen, solange Ton läuft – gilt sofort.")}
+      <div class="card set-group"><div class="set-row"><div><div class="lbl">Darstellung</div><div class="hint" id="vizHint">${esc((VIZ.find(x => x[0] === Meter.viz) || VIZ[0])[2])}</div></div>
+        <div class="segmented" id="vizSeg">${VIZ.map(([v, l, t]) => `<button data-viz="${v}" title="${esc(t)}" class="${Meter.viz === v ? "on" : ""}">${l}</button>`).join("")}</div><div></div></div></div>
+      ${sec("Shazam")}<div class="card set-group"><div class="set-row"><div><div class="lbl"><span class="status-dot on"></span>Shazam</div><div class="hint">Immer aktiv, braucht keinen Schlüssel.</div></div><div></div><div></div></div></div>
       ${sec("Weitere Erkennungsdienste", "Optional – nur mit deinem eigenen Schlüssel. Ob Audio dorthin gesendet werden darf, legst du unter Datenschutz fest.")}${keys(["AUDD_API_TOKEN", "ACRCLOUD_HOST", "ACRCLOUD_ACCESS_KEY", "ACRCLOUD_ACCESS_SECRET"])}`,
     datenschutz: () => `${sec("Datenschutz")}<div id="privacyBox"></div>`,
     traffic: () => `${sec("Datenverbrauch", "Wie viel SH-Tunebridge über das Internet lädt und sendet – gerade, heute und insgesamt, aufgeteilt nach Dienst.")}<div id="trafficBox"></div>`,
@@ -3856,6 +3854,12 @@ Views.settings = async (main) => {
   if (tab === "discord") DiscordUI.render($("#discordBox"));
   if (tab === "nichterkannt") Misses.render($("#missBox"));
   if (tab === "debug") Debug.render($("#debugBox"));
+  if (tab === "erkennung") $$("#vizSeg button").forEach(b => b.onclick = () => {
+    Meter.setViz(b.dataset.viz);
+    $$("#vizSeg button").forEach(x => x.classList.toggle("on", x === b));
+    $("#vizHint").textContent = VIZ.find(x => x[0] === b.dataset.viz)[2];
+    toast("Anzeige im Kreis gespeichert");
+  });
   if (tab === "dienste") {
     Connect.bind($("#accounts"), main);
     $$("[data-acc]").forEach(c => { const a = accs.find(x => x.id === c.dataset.acc); c.dataset.state = (a.session?.state || "") + a.connected + JSON.stringify(a.session?.found || {}) + (a.session?.message || ""); });
