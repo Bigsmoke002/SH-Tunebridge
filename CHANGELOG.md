@@ -21,6 +21,10 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
   Last.fm & Co. um eine Pause, bekamen die Songs in dieser Zeit kein Genre – und das wurde sogar gespeichert.
   Jetzt wartet das Sortieren die Pause ab (mit Hinweis im Fortschritt), Unvollständiges wird nicht gespeichert,
   und früher so gespeicherte Songs ohne Genre werden beim nächsten Sortieren neu nachgeschlagen.
+- Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren
+  gelikte Videos ohne Musik (Shorts, Gaming, Dokus). Die App fragt jetzt die YouTube-Kategorie ab: Solche Videos
+  kommen in eine eigene Gruppe „Keine Musik“ (standardmäßig nicht übernommen) und werden nicht mehr bei Last.fm & Co.
+  nachgeschlagen – das Sortieren geht dadurch auch deutlich schneller.
 - Fehler behoben: Nach dem letzten Einrichtungsschritt startete die Anmeldung nicht.
 - Fehler behoben: Spotify meldete „verbunden“, obwohl Spotify den Zugriff sperrte (z. B. App-Besitzer ohne
   Premium). Jetzt wird nach der Anmeldung geprüft, und die Dienste-Karte zeigt den Grund an.

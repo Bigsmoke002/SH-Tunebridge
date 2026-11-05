@@ -23,6 +23,7 @@ LEVELS = {1: "Passende Mixes", 2: "Stimmung & Energie", 3: "Feinsäuberlich sort
           4: "Genre-Familie", 5: "Genre", 6: "Mikro-Genre"}
 UNSORTED = "Unsortiert"
 OTHER = "Sonstiges"
+NOMUSIC = "Keine Musik (YouTube-Videos)"
 
 FAMILY = {
     **{g: "Elektronisch" for g in ("Drum & Bass", "Breakcore", "Dubstep", "House", "Techno", "UK Garage / Bass",
@@ -179,6 +180,14 @@ def _mixes(items: list[dict], min_size: int) -> list[tuple[str, list[int], dict]
 
 def sort(items: list[dict], level: int, min_size: int = 3) -> list[dict]:
     """-> [{name, items:[Index…], info}] größte Gruppe zuerst (Mixes in Tempo-Reihenfolge)."""
+    vids = [i for i, it in enumerate(items) if it.get("nomusic")]
+    if vids:                      # gelikte Videos ohne Musik: eigene Gruppe ganz hinten, nicht unter „Unsortiert“
+        keep = [i for i, it in enumerate(items) if not it.get("nomusic")]
+        res = sort([items[i] for i in keep], level, min_size) if keep else []
+        for g in res:
+            g["items"] = [keep[i] for i in g["items"]]
+        return res + [{"name": NOMUSIC, "items": vids, "nomusic": True,
+                       "info": {"anzahl": len(vids), "bpm": None, "energie": None}}]
     level = max(1, min(6, int(level)))
     if level == 1:
         groups = _mixes(items, min_size)

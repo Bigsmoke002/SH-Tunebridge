@@ -235,6 +235,8 @@ def _youtube(kind: str, i: str) -> tuple[str, list[Track]]:
         token = d.get("nextPageToken")
         if not token:
             break
+    from .providers.youtube import mark_non_music
+    mark_non_music(out, lambda path, **p: _get(f"https://www.googleapis.com/youtube/v3/{path}", params={**p, "key": key}))
     return name, out
 
 

@@ -268,6 +268,8 @@ def load(sid: str, pid: str) -> tuple[str, list[Track]]:
 
 
 # ------------------------------------------------------------------ Sortier-Aufträge
+from .providers.youtube import NO_MUSIC  # noqa: E402
+
 _jobs: dict[str, dict] = {}
 MAX_TRACKS = 5000      # Lieblingssongs können groß sein; Bekanntes kommt aus dem Song-Speicher
 
@@ -298,6 +300,12 @@ def _run_inner(job: dict) -> None:
         for i, t in enumerate(tracks):
             if job["cancel"]:
                 raise InterruptedError
+            if NO_MUSIC in (t.tags or {}):          # YouTube-Video ohne Musik: nicht bei Last.fm & Co. nachschlagen
+                job["items"].append({"title": t.title, "artist": ", ".join(t.artists), "artists": t.artists,
+                                     "ids": t.ids, "cover": t.cover, "genre": None, "nomusic": True})
+                job["nomusic"] = job.get("nomusic", 0) + 1
+                job["done"] = i + 1
+                continue
             try:
                 a = linkimport._analyse_one(t)
             except Exception as e:  # noqa: BLE001

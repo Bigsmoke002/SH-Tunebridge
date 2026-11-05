@@ -4222,7 +4222,7 @@ async function renderSort(main) {
   const out = $("#srtOut"); if (!out) return;
   const it = Sorter.items, meta = Sorter.meta;
   const groups = await api(`/api/sort/${Sorter.job}/groups`, { method: "POST", body: { level: Sorter.level, min_size: Sorter.min } });
-  Sorter.groups = groups.map(g => ({ ...g, keep: true }));
+  Sorter.groups = groups.map(g => ({ ...g, keep: !g.nomusic }));     // Videos ohne Musik: nicht mit übernehmen
   const svcs = await api("/api/services").catch(() => []);
   const targets = [["local", "SH-Tunebridge (lokal)"], ...svcs.filter(s => s.writable && s.ready).map(s => [s.id, s.name])];
   const lv = SORT_LEVELS.find(l => l[0] === Sorter.level);
@@ -4235,6 +4235,7 @@ async function renderSort(main) {
         <div class="field grow"><label>Analyse</label><div class="cell-sub" style="padding-top:8px">${it.length} Songs · ${sub} mit Mikro-Genre · ${known} mit Tempo/Tonart${meta.ai_fixes != null ? ` · KI hat ${meta.ai_fixes} korrigiert` : ""}${meta.ai_error ? ` · KI-Prüfung fehlgeschlagen: ${esc(meta.ai_error)}` : ""}</div></div>
       </div>
     </div>
+    ${meta.nomusic ? `<div class="notice">${icon("info")}<div>${meta.nomusic} Einträge sind laut YouTube keine Musik (gelikte Shorts, Gaming, Dokus …). Sie stehen ganz unten unter „Keine Musik“ und werden nicht mit übernommen – Häkchen setzen, falls doch.</div></div>` : ""}
     ${meta.cut ? `<div class="notice">${icon("info")}<div>Nur die ersten ${it.length} Songs wurden sortiert – ${meta.cut} weitere passen nicht in einen Durchgang.</div></div>` : ""}
     <div class="section-title">Vorschau · ${groups.length} Playlists <span class="cell-sub" style="font-weight:400">· Mit ▶ reinhören, Song anklicken zum Verschieben</span></div>
     <div class="split-grid sort-grid">${Sorter.groups.map((g, gi) => sortCard(g, gi)).join("")}</div>

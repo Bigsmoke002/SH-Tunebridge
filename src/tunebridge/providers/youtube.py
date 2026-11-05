@@ -18,6 +18,29 @@ from .oauth import OAuthError, OAuthProvider
 
 API = "https://www.googleapis.com/youtube/v3"
 MAX_ITEMS = 2000
+NO_MUSIC = "_keine_musik"     # Markierung in Track.tags: YouTube sagt, das Video ist keine Musik
+
+
+def mark_non_music(tracks: list[Track], get) -> int:
+    """„Mag ich“ enthält alle gelikten Videos (Shorts, Gaming, Doku …). YouTube liefert pro Video eine Kategorie;
+    Musik = Kategorie 10 oder ein automatischer „… - Topic“-Kanal. Alles andere bekommt die Markierung NO_MUSIC
+    und wird beim Sortieren nicht als Song nachgeschlagen. get(path, **params) -> dict. Gibt die Anzahl zurück.
+    Fehlt die Antwort (Fehler, Kontingent), bleibt alles unmarkiert – lieber ein Video zu viel als ein Song zu wenig."""
+    by_id = {t.ids.get("youtube"): t for t in tracks if t.ids.get("youtube")}
+    ids, n = list(by_id), 0
+    for k in range(0, len(ids), 50):
+        try:
+            d = get("videos", part="snippet", id=",".join(ids[k:k + 50]), maxResults=50)
+        except Exception:  # noqa: BLE001
+            return n
+        for it in d.get("items") or []:
+            sn = it.get("snippet") or {}
+            if sn.get("categoryId") != "10" and not (sn.get("channelTitle") or "").endswith(" - Topic"):
+                t = by_id.get(it.get("id"))
+                if t is not None:
+                    t.tags = {**(t.tags or {}), NO_MUSIC: 1.0}
+                    n += 1
+    return n
 
 
 class YouTube(OAuthProvider):
@@ -80,6 +103,7 @@ class YouTube(OAuthProvider):
             token = d.get("nextPageToken")
             if not token:
                 break
+        mark_non_music(out, self._get)
         return out
 
     def liked(self) -> list[Track]:

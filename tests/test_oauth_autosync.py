@@ -103,12 +103,15 @@ def test_youtube_playlists(monkeypatch):
             return _Resp({"items": [{"snippet": {"title": "Muse - Uprising (Official Video)", "videoOwnerChannelTitle": "MuseVEVO",
                                                  "resourceId": {"videoId": "v1"}, "thumbnails": {"medium": {"url": "https://i.ytimg.com/1.jpg"}}}},
                                     {"snippet": {"title": "Private video"}}]})
+        if url.endswith("/videos"):
+            return _Resp({"items": [{"id": "v1", "snippet": {"categoryId": "10"}}]})
         return _Resp({"items": [{"id": "PL1", "snippet": {"title": "Meine Liste"}, "contentDetails": {"itemCount": 1}}]})
     monkeypatch.setattr("tunebridge.providers.youtube.httpx.get", get)
     assert yt.playlist_list()[0]["name"] == "Meine Liste"
     tr = yt.liked()
     assert len(tr) == 1 and tr[0].ids == {"youtube": "v1"} and "Uprising" in tr[0].title
-    assert calls[-1][1]["playlistId"] == "LL"
+    assert calls[-2][1]["playlistId"] == "LL"
+    assert calls[-1][0].endswith("/videos") and calls[-1][1]["id"] == "v1" and not tr[0].tags   # Musik: unmarkiert
     with pytest.raises(NotImplementedError):
         yt.create_playlist("x")
 
