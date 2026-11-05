@@ -1521,6 +1521,69 @@ Views.playlist = async (main, name) => {
   };
 };
 
+/* ---------- Statistik & Jahresrückblick (nur lokale Daten) */
+const StatsUI = { year: null, source: "alle" };
+// Säulendiagramm (eine Reihe): Säulen mit 2px Abstand, Hover-Tooltip, Zahlen zusätzlich als Tabelle
+function colChart(id, rows, { label, value = r => r.n, tip, color = "var(--accent)", unit = "" }) {
+  const max = Math.max(1, ...rows.map(value));
+  return `<div class="st-chart-wrap"><div class="st-chart" data-chart="${id}">
+      <span class="st-max num">${max}${unit}</span><div class="sp-grid"><i style="bottom:50%"></i><i style="bottom:100%"></i></div>
+      <div class="st-cols">${rows.map((r, i) => `<b data-i="${i}" style="height:${value(r) ? Math.max(2, value(r) / max * 100) : 0}%;background:${color}"></b>`).join("")}</div>
+      <div class="sp-tip hidden"></div></div>
+    <div class="st-xl">${rows.map(r => `<span>${esc(label(r))}</span>`).join("")}</div>
+    <details class="st-table"><summary>Als Tabelle</summary><table>${rows.map(r => `<tr><td>${esc(label(r))}</td><td class="num">${value(r)}${unit}</td></tr>`).join("")}</table></details></div>`;
+}
+function bindColChart(root, id, rows, tip) {
+  const c = $(`[data-chart="${id}"]`, root); if (!c) return;
+  const tt = $(".sp-tip", c);
+  $$(".st-cols b", c).forEach(b => {
+    b.onmouseenter = () => { tt.innerHTML = tip(rows[+b.dataset.i]); tt.classList.remove("hidden");
+      const r = b.getBoundingClientRect(), cr = c.getBoundingClientRect();
+      tt.style.left = `${Math.min(cr.width - tt.offsetWidth, Math.max(0, r.left - cr.left + r.width / 2 - tt.offsetWidth / 2))}px`; };
+    b.onmouseleave = () => tt.classList.add("hidden");
+  });
+}
+// Rangliste: Name | Balken | Zahl (Zahlen stehen als Text daneben, nicht im Balken)
+const rankList = (rows, name, color) => { const max = Math.max(1, ...rows.map(r => r.n));
+  return rows.length ? `<div class="st-rank">${rows.map(r => `<div class="st-rrow"><span class="st-rn" title="${esc(name(r))}">${esc(name(r))}</span>
+    <span class="st-rb"><b style="width:${r.n / max * 100}%;background:${color(r)}"></b></span><span class="st-rv num">${r.n}</span></div>`).join("")}</div>`
+    : `<div class="cell-sub">Noch keine Daten.</div>`; };
+
+Views.stats = async (main) => {
+  main.innerHTML = `<div class="page view-enter">${skeletonRows(4)}</div>`;
+  const q = new URLSearchParams({ source: StatsUI.source, year: StatsUI.year ?? "" });
+  const d = await api(`/api/stats?${q}`);
+  if (StatsUI.year == null && d.years.length) { StatsUI.year = d.years[0]; return Views.stats(main); }
+  const z = d.zahlen, src = [["alle", "Alles"], ["erkannt", "Erkannt"], ["playlists", "In Playlists"]];
+  const yr = d.year ? `${d.year}` : "insgesamt";
+  main.innerHTML = `<div class="page view-enter">
+    <div class="page-head"><div><h1>${d.year ? `Dein Jahr ${d.year}` : "Statistik"}</h1><p>Was du erkannt und gesammelt hast – ausgewertet nur auf diesem Rechner.</p></div></div>
+    <div class="st-bar"><div class="segmented" id="stSrc">${src.map(([v, l]) => `<button data-v="${v}" class="${d.source === v ? "on" : ""}">${l}</button>`).join("")}</div>
+      <div class="segmented" id="stYear">${d.years.map(y => `<button data-y="${y}" class="${d.year === y ? "on" : ""}">${y}</button>`).join("")}<button data-y="" class="${d.year ? "" : "on"}">Alle Jahre</button></div></div>
+    ${!z.eintraege ? `<div class="empty">${icon("chart")}<h3>Noch keine Daten ${d.year ? `für ${d.year}` : ""}</h3><p>Erkenne Songs oder sortiere sie in Playlists – dann füllt sich diese Seite.</p></div>` : `
+    <div class="pls-stats st-tiles"><div><b class="num">${z.songs}</b><span>Songs</span></div><div><b class="num">${z.kuenstler}</b><span>Künstler</span></div>
+      <div><b class="num">${z.neue_kuenstler}</b><span>neu entdeckte Künstler</span></div><div><b class="num">${z.genres}</b><span>Genres</span></div></div>
+    <div class="st-grid">
+      <section class="card st-card"><h3>Top-Genres ${esc(yr)}</h3>${rankList(d.genres, r => r.genre, r => genreColor(r.genre, null))}
+        ${d.unsortiert ? `<div class="cell-sub st-foot">${d.unsortiert} ohne Genre</div>` : ""}</section>
+      <section class="card st-card"><h3>Top-Mikro-Genres</h3>${rankList(d.subgenres, r => r.subgenre, r => genreColor(r.genre, r.subgenre))}</section>
+      <section class="card st-card"><h3>Meiste Songs von</h3>${rankList(d.kuenstler, r => r.name, () => "var(--accent)")}</section>
+      <section class="card st-card"><h3>Tempo</h3>${d.tempo.length ? colChart("tempo", d.tempo, { label: r => r.von })
+        + `<div class="cell-sub st-foot">${z.mit_tempo} von ${z.eintraege} mit bekanntem Tempo (BPM)</div>` : `<div class="cell-sub">Noch kein Tempo gemessen – der <a href="#/setplan">Set-Planer</a> und das Sortieren messen es mit.</div>`}</section>
+      ${d.monate ? `<section class="card st-card st-wide"><h3>Pro Monat</h3><div class="st-two">
+        <div><div class="st-sub">Songs</div>${colChart("monat", d.monate, { label: r => r.monat })}</div>
+        <div><div class="st-sub">Neu entdeckte Künstler</div>${colChart("neu", d.monate, { label: r => r.monat, value: r => r.neu })}</div></div></section>` : ""}
+    </div>`}</div>`;
+  hydrateIcons(main);
+  if (z.eintraege) {
+    bindColChart(main, "tempo", d.tempo, r => `<b>${r.von}–${r.von + 9} BPM</b><span>${r.n} Songs</span>`);
+    if (d.monate) { bindColChart(main, "monat", d.monate, r => `<b>${r.monat} ${d.year}</b><span>${r.n} Songs</span>`);
+      bindColChart(main, "neu", d.monate, r => `<b>${r.monat} ${d.year}</b><span>${r.neu} neue Künstler</span>`); }
+  }
+  $$("#stSrc button").forEach(b => b.onclick = () => { StatsUI.source = b.dataset.v; StatsUI.year = d.year; Views.stats(main); });
+  $$("#stYear button").forEach(b => b.onclick = () => { StatsUI.year = b.dataset.y ? +b.dataset.y : ""; Views.stats(main); });
+};
+
 /* ---------- Set-Planer: Reihenfolge nach Tempo, Tonart (Camelot) und Energie-Kurve */
 const SetPlan = { job: null, curve: "peak", order: null, desc: null, items: null };
 Views.setplan = async (main, _, params) => {

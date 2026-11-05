@@ -1448,3 +1448,31 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .mx-row .sl span, .mx-row .sl em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-row .sl em { font-style: normal; font-size: 12px; color: var(--text-3); }
 .mx-row .chip { flex: none; }
+
+/* Statistik */
+.st-bar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.st-tiles { margin-bottom: 14px; flex-wrap: wrap; }
+.st-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+.st-card { padding: 14px 16px; min-width: 0; }
+.st-card h3 { margin: 0 0 12px; font-size: 14px; }
+.st-wide { grid-column: 1 / -1; }
+.st-two { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 20px; }
+.st-sub { font-size: 12px; color: var(--text-2); margin-bottom: 6px; }
+.st-foot { margin-top: 10px; }
+.st-rank { display: flex; flex-direction: column; gap: 6px; }
+.st-rrow { display: grid; grid-template-columns: minmax(80px, 38%) 1fr 36px; gap: 10px; align-items: center; font-size: 13px; }
+.st-rn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-rb { height: 10px; }
+.st-rb b { display: block; height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+.st-rv { text-align: right; color: var(--text-2); }
+.st-chart { position: relative; height: 120px; border-bottom: 1px solid var(--line); margin-top: 16px; }
+.st-max { position: absolute; top: -16px; left: 0; font-size: 11px; color: var(--text-3); }
+.st-cols { position: absolute; inset: 0; display: flex; align-items: flex-end; gap: 2px; }
+.st-cols b { flex: 1; border-radius: 4px 4px 0 0; opacity: .85; }
+.st-cols b:hover { opacity: 1; }
+.st-xl { display: flex; gap: 2px; margin-top: 4px; }
+.st-xl span { flex: 1; text-align: center; font-size: 10px; color: var(--text-3); overflow: hidden; white-space: nowrap; }
+.st-table { margin-top: 8px; font-size: 12px; color: var(--text-2); }
+.st-table summary { cursor: pointer; color: var(--text-3); }
+.st-table table { margin-top: 6px; border-collapse: collapse; }
+.st-table td { padding: 2px 14px 2px 0; }

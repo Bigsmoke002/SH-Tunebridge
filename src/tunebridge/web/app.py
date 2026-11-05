@@ -397,6 +397,14 @@ def history(limit: int = 200):
              "bpm": h["extra"].get("bpm")} for h in store.history(limit)]
 
 
+# ------------------------------------------------------------------ Statistik
+@app.get("/api/stats")
+def stats_get(year: str = "", source: str = "alle"):
+    from .. import stats
+    y = int(year) if year.isdigit() else None
+    return stats.overview(y, source)
+
+
 # ------------------------------------------------------------------ Set-Planer
 def _sp(fn, *a):
     try:
