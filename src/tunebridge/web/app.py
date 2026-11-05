@@ -530,6 +530,15 @@ def autosync_add(iid: str, req: InboxAddReq):
     return {"added": added, "playlist": name}
 
 
+@app.post("/api/autosync/inbox/{iid}/undo")
+def autosync_undo(iid: str):
+    from .. import autosync
+    undone = autosync.undo_auto(iid)
+    if not undone:
+        raise HTTPException(404, "Nichts zum Zurücknehmen")
+    return undone
+
+
 @app.post("/api/autosync/inbox/{iid}/done")
 def autosync_done(iid: str):
     from .. import autosync

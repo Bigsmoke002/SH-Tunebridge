@@ -2118,8 +2118,11 @@ Views.inbox = async (main) => {
     const [m, c] = SVC_STYLE[it.sid] || ["?", "#888"];
     return `<div class="ib-row" data-id="${esc(it.id)}">${trackLine(t)}
       <div class="ib-meta"><span class="ss-badge sm" style="--pc:${c}">${m}</span><span>${esc(it.service)} · ${esc(it.source || "")} · ${ago(it.ts)}${it.bpm ? ` · ${Math.round(it.bpm)} BPM` : ""}</span></div>
-      <div class="ib-act">${sug}<button class="btn btn--sm btn--ghost" data-other="${esc(it.id)}">${icon("pencil")}Andere Playlist</button>
-        <button class="btn btn--sm btn--ghost" data-done="${esc(it.id)}" title="Aus der Liste nehmen">${icon("check")}Erledigt</button></div></div>`;
+      ${it.auto ? `<div class="ib-auto">${icon("check")}<span>Automatisch in <b>${esc(it.auto.playlist)}</b> einsortiert · ${Math.round(it.auto.score * 100)} %${it.auto.reason ? ` · ${esc(it.auto.reason)}` : ""}</span>
+        <button class="btn btn--sm btn--primary" data-done="${esc(it.id)}">${icon("check")}Passt</button>
+        <button class="btn btn--sm btn--ghost" data-undo="${esc(it.id)}" title="Wieder aus der Playlist nehmen und selbst entscheiden">Rückgängig</button></div>`
+      : `<div class="ib-act">${sug}<button class="btn btn--sm btn--ghost" data-other="${esc(it.id)}">${icon("pencil")}Andere Playlist</button>
+        <button class="btn btn--sm btn--ghost" data-done="${esc(it.id)}" title="Aus der Liste nehmen">${icon("check")}Erledigt</button></div>`}</div>`;
   };
   main.innerHTML = `<div class="page view-enter">
     <div class="page-head"><div><h1>Neu von deinen Diensten</h1><p>SH-Tunebridge schaut regelmäßig in deine verbundenen Dienste (Lieblingssongs${cfg.lists ? " und Playlists" : ""}). Neue Songs werden analysiert und bekommen Vorschläge, in welche deiner Playlists sie passen. Alles bleibt auf diesem Rechner.</p></div></div>
@@ -2127,6 +2130,8 @@ Views.inbox = async (main) => {
       <label class="switch-row"><input type="checkbox" id="ibOn" ${cfg.enabled ? "checked" : ""}><span>Automatisch abgleichen</span></label>
       <label class="switch-row">alle <select class="select select--sm" id="ibInt">${[1, 3, 6, 12, 24, 48].map(h => `<option value="${h}" ${cfg.interval_h === h ? "selected" : ""}>${h} h</option>`).join("")}</select></label>
       <label class="switch-row"><input type="checkbox" id="ibLists" ${cfg.lists ? "checked" : ""}><span>Auch Playlists (nicht nur Likes)</span></label>
+      <label class="switch-row" title="Neue Songs landen selbst in deiner am besten passenden Playlist – du kannst jeden Eintrag rückgängig machen"><input type="checkbox" id="ibAuto" ${cfg.auto_sort ? "checked" : ""}><span>Automatisch einsortieren ab</span>
+        <select class="select select--sm" id="ibMin" ${cfg.auto_sort ? "" : "disabled"}>${[50, 60, 70, 80, 90].map(p => `<option value="${p}" ${cfg.auto_min === p ? "selected" : ""}>${p} %</option>`).join("")}</select></label>
       <span class="cell-sub grow">${d.running ? `<span class="upd-dot spin"></span> ${esc(d.phase || "Läuft …")}` : cfg.last_run ? `Zuletzt ${ago(cfg.last_run)}${d.next_run ? ` · nächster Abgleich ${new Date(d.next_run * 1000).toLocaleTimeString("de-DE", { hour: "2-digit", minute: "2-digit" })}` : ""}` : "Noch nie abgeglichen"}</span>
       <button class="btn btn--sm btn--primary" id="ibRun" ${d.running ? "disabled" : ""}>${icon("repeat")}Jetzt abgleichen</button>
       <button class="btn btn--sm btn--ghost" id="ibMore" title="Mehr">${icon("sliders")}</button>
@@ -2140,6 +2145,9 @@ Views.inbox = async (main) => {
   $("#ibOn").onchange = e => save({ enabled: e.target.checked });
   $("#ibInt").onchange = e => save({ interval_h: +e.target.value });
   $("#ibLists").onchange = e => save({ lists: e.target.checked });
+  $("#ibAuto").onchange = e => { save({ auto_sort: e.target.checked }); $("#ibMin").disabled = !e.target.checked;
+    if (e.target.checked) toast("Ab dem nächsten Abgleich: sichere Treffer landen selbst in der Playlist – hier siehst du sie mit „Rückgängig“"); };
+  $("#ibMin").onchange = e => save({ auto_min: +e.target.value });
   $("#ibRun").onclick = async () => { await api("/api/autosync/run", { method: "POST" }); toast("Abgleich läuft …"); setTimeout(() => route(), 600); Inbox.badge(); };
   $("#ibMore").onclick = () => modal({ title: "Abgleich zurücksetzen?", text: "SH-Tunebridge vergisst, welche Songs es schon gesehen hat, und leert diese Liste. Der nächste Abgleich merkt sich nur wieder den Ist-Stand.", confirm: "Zurücksetzen", danger: true,
     onConfirm: async () => { await api("/api/autosync/reset", { method: "POST" }); Inbox.badge(); route(); } });
@@ -2150,6 +2158,10 @@ Views.inbox = async (main) => {
     catch (e) { toast(e.message, "err"); }
   };
   $$("[data-add]", main).forEach(b => b.onclick = () => add(b.dataset.add, b.dataset.pl));
+  $$("[data-undo]", main).forEach(b => b.onclick = async () => {
+    try { const r = await api(`/api/autosync/inbox/${b.dataset.undo}/undo`, { method: "POST" }); toast(`Aus „${r.playlist}“ genommen – entscheide selbst`); refreshMeta(); route(); }
+    catch (e) { toast(e.message, "err"); }
+  });
   $$("[data-done]", main).forEach(b => b.onclick = async () => { await api(`/api/autosync/inbox/${b.dataset.done}/done`, { method: "POST" }); gone(b.dataset.done); });
   $$("[data-other]", main).forEach(b => b.onclick = () => modal({ title: "In welche Playlist?", body: `<input class="input" id="ibPl" list="plnames" placeholder="Name einer Playlist (neu oder vorhanden)" style="width:100%" autocomplete="off">`, confirm: "Einsortieren",
     onConfirm: async box => { const v = $("#ibPl", box).value.trim(); if (!v) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; } await add(b.dataset.other, v); } }));

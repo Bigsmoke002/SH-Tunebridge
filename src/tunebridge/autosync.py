@@ -36,6 +36,8 @@ DEFAULTS = {
     "interval_h": 6,           # 1 … 48
     "lists": True,             # auch eigene Playlists (sonst nur Lieblingssongs)
     "services": {},            # sid -> False zum Ausschließen
+    "auto_sort": False,        # neue Songs selbst in die beste eigene Playlist legen
+    "auto_min": 70,            # … aber nur ab so viel Prozent Übereinstimmung (50 … 95)
     "last_run": 0.0,
 }
 
@@ -66,6 +68,10 @@ def save(patch: dict) -> dict:
             cfg[k] = bool(v)
         elif k == "interval_h":
             cfg[k] = max(1, min(48, int(v)))
+        elif k == "auto_sort":
+            cfg[k] = bool(v)
+        elif k == "auto_min":
+            cfg[k] = max(50, min(95, int(v)))
         elif k == "services" and isinstance(v, dict):
             cfg[k] = {**cfg["services"], **{str(s): bool(on) for s, on in v.items()}}
     _write(cfg)
@@ -117,6 +123,29 @@ def take(item_id: str) -> dict | None:
         if hit:
             _save_inbox([x for x in items if x["id"] != item_id])
     return hit
+
+
+def auto_target(sug: list[dict], cfg: dict) -> dict | None:
+    """Beste vorhandene LOKALE Playlist, wenn sie sicher genug passt (sonst bleibt der Song zum Selbst-Entscheiden)."""
+    if not cfg.get("auto_sort") or not sug:
+        return None
+    top = sug[0]
+    if top.get("new") or top.get("origin") != "lokal" or top.get("score", 0) * 100 < cfg.get("auto_min", 70):
+        return None
+    return top
+
+
+def undo_auto(item_id: str) -> dict | None:
+    """Automatisches Einsortieren zurücknehmen: Song wieder aus der Playlist, Eintrag bleibt zum Selbst-Entscheiden."""
+    with _ilock:
+        items = inbox()
+        hit = next((x for x in items if x["id"] == item_id), None)
+        if not hit or not hit.get("auto"):
+            return None
+        store.remove_from_playlist(hit["auto"]["playlist"], store.track_key(inbox_track(hit)))
+        undone = hit.pop("auto")
+        _save_inbox(items)
+    return undone
 
 
 def clear_inbox() -> None:
@@ -217,10 +246,15 @@ def run_once() -> dict:
                            cover=a.get("cover") or t.cover, preview_url=a.get("preview_url") or t.preview_url,
                            duration_ms=t.duration_ms)
                 sug = [asdict(x) for x in suggest(tr, pls, top=3)]
+                auto = None
+                if (best := auto_target(sug, cfg)):
+                    store.add_to_playlist(best["playlist"], tr)
+                    auto = {"playlist": best["playlist"], "score": best["score"], "reason": best.get("reason")}
                 items.insert(0, {"id": uuid.uuid4().hex[:12], "ts": time.time(), "sid": sid, "service": s["name"],
                                  "source": "Lieblingssongs" if src in ("Lieblingssongs", "Lieblingssongs (Loved Tracks)") else src,
                                  **{k2: v for k2, v in asdict(tr).items() if k2 != "tags"},
-                                 "bpm": a.get("bpm"), "confidence": a.get("confidence"), "suggestions": sug})
+                                 "bpm": a.get("bpm"), "confidence": a.get("confidence"), "suggestions": sug,
+                                 **({"auto": auto} if auto else {})})
                 known.add(k)
                 keys.append(k)
                 found += 1

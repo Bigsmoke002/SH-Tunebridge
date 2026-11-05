@@ -30,6 +30,9 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
 - **„Unsortiert“ erklärt sich:** Jeder Song zeigt, warum er kein Genre bekam (nicht gefunden, keine Genre-Angaben,
   Tags passen zu keinem Genre …). Die Gruppe hat „Mit KI prüfen“ – die KI ordnet nur unsortierte Songs ein, die sie
   wirklich kennt; deine bisherigen Verschiebungen bleiben erhalten.
+- **Neue Likes automatisch einsortieren** („Neu für dich“, Schalter „Automatisch einsortieren ab … %“, Standard aus):
+  passt ein neuer Song sicher genug zu einer deiner Playlists, landet er selbst dort. In der Liste steht
+  „Automatisch in X einsortiert“ mit „Passt“ und „Rückgängig“.
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren

@@ -227,3 +227,42 @@ def test_spotify_premium_block_is_reported(monkeypatch, tmp_path):
     assert prov.connected() is False and "Premium" in prov.last_error
     monkeypatch.setattr(sp.httpx, "request", lambda *a, **k: R(200, {"id": "me"}))
     assert prov.connected() is True and prov.last_error is None
+
+
+def test_autosync_auto_sort_and_undo(monkeypatch):
+    """Sichere Treffer landen selbst in der eigenen Playlist; Rückgängig nimmt sie wieder heraus."""
+    from fastapi.testclient import TestClient
+    from tunebridge.web.app import app
+    for i in range(4):
+        store.add_to_playlist("Meine Liquid DnB", Track(f"Alt{i}", [f"K{i}"], genre="Drum & Bass", subgenre="Liquid"))
+    data = {"spotify": {"__liked__": []}}
+    _fake_sources(monkeypatch, data)
+    autosync.run_once()
+    monkeypatch.setattr("tunebridge.linkimport._analyse_one", lambda t: {"title": t.title, "artists": t.artists,
+                        "genre": "Drum & Bass", "subgenre": "Liquid", "ids": {}})
+    data["spotify"]["__liked__"] = [Track("Neu1", ["N"])]
+    autosync.run_once()                                   # aus: nur Vorschlag
+    assert "auto" not in autosync.inbox()[0]
+    cl = TestClient(app)
+    s = cl.post("/api/autosync", json={"auto_sort": True, "auto_min": 10}).json()["settings"]
+    assert s["auto_sort"] and s["auto_min"] == 50         # Untergrenze 50 %
+    data["spotify"]["__liked__"].append(Track("Neu2", ["M"]))
+    autosync.run_once()
+    item = autosync.inbox()[0]
+    assert item["title"] == "Neu2" and item["auto"]["playlist"] == "Meine Liquid DnB"
+    assert any(t.title == "Neu2" for p in store.local_playlists() for t in p.tracks)
+    r = cl.post(f"/api/autosync/inbox/{item['id']}/undo").json()
+    assert r["playlist"] == "Meine Liquid DnB"
+    assert not any(t.title == "Neu2" for p in store.local_playlists() for t in p.tracks)
+    assert "auto" not in autosync.inbox()[0]              # bleibt zum Selbst-Entscheiden
+    assert cl.post(f"/api/autosync/inbox/{item['id']}/undo").status_code == 404
+
+
+def test_auto_target_rules():
+    cfg = {"auto_sort": True, "auto_min": 70}
+    ok = {"playlist": "A", "score": .8, "new": False, "origin": "lokal"}
+    assert autosync.auto_target([ok], cfg) == ok
+    assert autosync.auto_target([{**ok, "score": .6}], cfg) is None
+    assert autosync.auto_target([{**ok, "new": True}], cfg) is None
+    assert autosync.auto_target([{**ok, "origin": "spotify"}], cfg) is None
+    assert autosync.auto_target([ok], {**cfg, "auto_sort": False}) is None
