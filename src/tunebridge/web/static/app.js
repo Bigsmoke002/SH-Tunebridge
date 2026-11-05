@@ -521,7 +521,9 @@ function detailHtml(r) {
     <button class="btn" data-role="addpl">${icon("plus")}Hinzufügen</button>
   </div>
   <div class="section-title">Ähnliche Songs</div>
-  <div data-role="similar"><button class="btn btn--sm" data-role="loadsim">${icon("compass")}Ähnliche Songs laden</button></div>`;
+  <div data-role="similar"><button class="btn btn--sm" data-role="loadsim">${icon("compass")}Ähnliche Songs laden</button></div>
+  ${r.id != null || r.key ? `<div class="section-title">Passt dazu – zum Mixen</div>
+  <div data-role="mix"><button class="btn btn--sm" data-role="loadmix" title="Songs aus deinen Playlists mit passendem Tempo und passender Tonart">${icon("disc")}Mixbare Songs aus deiner Bibliothek</button></div>` : ""}`;
 }
 
 function sugRow(s, inside) {
@@ -706,6 +708,7 @@ function bindDetail(root, r, onChange) {
   $("[data-role=addpl]", root).onclick = () => inp.value.trim() && update("/api/assign", inp.value.trim(), "Zu „%s“ hinzugefügt");
   inp.onkeydown = e => { if (e.key === "Enter") $("[data-role=addpl]", root).click(); };
   $("[data-role=loadsim]", root).onclick = () => loadSimilar($("[data-role=similar]", root), r);
+  const lm = $("[data-role=loadmix]", root); if (lm) lm.onclick = () => loadMix($("[data-role=mix]", root), r);
   const rf = $("[data-role=refresh]", root);
   if (rf) rf.onclick = async () => {
     rf.disabled = true; rf.textContent = "Lädt …";
@@ -735,6 +738,25 @@ function bindDetail(root, r, onChange) {
   const ai = $("[data-role=aianalyze]", root);
   if (ai) ai.onclick = () => AI.analyzeTrack(r.id != null ? { id: r.id } : { track: { artist: r.track.artists.join(", "), title: r.track.title, album: r.track.album, tags: Object.keys(r.track.tags || {}), genre: r.track.genre, subgenre: r.track.subgenre } }, ai);
   Player.sync();
+}
+
+async function loadMix(box, r) {
+  box.innerHTML = skeletonRows(3);
+  try {
+    const d = await api(r.id != null ? `/api/mixmatch?id=${r.id}` : `/api/mixmatch?key=${encodeURIComponent(r.key)}`);
+    if (d.error) { box.innerHTML = `<div class="cell-sub">${esc(d.error)}</div>`; return; }
+    const me = d.song, kd = m => m.key_d == null ? "Tonart unbekannt" : m.key_d === 0 ? "gleiche Tonart" : "Camelot-Nachbar";
+    const hint = d.unmeasured ? `<div class="cell-sub mx-hint">${d.unmeasured} von ${d.total} Songs deiner Playlists sind noch nicht gemessen – der <a href="#/setplan">Set-Planer</a> oder das Sortieren misst sie mit.</div>` : "";
+    box.innerHTML = `<div class="cell-sub mx-me">Dieser Song: <b>${me.bpm ? Math.round(me.bpm) + " BPM" : "Tempo unbekannt"}</b>${me.camelot ? ` · <b>${esc(me.camelot)}</b>${me.key ? ` (${esc(me.key)})` : ""}` : ""} · passend: ±6 % Tempo (auch halb/doppelt), gleiche Tonart oder Camelot-Nachbar</div>
+      ${d.matches.length ? `<div class="mx-list">${d.matches.map((m, i) => { const t = withPreview({ ...m });
+        return `<div class="mx-row" data-i="${i}"><button class="icon-btn thumb-play" ${playAttr(t)} title="Reinhören">${icon("play")}</button>
+          ${m.cover ? `<img class="thumb" src="${esc(m.cover)}" alt="" loading="lazy">` : `<span class="thumb ph"></span>`}
+          <div class="sl"><span>${esc(m.artists.join(", "))} – ${esc(m.title)}</span><em>${m.tempo < 0.5 ? "gleiches Tempo" : String(m.tempo).replace(".", ",") + " % Tempo"} · ${kd(m)} · in ${m.playlists.map(esc).join(", ")}</em></div>
+          <span class="chip num">${Math.round(m.bpm)} BPM</span><span class="chip" title="${kd(m)}">${esc(m.camelot || "–")}</span></div>`; }).join("")}</div>`
+      : `<div class="cell-sub">Keine passenden Songs unter den gemessenen.</div>`}${hint}`;
+    hydrateIcons(box); Player.sync();
+    lazyCovers(box, d.matches, i => `.mx-row[data-i="${i}"]`);
+  } catch (e) { box.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; }
 }
 
 async function loadSimilar(box, r) {

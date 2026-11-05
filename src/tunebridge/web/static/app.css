@@ -1437,3 +1437,14 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .sp-tr.ok::before, .sp-tr.mid::before, .sp-tr.bad::before { content: ""; display: inline-block; width: 6px; height: 6px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .sp-tr.ok::before { background: var(--accent); } .sp-tr.mid::before { background: var(--warn); } .sp-tr.bad::before { background: var(--danger); }
 @media (max-width: 700px) { .sp-v:not(.sp-cam) { display: none; } }
+
+/* Passt dazu (Mixen) */
+.mx-me { margin-bottom: 8px; white-space: normal; }
+.mx-hint { margin-top: 8px; }
+.mx-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; min-width: 0; }
+.mx-row .thumb { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; flex: none; }
+.mx-row .ph { background: var(--bg-3); display: inline-block; }
+.mx-row .sl { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mx-row .sl span, .mx-row .sl em { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-row .sl em { font-style: normal; font-size: 12px; color: var(--text-3); }
+.mx-row .chip { flex: none; }

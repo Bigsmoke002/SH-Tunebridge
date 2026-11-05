@@ -775,6 +775,20 @@ def similar(rid: int, limit: int = 15):
     return _similar(got[0], limit)
 
 
+@app.get("/api/mixmatch")
+def mixmatch(id: int | None = None, key: str | None = None):
+    """„Passt dazu“: mixbare Songs (Tempo + Tonart) aus den eigenen Playlists."""
+    from .. import mixmatch as mm
+    extra = {}
+    if id is not None and (got := store.get_recognition(id)):
+        t, extra = got
+    elif key and (t := store.find_track(key)):
+        pass
+    else:
+        raise HTTPException(404, "Song nicht gefunden")
+    return mm.find(t, deezer_bpm=(extra or {}).get("bpm"))
+
+
 class DiscoverReq(BaseModel):
     artist: str
     title: str

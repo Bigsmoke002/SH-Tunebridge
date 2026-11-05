@@ -37,6 +37,9 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
   kleine Tempo-Sprünge (halbes/doppeltes Tempo zählt als passend) und ein Energie-Verlauf nach Wahl (Aufbauen, Peak
   in der Mitte, Gleichmäßig, Runterfahren). Energie-Kurve mit Ziel-Verlauf, jeder Übergang bewertet, von Hand
   umstellbar. Als Playlist speichern, als M3U8/CSV (BPM, Tonart) in den Download-Ordner oder als Tracklist kopieren.
+- **„Passt dazu – zum Mixen“** im Song-Detail (auch direkt nach dem Erkennen): Songs aus deinen Playlists mit
+  passendem Tempo (±6 %, halbes/doppeltes Tempo zählt) und passender Tonart (gleich oder Camelot-Nachbar).
+  Nutzt nur schon gemessene Werte – wie viele noch fehlen, steht dabei.
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren
