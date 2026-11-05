@@ -1,6 +1,18 @@
 """Alle Tests laufen in einem Wegwerf-Ordner – nie gegen die echten Daten des Nutzers (Datenbank, Token,
 Fehler-Warteschlange, Upload-Schlüssel, Debug-Protokoll)."""
+import os
+import tempfile
+
 import pytest
+
+# Zweite Sicherung, VOR dem ersten Import von tunebridge: Daten- und Konfig-Ordner zeigen von Anfang an auf
+# Wegwerf-Ordner. Selbst wenn ein Test die Isolierung unten versehentlich aufhebt (z. B. monkeypatch.undo()),
+# landet nichts in den echten Daten oder der echten config.env.
+_SAFE = tempfile.mkdtemp(prefix="tunebridge-tests-")
+os.environ["TUNEBRIDGE_DATA"] = os.path.join(_SAFE, "data")
+os.environ["XDG_CONFIG_HOME"] = os.path.join(_SAFE, "config")
+os.environ["TUNEBRIDGE_DOWNLOADS"] = os.path.join(_SAFE, "downloads")
+os.makedirs(os.environ["TUNEBRIDGE_DOWNLOADS"], exist_ok=True)
 
 
 @pytest.fixture(autouse=True)
