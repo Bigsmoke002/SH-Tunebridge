@@ -34,6 +34,8 @@ const store = {
 /* ================================================================= Icons */
 const P = (...d) => d.map(x => `<path d="${x}"/>`).join("");
 const ICONS = {
+  chart: P("M4 20V11", "M10 20V5", "M16 20v-8", "M21 20H3"),
+  dupe: `<rect x="8" y="8" width="12" height="12" rx="2"/>` + P("M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"),
   wave: P("M3 10v4", "M7 6v12", "M11 3v18", "M15 8v8", "M19 5v14"),
   inbox: P("M3 13h5l1.5 3h5l1.5-3h5", "M5.5 5h13L21 13v6H3v-6Z"),
   clock: `<circle cx="12" cy="12" r="9"/>` + P("M12 7v5l3 2"),
@@ -1495,6 +1497,46 @@ Views.playlist = async (main, name) => {
     h.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); done(true); } if (e.key === "Escape") done(false); };
     h.onblur = () => done(true);
   };
+};
+
+/* ---------- Doppelte Songs (nur lokale Playlists) */
+Views.dupes = async (main) => {
+  main.innerHTML = `<div class="page view-enter">
+    <div class="page-head"><div><h1>Doppelte Songs</h1><p>Findet Songs, die in deinen Playlists mehrfach stehen – und Remixe/Originale desselben Songs. Läuft nur auf deinem Rechner.</p></div></div>
+    <div id="dpOut"><div class="empty">${icon("search")}<h3>Suche …</h3></div></div></div>`;
+  hydrateIcons(main);
+  const d = await api("/api/dupes");
+  const z = d.zahlen;
+  const row = (o, act = "") => { const t = withPreview({ ...o });
+    return `<div class="dp-row"><button class="icon-btn" ${playAttr(t)} title="Reinhören">${icon("play")}</button>
+      ${o.cover ? `<img src="${esc(o.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
+      <div class="sl"><span>${esc((o.artists || []).join(", "))} – ${esc(o.title)}</span><em>${esc(o.playlist)}${o.genre ? " · " + esc(o.subgenre || o.genre) : ""} · ${relTime(o.ts)}</em></div>${act}</div>`; };
+  const rm = (o, label = "Entfernen") => `<button class="btn btn--xs btn--ghost" data-rm='${esc(JSON.stringify({ playlist: o.playlist, key: o.key }))}'>${icon("x")}${label}</button>`;
+  $("#dpOut").innerHTML = !z.songs ? `<div class="empty">${icon("stack")}<h3>Noch keine Playlists</h3><p>Sobald du Songs in lokale Playlists einsortierst, kann hier aufgeräumt werden.</p></div>` : `
+    <div class="pls-stats dp-stats"><div><b class="num">${z.doppelt}</b><span>doppelt in einer Playlist</span></div><div><b class="num">${z.mehrfach}</b><span>in mehreren Playlists</span></div><div><b class="num">${z.versionen}</b><span>mit Remix/Original</span></div></div>
+    <div class="section-title">Doppelt in derselben Playlist</div>
+    ${d.doppelt.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Der älteste Eintrag bleibt, die Kopien sind überflüssig.</p>
+      <button class="btn btn--sm" id="dpAll">${icon("trash")}${z.doppelt === 1 ? "Die Kopie entfernen" : `Alle ${z.doppelt} Kopien entfernen`}</button>
+      ${d.doppelt.map(g => `<div class="dp-group">${row(g.keep, `<span class="chip">bleibt</span>`)}${g.remove.map(o => row(o, rm(o))).join("")}</div>`).join("")}</div>`
+      : `<div class="card dp-card cell-sub">${icon("check")} Keine – jede Playlist enthält jeden Song nur einmal.</div>`}
+    <div class="section-title">In mehreren Playlists</div>
+    ${d.mehrfach.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Kann gewollt sein. Entferne den Song nur dort, wo er nicht hingehört.</p>
+      ${d.mehrfach.map(g => `<div class="dp-group">${g.in.map(o => row(o, rm(o, "Hier entfernen"))).join("")}</div>`).join("")}</div>`
+      : `<div class="card dp-card cell-sub">${icon("check")} Keine.</div>`}
+    <div class="section-title">Original und Versionen</div>
+    ${d.versionen.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Remix, VIP, Edit oder Slowed sind eigene Songs – nur zur Info, falls du nur eine Fassung willst.</p>
+      ${d.versionen.map(g => `<div class="dp-group">${g.songs.map(o => row(o, rm(o))).join("")}</div>`).join("")}</div>`
+      : `<div class="card dp-card cell-sub">${icon("check")} Keine.</div>`}`;
+  hydrateIcons(main);
+  const remove = async items => {
+    const r = await api("/api/dupes/remove", { method: "POST", body: { items } });
+    toast(`${r.removed} ${r.removed === 1 ? "Eintrag" : "Einträge"} entfernt`); refreshMeta(); Views.dupes(main);
+  };
+  $$("[data-rm]", main).forEach(b => b.onclick = () => remove([JSON.parse(b.dataset.rm)]));
+  $("#dpAll")?.addEventListener("click", () => {
+    if (confirm(`${z.doppelt} doppelte Einträge entfernen? Von jedem Song bleibt der älteste Eintrag in der Playlist.`))
+      remove(d.doppelt.flatMap(g => g.remove.map(o => ({ playlist: o.playlist, key: o.key }))));
+  });
 };
 
 /* ---------- Entdecken */

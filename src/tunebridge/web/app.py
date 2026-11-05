@@ -397,6 +397,23 @@ def history(limit: int = 200):
              "bpm": h["extra"].get("bpm")} for h in store.history(limit)]
 
 
+# ------------------------------------------------------------------ Doppelte Songs
+@app.get("/api/dupes")
+def dupes_find():
+    from .. import dupes
+    return dupes.find()
+
+
+class DupesRemoveReq(BaseModel):
+    items: list[dict]
+
+
+@app.post("/api/dupes/remove")
+def dupes_remove(req: DupesRemoveReq):
+    from .. import dupes
+    return {"removed": dupes.remove(req.items[:5000])}
+
+
 # ------------------------------------------------------------------ Playlists
 @app.get("/api/playlists")
 def playlists():
