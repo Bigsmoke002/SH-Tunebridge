@@ -397,6 +397,42 @@ def history(limit: int = 200):
              "bpm": h["extra"].get("bpm")} for h in store.history(limit)]
 
 
+# ------------------------------------------------------------------ Mix-Tracklists (Verlauf)
+@app.get("/api/mixlog")
+def mixlog_list():
+    from .. import mixlog
+    return mixlog.overview()
+
+
+@app.get("/api/mixlog/{sid}")
+def mixlog_get(sid: int, fmt: str = "offset", genre: bool = False):
+    from .. import mixlog
+    s = mixlog.find(sid)
+    if not s:
+        raise HTTPException(404, "Sitzung nicht gefunden")
+    return {**{k: v for k, v in s.items() if k != "songs"}, "songs": s["songs"],
+            "text": mixlog.tracklist(s, fmt if fmt in ("offset", "clock", "plain") else "offset", genre)}
+
+
+class MixlogSaveReq(BaseModel):
+    name: str
+
+
+@app.post("/api/mixlog/{sid}/save")
+def mixlog_save(sid: int, req: MixlogSaveReq):
+    from .. import mixlog
+    s = mixlog.find(sid)
+    name = req.name.strip()[:120]
+    if not s or not name:
+        raise HTTPException(400, "Sitzung oder Name fehlt")
+    added = 0
+    for x in s["songs"]:
+        added += store.add_to_playlist(name, Track(title=x["title"], artists=x["artists"], isrc=x.get("isrc"), ids=x.get("ids") or {},
+                                                   cover=x.get("cover"), preview_url=x.get("preview_url"), genre=x.get("genre"),
+                                                   subgenre=x.get("subgenre")))
+    return {"name": name, "added": added}
+
+
 # ------------------------------------------------------------------ Statistik
 @app.get("/api/stats")
 def stats_get(year: str = "", source: str = "alle"):

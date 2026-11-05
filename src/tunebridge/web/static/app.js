@@ -1279,7 +1279,9 @@ Views.history = async (main) => {
   let q = "", gf = null;
   const genres = [...new Map(items.filter(i => i.genre).map(i => [i.genre, i])).keys()];
   main.innerHTML = `<div class="page view-enter">
-    <div class="page-head"><div><h1>Verlauf</h1><p>${items.length} erkannte Songs</p></div></div>
+    <div class="page-head"><div><h1>Verlauf</h1><p>${items.length} erkannte Songs</p></div>
+      ${items.length > 1 ? `<button class="btn btn--sm btn--ghost" id="hMix" title="Erkennungen am Stück (z. B. ein DJ-Mix im Dauer-Modus) als Tracklist mit Zeitstempeln">${icon("clock")}Mix-Tracklists</button>` : ""}</div>
+    <div id="hMixBox"></div>
     ${items.length ? `<div class="toolbar">
       <div class="input-icon">${icon("search")}<input class="input" id="hq" placeholder="Suchen …"></div>
       <div class="filter-chips" id="hf"><button class="on" data-g="">Alle</button>${genres.map(g => `<button data-g="${esc(g)}"><span class="dot" style="background:${genreColor(g)}"></span>${esc(g)}</button>`).join("")}</div>
@@ -1303,9 +1305,43 @@ Views.history = async (main) => {
     Player.sync();
   };
   $("#hq").oninput = e => { q = e.target.value.toLowerCase(); draw(); };
+  $("#hMix")?.addEventListener("click", () => mixSessions($("#hMixBox")));
   $$("#hf button").forEach(b => b.onclick = () => { gf = b.dataset.g || null; $$("#hf button").forEach(x => x.classList.toggle("on", x === b)); draw(); });
   draw();
 };
+
+// Mix-Tracklists: Sitzungen = Erkennungen mit < 15 min Abstand
+async function mixSessions(box) {
+  if (box.innerHTML) { box.innerHTML = ""; return; }
+  box.innerHTML = skeletonRows(2);
+  const list = await api("/api/mixlog").catch(e => (toast(e.message, "err"), []));
+  box.innerHTML = `<div class="card mx-sess"><div class="mx-sess-head"><b>Mix-Tracklists</b><span class="cell-sub">Erkennungen am Stück (weniger als 15 Minuten Pause) – z. B. ein DJ-Mix im Dauer-Modus</span></div>
+    ${list.length ? list.map(s => `<div class="mx-srow"><div class="sl"><span>${esc(s.label)} · ${s.count} Songs</span><em>${s.first.map(esc).join(" · ")}${s.count > 3 ? " …" : ""}</em></div>
+      <button class="btn btn--sm" data-sess="${s.id}">${icon("copy")}Tracklist</button></div>`).join("")
+      : `<div class="cell-sub">Noch keine Sitzung mit mehreren Songs. Tipp: beim Mix den Dauer-Modus einschalten.</div>`}</div>`;
+  hydrateIcons(box);
+  $$("[data-sess]", box).forEach(b => b.onclick = () => mixTracklist(+b.dataset.sess));
+}
+async function mixTracklist(sid) {
+  let fmt = store.get("mixFmt", "offset"), genre = store.get("mixGenre", false), d;
+  const load = async () => { d = await api(`/api/mixlog/${sid}?fmt=${fmt}&genre=${genre}`); const ta = $("#mxText"); if (ta) ta.value = d.text; return d; };
+  try { await load(); } catch (e) { return toast(e.message, "err"); }
+  modal({ title: "Tracklist", text: esc(`${d.label} · ${d.count} Songs`), wide: true, confirm: "Kopieren", cancel: "Schließen",
+    body: `<div class="segmented" id="mxFmt">${[["offset", "Zeit ab Start (00:00)"], ["clock", "Uhrzeit"], ["plain", "Nur nummeriert"]].map(([v, l]) => `<button data-f="${v}" class="${v === fmt ? "on" : ""}">${l}</button>`).join("")}</div>
+      <label class="check" style="display:flex;gap:8px;margin:10px 0"><input type="checkbox" id="mxGenre" ${genre ? "checked" : ""}><span>Genre dazuschreiben</span></label>
+      <textarea class="input mx-text" id="mxText" spellcheck="false" readonly>${esc(d.text)}</textarea>
+      <div class="cell-sub" style="margin-top:6px;white-space:normal">Zeitstempel = Zeitpunkt der Erkennung (ein paar Sekunden nach Songbeginn). „Zeit ab Start“ passt z. B. als YouTube-Kapitel oder SoundCloud-Beschreibung.</div>
+      <div class="mx-save"><input class="input" id="mxName" value="${esc(`Mix ${d.label.split(",")[0]}`)}" aria-label="Name der Playlist">
+        <button class="btn btn--sm" id="mxSave">${icon("plus")}Als Playlist speichern</button></div>`,
+    onConfirm: async () => { toast(await Clip.write($("#mxText").value) ? "Tracklist kopiert" : "Kopieren nicht möglich"); throw { silent: true }; } });
+  hydrateIcons($("#modalBox"));
+  $$("#mxFmt button").forEach(b => b.onclick = async () => { fmt = b.dataset.f; store.set("mixFmt", fmt); $$("#mxFmt button").forEach(x => x.classList.toggle("on", x === b)); await load(); });
+  $("#mxGenre").onchange = async e => { genre = e.target.checked; store.set("mixGenre", genre); await load(); };
+  $("#mxSave").onclick = async () => {
+    const name = $("#mxName").value.trim(); if (!name) return toast("Bitte einen Namen eingeben", "err");
+    try { const r = await api(`/api/mixlog/${sid}/save`, { method: "POST", body: { name } }); toast(`„${r.name}“: ${r.added} Songs`); refreshMeta(); } catch (e) { toast(e.message, "err"); }
+  };
+}
 
 /* ---------- Playlists */
 function mosaic(p) {

@@ -43,6 +43,10 @@ Geführte Anmeldung bei Spotify, SoundCloud, Last.fm und Deezer; Sortieren mit R
 - **Statistik / Jahresrückblick** (neue Seite „Statistik“): Songs, Künstler, neu entdeckte Künstler und Genres pro
   Jahr; Top-Genres, Top-Mikro-Genres, meiste Songs von, Tempo-Verteilung und Verlauf pro Monat. Wahlweise nur
   Erkanntes, nur Playlists oder beides. Alles wird lokal ausgewertet, jedes Diagramm auch als Tabelle.
+- **Mix-Tracklists** (Verlauf › „Mix-Tracklists“): Erkennungen am Stück (weniger als 15 Minuten Pause, z. B. ein
+  DJ-Mix im Dauer-Modus) werden zur Tracklist mit Zeitstempeln – ab Start (00:00, passt als YouTube-Kapitel),
+  mit Uhrzeit oder nur nummeriert, wahlweise mit Genre. Mehrfach erkannte Songs zählen einmal. Kopieren oder als
+  Playlist speichern.
 - **„Anzeige im Kreis“** (Spektrum / Welle 3-Band / Welle RGB) ist nach Einstellungen › Erkennung umgezogen –
   mit Beschreibung der Varianten. Auf der Erkennen-Seite führt ein kleiner Link dorthin.
 - Fehler behoben: Beim Sortieren von YouTube-„Mag ich“ landeten Hunderte Einträge unter „Unsortiert“ – das waren

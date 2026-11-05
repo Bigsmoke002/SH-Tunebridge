@@ -1476,3 +1476,13 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .st-table summary { cursor: pointer; color: var(--text-3); }
 .st-table table { margin-top: 6px; border-collapse: collapse; }
 .st-table td { padding: 2px 14px 2px 0; }
+
+/* Mix-Tracklists */
+.mx-sess { padding: 14px 16px; margin-bottom: 14px; }
+.mx-sess-head { display: flex; flex-direction: column; gap: 2px; margin-bottom: 8px; }
+.mx-srow { display: flex; align-items: center; gap: 12px; padding: 6px 0; border-top: 1px solid var(--line-soft); min-width: 0; }
+.mx-srow .sl { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.mx-srow .sl em { font-style: normal; font-size: 12px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-text { width: 100%; min-height: 260px; font-family: ui-monospace, monospace; font-size: 12.5px; line-height: 1.5; resize: vertical; }
+.mx-save { display: flex; gap: 8px; margin-top: 12px; }
+.mx-save .input { flex: 1; }
