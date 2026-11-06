@@ -19,14 +19,15 @@ DOMAIN = "shtunebridge.bs002.de"
 _KEY = "consent"
 
 LOCAL = ("misses", "player", "cache")          # lokal speichern
-SERVER = ("misses", "fehler", "songs", "genres", "genredb", "share", "bibliothek")
-# genredb = laden, share = Playlists teilen (verschlüsselt), bibliothek = Song → Genre aus dem Song-Speicher beitragen
+SERVER = ("misses", "fehler", "songs", "genres", "genredb", "share", "bibliothek", "verzeichnis")
+# genredb = laden, share = Playlists teilen (verschlüsselt), bibliothek = Song → Genre aus dem Song-Speicher beitragen,
+# verzeichnis = öffentliches Playlist-Verzeichnis (stöbern; veröffentlichen zusätzlich je Playlist bestätigt)
 
 DEFAULTS = {
     "version": 0, "privacy_at": None,
     "local": {"misses": True, "player": True, "cache": True},
     "server": {"domain": False, "misses": False, "fehler": False, "songs": False, "genres": False, "genredb": False,
-               "share": False, "bibliothek": False},
+               "share": False, "bibliothek": False, "verzeichnis": False},
 }
 
 

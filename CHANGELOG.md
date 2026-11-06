@@ -4,6 +4,12 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.9.0)
+- **Neu: Öffentliches Playlist-Verzeichnis** (Werkzeuge › Verzeichnis). Playlists anderer Nutzer durchsuchen
+  (Name, Künstler, Pseudonym, Genre), ansehen und in eigene Playlists übernehmen. Eigene Playlists einzeln und mit
+  Bestätigung veröffentlichen – unter einem Pseudonym, ohne Cover und Musik; aktualisieren und löschen jederzeit.
+  Melden-Knopf: nach mehreren Meldungen wird bis zur Prüfung ausgeblendet; bei eigenen Playlists siehst du Status
+  und Grund. Keine Links, Mail-Adressen oder Telefonnummern in Texten; höchstens 500 Songs und 20 Playlists;
+  Löschung nach 12 Monaten ohne Aktualisierung. Eigene Einwilligung „Öffentliches Playlist-Verzeichnis nutzen“.
 - **Sortier-Vorschau: einzeln oder alle bestätigen.** Jede Playlist hat „Diese übernehmen“; „Alle ausgewählten
   übernehmen“ legt den Rest an. Bereits angelegte Playlists sind markiert und werden beim Sammel-Knopf nicht doppelt angelegt.
 - **Erkennen aufgeräumt:** Hinweistexte stehen nur noch als ⓘ-Icon da – Text beim Drüberfahren (oder per Tab-Taste).

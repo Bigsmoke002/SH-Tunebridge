@@ -41,6 +41,8 @@ const ICONS = {
   clock: `<circle cx="12" cy="12" r="9"/>` + P("M12 7v5l3 2"),
   stack: P("M21 15V6", "M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z", "M12 12H3", "M16 6H3", "M12 18H3"),
   compass: `<circle cx="12" cy="12" r="9"/>` + P("m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"),
+  globe: `<circle cx="12" cy="12" r="9"/>` + P("M3 12h18", "M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"),
+  flag: P("M5 21V4", "M5 4h11l-2 4 2 4H5"),
   split: P("M16 3h5v5", "M8 3H3v5", "M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3", "m15 9 6-6"),
   transfer: P("M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"),
   panel: P("M3 4h18v16H3z", "M9 4v16"),
@@ -3744,6 +3746,10 @@ const Consent = {
       "Nur wenn du unter „Teilen“ Playlists freigibst oder Playlists von Freunden ansiehst: Die Playlists (Titel, Künstler, Album, ISRC, Genre – nie Musik oder Cover) " +
       "werden auf deinem Rechner mit AES-256 verschlüsselt; der Server speichert nur unlesbare Blöcke, eine zufällige Kennung und das Datum der letzten Änderung. " +
       "Keine IP-Adressen, kein Konto. Lesen kann nur, wer deinen Schlüssel hat. Unbenutzte Bereiche werden nach einem Jahr gelöscht."],
+    ["verzeichnis", "Öffentliches Playlist-Verzeichnis nutzen",
+      "Stöbern lädt die Liste veröffentlichter Playlists vom Server (gesendet wird nur die Suchanfrage). Veröffentlichen geht nur einzeln und mit Bestätigung: " +
+      "Name der Playlist, dein selbst gewähltes Pseudonym, Genre, Beschreibung und die Songs (Titel, Künstler, Album, ISRC, Länge, Dienst-IDs – nie Musik oder Cover) " +
+      "sind dann für alle sichtbar. Der Server kennt dich nur als Hash deines Installations-Schlüssels; Löschen jederzeit, automatisch nach 12 Monaten ohne Aktualisierung."],
     ["songs", "Erkannte Songs für die Genre-Analyse senden",
       "Je erkanntem Song: Datum, Künstler, Titel, ISRC, ermitteltes Genre/Subgenre/Nische, Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor, KI-Musik-Hinweis. " +
       "Kein Hörverlauf mit Uhrzeit, keine Playlists, kein Konto. Zweck: Genre-Zuordnung und Song-Analyse für alle verbessern."],
@@ -4351,6 +4357,146 @@ const Share = {
       ${secret ? `<button class="btn btn--sm btn--ghost" data-reveal>Anzeigen</button>` : ""}
       <button class="btn btn--sm" data-copykey="${esc(key)}">${icon("copy")}Kopieren</button></div></div>`;
   },
+};
+
+/* ================================================================= Öffentliches Playlist-Verzeichnis */
+const PubDir = {
+  q: "", genre: "", page: 0, reasons: {},
+  day: ts => new Date(ts * 1000).toLocaleDateString("de-DE"),
+  consent() {
+    modal({ title: "Playlist-Verzeichnis nutzen?", wide: true, confirm: "Erlauben",
+      body: `<div class="cons"><p class="cons-intro">Das Verzeichnis liegt auf dem Server des Entwicklers (Deutschland). Beim <b>Stöbern</b> wird nur die Suchanfrage gesendet.
+        <b>Veröffentlichen</b> geht nur einzeln, mit eigener Bestätigung – dann sind Playlist-Name, dein Pseudonym, Genre, Beschreibung und die Songliste für alle sichtbar.</p>
+        <label class="cons-check"><input type="checkbox" id="pdC1"><span>Ich habe die <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden.</span></label>
+        <label class="cons-check"><input type="checkbox" id="pdC2"><span>Ich erlaube die Verbindung zum Server des Entwicklers für das öffentliche Verzeichnis.</span></label></div>`,
+      onConfirm: async box => {
+        if (!$("#pdC1", box).checked || !$("#pdC2", box).checked) { toast("Bitte beide Punkte bestätigen", "err"); throw { silent: true }; }
+        await api("/api/consent", { method: "POST", body: { privacy: true, server: { domain: true, verzeichnis: true } } });
+        route();
+      } });
+  },
+  card(p) {
+    return `<button class="card pd-card" data-pd="${p.id}">
+      <div class="pd-top"><span class="li-title">${esc(p.name)}</span>${p.info ? tip(p.info) : ""}</div>
+      <div class="cell-sub">von ${esc(p.alias)} · ${p.n} Songs${p.genre ? ` · ${esc(p.genre)}` : ""} · ${this.day(p.updated)}</div></button>`;
+  },
+  async open(id) {
+    let p; try { p = await api(`/api/pubdir/item/${id}`); } catch (e) { return toast(e.message, "err"); }
+    const rows = (p.tracks || []).map((t, i) => `<li><span class="pd-n">${i + 1}</span><span class="pd-t">${esc(t.title)}</span><span class="cell-sub">${esc((t.artists || []).join(", "))}</span></li>`).join("");
+    modal({ title: p.name, wide: true, cancel: "Schließen", confirm: "In meine Playlists übernehmen",
+      text: `von ${esc(p.alias)} · ${p.n} Songs${p.genre ? ` · ${esc(p.genre)}` : ""} · aktualisiert ${this.day(p.updated)}`,
+      body: `${p.info ? `<p class="pd-info">${esc(p.info)}</p>` : ""}<ol class="pd-tracks">${rows}</ol>
+        <div class="pd-foot"><button class="btn btn--sm btn--ghost" id="pdReport">${icon("flag")}Melden</button>
+        <span class="cell-sub">Inhalte stammen von Nutzern. Rechtswidriges oder Persönliches bitte melden.</span></div>`,
+      onConfirm: async () => {
+        const r = await api("/api/pubdir/copy", { method: "POST", body: { id } });
+        toast(`„${r.name}“ angelegt · ${r.count} Songs`); refreshMeta();
+      } });
+    const box = $("#modalBox"); hydrateIcons(box);
+    $("#pdReport", box).onclick = () => this.report(p);
+  },
+  report(p) {
+    modal({ title: `„${p.name}“ melden`, confirm: "Meldung senden", danger: true,
+      text: "Die Meldung geht an den Betreiber. Nach mehreren Meldungen verschiedener Nutzer wird die Playlist bis zur Prüfung ausgeblendet.",
+      body: `<div class="field"><label>Grund</label><select class="input" id="pdRg">${Object.entries(this.reasons).map(([k, v]) => `<option value="${k}">${esc(v)}</option>`).join("")}</select></div>
+        <div class="field" style="margin-top:10px"><label>Begründung (optional)</label><textarea class="input" id="pdRt" maxlength="500" rows="3" style="width:100%"></textarea></div>
+        <p class="cell-sub" style="margin-top:8px">Bitte nur ehrlich und nach bestem Wissen melden. Gesendet wird nur der Grund, deine Begründung und die Kennung deiner Installation (gegen Mehrfach-Meldungen).</p>`,
+      onConfirm: async box => {
+        const r = await api("/api/pubdir/report", { method: "POST", body: { id: p.id, grund: $("#pdRg", box).value, text: $("#pdRt", box).value } });
+        toast(r.schon_gemeldet ? "Du hast diese Playlist schon gemeldet" : "Danke – Meldung ist eingegangen");
+      } });
+  },
+  async publish(pre = {}) {
+    const [pls, mine] = await Promise.all([api("/api/playlists").catch(() => []), api("/api/pubdir/mine").catch(e => { toast(e.message, "err"); return null; })]);
+    if (!mine) return;
+    const locals = pls.filter(p => p.origin === "lokal" && p.count);
+    if (!locals.length) return toast("Du hast noch keine eigenen Playlists mit Songs", "err");
+    const pub = mine.map || {};
+    modal({ title: "Playlist veröffentlichen", wide: true, confirm: "Veröffentlichen",
+      body: `<div class="pd-form">
+        <div class="field"><label>Playlist</label><select class="input" id="pdPl">${locals.map(p => `<option value="${esc(p.name)}" ${p.name === pre.name ? "selected" : ""}>${esc(p.name)} (${p.count})${pub[p.name] ? " – schon veröffentlicht, wird aktualisiert" : ""}</option>`).join("")}</select></div>
+        <div class="field"><label>Dein Pseudonym ${tip("Ein Fantasiename, kein Klarname. Wird bei allen deinen Veröffentlichungen angezeigt.")}</label><input class="input" id="pdAl" maxlength="32" value="${esc(mine.alias || "")}" placeholder="z. B. BassKatze"></div>
+        <div class="field"><label>Genre (optional)</label><input class="input" id="pdGe" maxlength="60" list="pdGenres" value="${esc(pre.genre || "")}"></div>
+        <div class="field"><label>Beschreibung (optional)</label><textarea class="input" id="pdIn" maxlength="300" rows="2"></textarea></div>
+        <p class="cell-sub">Keine Links, E-Mail-Adressen oder Telefonnummern. Höchstens 500 Songs, ${mine.max || 20} Playlists pro Installation.</p>
+        <label class="cons-check"><input type="checkbox" id="pdOk1"><span>Mir ist klar: Name, Pseudonym, Genre, Beschreibung und die Songliste (Titel, Künstler, Album, ISRC, Länge, Dienst-IDs) sind <b>für alle sichtbar</b>. Keine Musik, keine Cover.</span></label>
+        <label class="cons-check"><input type="checkbox" id="pdOk2"><span>Die Texte enthalten keine persönlichen Daten (keinen Klarnamen, keine Kontaktdaten) und verletzen keine Rechte anderer.</span></label>
+        <p class="cell-sub">Löschen kannst du jederzeit unter „Meine Veröffentlichungen“. Ohne Aktualisierung löscht der Server nach 12 Monaten.</p></div>`,
+      onConfirm: async box => {
+        if (!$("#pdOk1", box).checked || !$("#pdOk2", box).checked) { toast("Bitte beide Punkte bestätigen", "err"); throw { silent: true }; }
+        const r = await api("/api/pubdir/publish", { method: "POST", body: { name: $("#pdPl", box).value, alias: $("#pdAl", box).value,
+          genre: $("#pdGe", box).value, info: $("#pdIn", box).value, confirm: true } });
+        toast(`Veröffentlicht · ${r.n} Songs${r.gekappt ? " (auf 500 gekürzt)" : ""}`); route();
+      } });
+    const box = $("#modalBox"); hydrateIcons(box);
+    const fill = () => {        // schon veröffentlicht: bisheriges Genre / bisherige Beschreibung vorbelegen
+      const cur = (mine.playlists || []).find(x => x.id === pub[$("#pdPl", box).value]);
+      if (cur) { $("#pdGe", box).value = cur.genre || ""; $("#pdIn", box).value = cur.info || ""; }
+    };
+    $("#pdPl", box).onchange = fill; fill();
+  },
+  async mine(box) {
+    box.innerHTML = `<div class="hint" style="padding:12px">Lade …</div>`;
+    let d; try { d = await api("/api/pubdir/mine"); } catch (e) { box.innerHTML = `<div class="hint" style="padding:12px">${esc(e.message)}</div>`; return; }
+    const names = Object.fromEntries(Object.entries(d.map || {}).map(([k, v]) => [v, k]));
+    box.innerHTML = d.playlists.length ? d.playlists.map(p => `<div class="sh-pl pd-mine">
+        <div style="min-width:0"><div class="li-title">${esc(p.name)} ${p.status === "sichtbar" ? `<span class="chip chip--ok">sichtbar</span>` : `<span class="chip chip--warn">${esc(p.status)}</span>`}</div>
+          <div class="cell-sub">${p.n} Songs · als ${esc(p.alias)} · aktualisiert ${this.day(p.updated)} · wird gelöscht am ${this.day(p.loeschung)} ohne Aktualisierung${p.grund ? ` · Grund: ${esc(p.grund)}` : ""}</div></div>
+        ${names[p.id] ? `<button class="btn btn--sm btn--ghost" data-pdup="${esc(names[p.id])}" title="Mit dem aktuellen Stand deiner Playlist neu veröffentlichen">${icon("repeat")}Aktualisieren</button>` : ""}
+        <button class="icon-btn" data-pddel="${p.id}" title="Aus dem Verzeichnis löschen">${icon("trash")}</button></div>`).join("")
+        + `<div class="btn-row" style="padding:10px 14px"><button class="btn btn--sm btn--ghost" id="pdDelAll">${icon("trash")}Alle meine Veröffentlichungen löschen</button></div>`
+      : `<div class="hint" style="padding:12px">Du hast noch nichts veröffentlicht.</div>`;
+    hydrateIcons(box);
+    $$("[data-pdup]", box).forEach(b => b.onclick = () => this.publish({ name: b.dataset.pdup }));
+    $$("[data-pddel]", box).forEach(b => b.onclick = () => modal({ title: "Aus dem Verzeichnis löschen?", text: "Die Playlist verschwindet sofort für alle. Deine eigene Playlist bleibt.", confirm: "Löschen", danger: true,
+      onConfirm: async () => { await api("/api/pubdir/delete", { method: "POST", body: { id: b.dataset.pddel } }); toast("Gelöscht"); route(); } }));
+    const all = $("#pdDelAll", box);
+    if (all) all.onclick = () => modal({ title: "Alles löschen?", text: "Alle deine Veröffentlichungen und Meldungen werden auf dem Server sofort gelöscht.", confirm: "Alles löschen", danger: true,
+      onConfirm: async () => { const r = await api("/api/pubdir/delete", { method: "POST", body: { alle: true } }); toast(`${r.geloescht} gelöscht`); route(); } });
+  },
+};
+
+Views.directory = async (main, _x, params) => {
+  if (params) { PubDir.q = params.get("q") ?? PubDir.q; PubDir.genre = params.get("genre") ?? PubDir.genre; PubDir.page = +(params.get("page") || 0); }
+  main.innerHTML = `<div class="page view-enter">${skeletonRows(3)}</div>`;
+  const head = `<div class="page-head"><div><h1>Playlist-Verzeichnis</h1><p>Öffentliche Playlists anderer Nutzer durchstöbern und übernehmen – oder eigene veröffentlichen.
+    Nur Songlisten, keine Musik. ${tip("Veröffentlicht wird nur, was du einzeln freigibst – unter einem Pseudonym. Du kannst jederzeit löschen. Gemeldete Inhalte werden geprüft.")}</p></div></div>`;
+  const qs = new URLSearchParams({ q: PubDir.q, genre: PubDir.genre, page: PubDir.page });
+  let d; try { d = await api(`/api/pubdir?${qs}`); } catch (e) {
+    main.innerHTML = `<div class="page view-enter">${head}<div class="empty">${icon("info")}<h3>Verzeichnis nicht erreichbar</h3><p>${esc(e.message)}</p></div></div>`; return hydrateIcons(main);
+  }
+  PubDir.reasons = d.reasons || {};
+  if (!d.allowed) {
+    main.innerHTML = `<div class="page view-enter">${head}<div class="card sh-off"><div>${icon("globe")}</div><div><h3>Das Verzeichnis ist noch aus</h3>
+      <p>Zum Stöbern und Veröffentlichen braucht es deine Einwilligung, weil das Verzeichnis auf dem Server des Entwicklers liegt.</p>
+      <button class="btn btn--primary" id="pdAllow">Verzeichnis erlauben</button></div></div></div>`;
+    hydrateIcons(main); $("#pdAllow").onclick = () => PubDir.consent(); return;
+  }
+  const pages = Math.max(1, Math.ceil(d.total / (d.seite || 30)));
+  main.innerHTML = `<div class="page view-enter">${head}
+    <div class="card pd-bar"><input class="input" id="pdQ" placeholder="Suchen: Name, Künstler, Pseudonym …" value="${esc(PubDir.q)}" maxlength="80">
+      <select class="input" id="pdG"><option value="">Alle Genres</option>${(d.genres || []).map(g => `<option value="${esc(g.genre)}" ${g.genre === PubDir.genre ? "selected" : ""}>${esc(g.genre)} (${g.n})</option>`).join("")}</select>
+      <button class="btn" id="pdGo">${icon("search")}Suchen</button>
+      <button class="btn btn--primary" id="pdPub">${icon("globe")}Veröffentlichen</button></div>
+    <datalist id="pdGenres">${(d.genres || []).map(g => `<option value="${esc(g.genre)}">`).join("")}</datalist>
+    <div class="section-title">${d.total === 1 ? "1 Playlist" : `${d.total} Playlists`}${PubDir.q || PubDir.genre ? " gefunden" : ""}</div>
+    ${d.playlists.length ? `<div class="pd-grid">${d.playlists.map(p => PubDir.card(p)).join("")}</div>`
+      : `<div class="empty">${icon("globe")}<h3>${PubDir.q || PubDir.genre ? "Nichts gefunden" : "Noch leer"}</h3><p>${PubDir.q || PubDir.genre ? "Andere Suchwörter probieren." : "Sei die erste Person, die eine Playlist veröffentlicht."}</p></div>`}
+    ${pages > 1 ? `<div class="btn-row pd-pages"><button class="btn btn--sm btn--ghost" id="pdPrev" ${PubDir.page ? "" : "disabled"}>Zurück</button>
+      <span class="cell-sub">Seite ${PubDir.page + 1} von ${pages}</span><button class="btn btn--sm btn--ghost" id="pdNext" ${PubDir.page + 1 < pages ? "" : "disabled"}>Weiter</button></div>` : ""}
+    <details class="card pd-minebox" id="pdMineBox"><summary>${icon("chevron")}<b>Meine Veröffentlichungen</b><span class="cell-sub">ändern, Status ansehen, löschen</span></summary><div id="pdMine"></div></details>
+  </div>`;
+  hydrateIcons(main);
+  const go = page => { PubDir.q = $("#pdQ").value.trim(); PubDir.genre = $("#pdG").value; PubDir.page = page; location.hash = `#/directory?${new URLSearchParams({ q: PubDir.q, genre: PubDir.genre, page })}`; };
+  $("#pdGo").onclick = () => go(0);
+  $("#pdQ").onkeydown = e => { if (e.key === "Enter") go(0); };
+  $("#pdG").onchange = () => go(0);
+  const pv = $("#pdPrev"), nx = $("#pdNext");
+  if (pv) pv.onclick = () => go(PubDir.page - 1);
+  if (nx) nx.onclick = () => go(PubDir.page + 1);
+  $("#pdPub").onclick = () => PubDir.publish();
+  $$("[data-pd]", main).forEach(b => b.onclick = e => { if (!e.target.closest(".tip")) PubDir.open(b.dataset.pd); });
+  $("#pdMineBox").ontoggle = e => { if (e.target.open) PubDir.mine($("#pdMine")); };
 };
 
 Views.share = async (main) => {

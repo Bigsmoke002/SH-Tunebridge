@@ -2343,6 +2343,75 @@ def community_sync():
         raise HTTPException(502, str(e))
 
 
+# ------------------------------------------------------------------ Öffentliches Playlist-Verzeichnis
+def _pub(fn, *a, **kw):
+    from .. import pubdir
+    try:
+        return fn(*a, **kw)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except pubdir.PubError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get("/api/pubdir")
+def pubdir_list(q: str = "", genre: str = "", page: int = 0):
+    from .. import consent, pubdir
+    if not consent.server("verzeichnis"):
+        return {"allowed": False, "reasons": pubdir.REASONS}
+    r = _pub(pubdir.browse, q, genre, page)
+    g = _pub(pubdir.genres)
+    return {"allowed": True, **r, "genres": g, "reasons": pubdir.REASONS}
+
+
+@app.get("/api/pubdir/item/{pid}")
+def pubdir_item(pid: str):
+    from .. import pubdir
+    return _pub(pubdir.get, pid)
+
+
+@app.get("/api/pubdir/mine")
+def pubdir_mine():
+    from .. import pubdir
+    return _pub(pubdir.mine)
+
+
+class PubReq(BaseModel):
+    name: str = ""
+    alias: str = ""
+    genre: str = ""
+    info: str = ""
+    confirm: bool = False
+    id: str = ""
+    grund: str = ""
+    text: str = ""
+    alle: bool = False
+
+
+@app.post("/api/pubdir/publish")
+def pubdir_publish(req: PubReq):
+    from .. import pubdir
+    return _pub(pubdir.publish, req.name, req.alias, req.genre, req.info, req.confirm)
+
+
+@app.post("/api/pubdir/delete")
+def pubdir_delete(req: PubReq):
+    from .. import pubdir
+    return _pub(pubdir.unpublish, req.id or None, req.alle)
+
+
+@app.post("/api/pubdir/report")
+def pubdir_report(req: PubReq):
+    from .. import pubdir
+    return _pub(pubdir.report, req.id, req.grund, req.text)
+
+
+@app.post("/api/pubdir/copy")
+def pubdir_copy(req: PubReq):
+    from .. import pubdir
+    return _pub(pubdir.copy, req.id, req.name)
+
+
 class SortStartReq(BaseModel):
     service: str
     playlist: str = ""

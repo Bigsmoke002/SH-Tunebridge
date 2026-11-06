@@ -43,6 +43,9 @@ Ziel-Domain `shtunebridge.bs002.de` wählbar):
   Siehe „Genre-Datenbank“.
 
 - *Playlists teilen* – nur verschlüsselte Blöcke, siehe „Playlists teilen“.
+- *Öffentliches Playlist-Verzeichnis nutzen* – Stöbern sendet nur die Suchanfrage. Veröffentlicht wird nur, was
+  du **einzeln und mit Bestätigung** freigibst; diese Angaben sind dann für alle sichtbar. Siehe
+  „Öffentliches Playlist-Verzeichnis“.
 
 **Laden** (standardmäßig aus): *Gemeinschafts-Genre-Datenbank laden* – einmal am Tag eine signierte Datei
 (nur Song → Genre) vom selben Server. Gesendet wird dabei nur die Anfrage selbst.
@@ -87,6 +90,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Microsoft (nur Windows) | deine IP-Adresse | nur wenn WebView2 fehlt und du der Installation zustimmst (Setup oder Dialog beim Start) |
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
 | Entwickler (`shtunebridge.bs002.de`) – Playlists teilen | nur Ende-zu-Ende-verschlüsselte Blöcke, zufällige Bereichs-Kennung, Prüfwert des Schreib-Schlüssels (technisch deine IP-Adresse) | beim Teilen, Aktualisieren und Ansehen von Freunde-Playlists, **nur mit Einwilligung** „Playlists teilen“ |
+| Entwickler (`shtunebridge.bs002.de`) – Öffentliches Playlist-Verzeichnis | Suchanfrage; beim Veröffentlichen Playlist-Name, Pseudonym, Genre, Beschreibung, Songliste, Kennung deiner Installation (technisch deine IP-Adresse) | beim Stöbern, Veröffentlichen, Melden, **nur mit Einwilligung** „Verzeichnis“ |
 | Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, **nur mit Einwilligung** „laden“ |
 
 Für diese Dienste gelten deren eigene Datenschutzbestimmungen.
@@ -254,6 +258,36 @@ oder lösche den Bereich und lege einen neuen an.
 Bilder. Teile nur Playlists, die du selbst erstellt hast, und keine personenbezogenen Daten anderer (z. B. in
 Playlist-Namen). Für das, was du teilst, bist du selbst verantwortlich. Playlists von Freunden werden nur
 angezeigt; „In meine Playlists“ kopiert die Songliste in eine eigene, lokale Playlist.
+
+## Öffentliches Playlist-Verzeichnis (Standard: aus)
+
+Unter **Verzeichnis** kannst du Playlists anderer Nutzer durchstöbern, in eigene Playlists übernehmen und eigene
+Playlists für alle sichtbar veröffentlichen. Dafür braucht es die Einwilligung „Öffentliches Playlist-Verzeichnis
+nutzen“ (Art. 6 Abs. 1 lit. a DSGVO), weil das Verzeichnis auf dem Server des Entwicklers liegt.
+
+- **Stöbern:** gesendet wird nur die Suchanfrage (Suchwörter, Genre, Seite) – technisch auch deine IP-Adresse,
+  die die Annahme-Software nicht speichert (siehe „Technik vor dem Server“).
+- **Veröffentlichen** geht nur einzeln, mit zwei ausdrücklichen Bestätigungen. **Für alle sichtbar** sind dann:
+  Name der Playlist, dein selbst gewähltes **Pseudonym** (bitte kein Klarname), Genre, Beschreibung, Datum der
+  letzten Änderung und je Song Titel, Künstler, Album, ISRC, Länge, Genre und Kennungen bei den Diensten.
+  **Nie:** Musik, Hörproben, Cover, Konten, Rechnernamen.
+- **Zuordnung:** Der Server speichert zusätzlich die Kennung deiner Installation (Hash deines
+  Installations-Schlüssels), damit nur du deine Playlists ändern und löschen kannst. Sie ist für andere nicht
+  sichtbar.
+- **Texte:** Links, E-Mail-Adressen und Telefonnummern werden abgelehnt (gegen Spam und versehentlich
+  veröffentlichte Kontaktdaten). Höchstens 500 Songs je Playlist und 20 Playlists je Installation.
+- **Löschen:** jederzeit einzeln oder alles unter Verzeichnis › „Meine Veröffentlichungen“ – sofort, für alle.
+  Das geht auch nach Widerruf der Einwilligung. Ohne Aktualisierung löscht der Server eine Playlist nach
+  12 Monaten automatisch.
+- **Melden (Art. 16 DSA):** Jede Playlist lässt sich mit Grund und optionaler Begründung melden. Gespeichert werden
+  Grund, Begründung, Datum und die Kennung der meldenden Installation (nur gegen Mehrfach-Meldungen). Nach
+  Meldungen von drei verschiedenen Installationen wird die Playlist automatisch ausgeblendet, bis der Betreiber
+  sie geprüft hat. Bei deinen eigenen Playlists siehst du Status und Grund einer Ausblendung oder Sperre
+  (Art. 17 DSA); Fragen und Widerspruch bitte per E-Mail an den Verantwortlichen (oben). Meldungen werden mit
+  der Playlist gelöscht.
+- **Verantwortung:** Veröffentliche nur Songlisten, die du selbst zusammengestellt hast, und keine Daten anderer
+  Menschen. Für deine Texte bist du selbst verantwortlich. Übernommene Playlists werden nur als Songliste in eine
+  lokale Playlist kopiert.
 
 ## YouTube- und SoundCloud-Login
 
