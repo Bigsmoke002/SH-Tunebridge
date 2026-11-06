@@ -15,6 +15,7 @@ import io
 import re
 import shutil
 import subprocess
+import time
 import wave
 from dataclasses import dataclass, field
 
@@ -169,11 +170,45 @@ def status() -> list[dict]:
 
 
 # ------------------------------------------------------------------ Zwischenablage
+def _win_clipboard() -> str | None:
+    """Windows: Text direkt über die Windows-Schnittstelle lesen – ohne PowerShell, also ohne Konsolenfenster."""
+    import ctypes
+    from ctypes import wintypes
+    u32, k32 = ctypes.WinDLL("user32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+    u32.OpenClipboard.argtypes, u32.GetClipboardData.argtypes = [wintypes.HWND], [wintypes.UINT]
+    u32.GetClipboardData.restype = wintypes.HANDLE
+    k32.GlobalLock.argtypes, k32.GlobalLock.restype = [wintypes.HGLOBAL], ctypes.c_void_p
+    k32.GlobalUnlock.argtypes = [wintypes.HGLOBAL]
+    CF_UNICODETEXT = 13
+    for _ in range(10):                       # kann kurz von einem anderen Programm belegt sein
+        if u32.OpenClipboard(None):
+            break
+        time.sleep(0.02)
+    else:
+        return None
+    try:
+        h = u32.GetClipboardData(CF_UNICODETEXT)
+        if not h:
+            return None
+        p = k32.GlobalLock(h)
+        if not p:
+            return None
+        try:
+            return ctypes.wstring_at(p)
+        finally:
+            k32.GlobalUnlock(h)
+    finally:
+        u32.CloseClipboard()
+
+
 def read_clipboard() -> str | None:
     import sys
     if sys.platform == "win32":
-        cmds = [["powershell", "-NoProfile", "-Command", "Get-Clipboard -Raw"]]
-    elif sys.platform == "darwin":
+        try:
+            return (_win_clipboard() or "").strip() or None
+        except (OSError, AttributeError, ValueError):
+            return None
+    if sys.platform == "darwin":
         cmds = [["pbpaste"]]
     else:
         cmds = []

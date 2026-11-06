@@ -14,6 +14,8 @@ from pathlib import Path
 
 LINUX = sys.platform.startswith("linux")
 WINDOWS = sys.platform == "win32"
+# Unterprozesse unter Windows nie mit sichtbarem Konsolenfenster starten (wirkte wie „Schadsoftware“)
+NO_WINDOW: dict = {"creationflags": 0x08000000} if WINDOWS else {}   # CREATE_NO_WINDOW
 MACOS = sys.platform == "darwin"
 NAME = "Linux" if LINUX else "Windows" if WINDOWS else "macOS" if MACOS else sys.platform
 

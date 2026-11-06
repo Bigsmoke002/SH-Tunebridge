@@ -1769,9 +1769,26 @@ def _companion_start(cfg: dict, port: int | None) -> None:
         env["QT_QPA_PLATFORM"] = "xcb"     # XWayland: „immer im Vordergrund“ + freie Position sind erlaubt
     cmd = [sys.executable, "companion", "--port", str(port)] if getattr(sys, "frozen", False) else \
         [sys.executable, "-c", f"from tunebridge.companion import main; main({port})"]
-    _companion["proc"] = subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+    from .. import osutil
+    if osutil.WINDOWS and not getattr(sys, "frozen", False):   # Entwickler-Start: pythonw statt python (kein Konsolenfenster)
+        pw = Path(sys.executable).with_name("pythonw.exe")
+        if pw.exists():
+            cmd[0] = str(pw)
+    _companion["proc"] = subprocess.Popen(cmd, env=env, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, **osutil.NO_WINDOW,
                                           stderr=subprocess.DEVNULL, start_new_session=True)
     dbg.event("begleiter", "Gestartet", tray=cfg["tray"], schwebe_icon=cfg["bubble"])
+
+
+def companion_stop(wait: float = 3) -> None:
+    """Begleit-Prozess sofort beenden (vor einem Update – unter Windows sperrt er sonst den Programmordner)."""
+    p = _companion["proc"]
+    if p is None or p.poll() is not None:
+        return
+    p.terminate()
+    try:
+        p.wait(wait)
+    except Exception:  # noqa: BLE001
+        p.kill()
 
 
 @app.get("/api/companion")
@@ -1780,7 +1797,9 @@ def companion_get():
     raw = store.meta_get("appearance")
     look = json.loads(raw) if raw else {}
     ok, why = companion_available()
+    p = _companion["proc"]
     return {**_comp_cfg(), "accent": look.get("accent", "#6cc8a8"), "available": ok, "why": why,
+            "running": bool(p is not None and p.poll() is None),
             "desktop": bool(WINDOW_HOOKS), "source": _prefs().get("device_desktop") or "desktop"}
 
 

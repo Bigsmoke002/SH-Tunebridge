@@ -13,9 +13,18 @@ ICON = str(ROOT / "assets/logo/logo-256.png")   # wird von PyInstaller (mit Pill
 datas = collect_data_files("tunebridge", excludes=["**/__pycache__/**"])
 datas += [(str(ROOT / "LICENSE"), "."), (str(ROOT / "THIRD_PARTY.md"), "."), (str(ROOT / "DATENSCHUTZ.md"), ".")]
 hidden = collect_submodules("tunebridge") + collect_submodules("uvicorn") + ["soundcard", "webview"]
+excl = ["tkinter", "PyQt5", "PyQt6", "pytest", "IPython"]
+if sys.platform == "win32":   # Begleiter (Tray + Schwebe-Icon) braucht nur Qt Core/Gui/Widgets/Svg
+    hidden += ["PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets", "PySide6.QtSvg"]
+    excl += ["PySide6." + m for m in ("QtQml", "QtQuick", "QtQuickWidgets", "QtQuickControls2", "QtNetwork", "QtOpenGL",
+                                      "QtOpenGLWidgets", "QtPrintSupport", "QtSql", "QtTest", "QtXml", "QtDBus",
+                                      "QtConcurrent", "QtDesigner", "QtHelp", "QtUiTools", "QtWebEngineCore",
+                                      "QtWebEngineWidgets", "QtMultimedia", "Qt3DCore", "QtCharts")]
+else:
+    excl += ["PySide6"]
 
 a = Analysis([str(Path(SPECPATH) / "entry.py")], pathex=[str(ROOT / "src")], datas=datas, hiddenimports=hidden,
-             excludes=["tkinter", "PySide6", "PyQt5", "PyQt6", "pytest", "IPython"], noarchive=False)
+             excludes=excl, noarchive=False)
 pyz = PYZ(a.pure)
 exe = EXE(pyz, a.scripts, [], exclude_binaries=True, name="SH-Tunebridge", icon=ICON,
           console=False, upx=False, argv_emulation=False)

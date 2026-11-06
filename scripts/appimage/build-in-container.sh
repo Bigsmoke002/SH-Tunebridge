@@ -84,8 +84,10 @@ if [ -n "$CORE" ]; then
 fi
 
 echo "› Häufig fehlende Qt-Hilfsbibliotheken neben Qt ablegen (kein globales LD_LIBRARY_PATH)"
+# libxkbcommon.so.0 MUSS mit: libxkbcommon-x11 nutzt interne Teile genau ihrer eigenen Version – mit der (neueren)
+# System-libxkbcommon gemischt stürzt Qt beim Verbinden mit X11 ab (Speicherzugriffsfehler, betraf das Schwebe-Icon).
 for l in libxcb-cursor.so.0 libxcb-icccm.so.4 libxcb-image.so.0 libxcb-keysyms.so.1 libxcb-render-util.so.0 \
-         libxcb-util.so.1 libxcb-xkb.so.1 libxkbcommon-x11.so.0; do
+         libxcb-util.so.1 libxcb-xkb.so.1 libxkbcommon.so.0 libxkbcommon-x11.so.0; do
   cp -L "/usr/lib/x86_64-linux-gnu/$l" "$QT/Qt/lib/"
   patchelf --set-rpath '$ORIGIN' "$QT/Qt/lib/$l"   # eigene Abhängigkeiten im selben Ordner finden
 done

@@ -291,8 +291,9 @@ def _cli(p: str, prompt: str, wait: float) -> str:
         # eigene Umgebung: keine Variablen einer evtl. umgebenden Claude-Code-Sitzung weiterreichen
         env = {k: v for k, v in os.environ.items() if not (k.startswith("CLAUDE") or k == "CLAUDECODE")}
         try:
+            from .osutil import NO_WINDOW
             r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, cwd=tmp, env=env,
-                               timeout=max(wait, 60), encoding="utf-8", errors="replace")
+                               timeout=max(wait, 60), encoding="utf-8", errors="replace", **NO_WINDOW)
         except subprocess.TimeoutExpired as e:
             raise AIError(f"{PROVIDERS[p]['name']}: keine Antwort in {int(max(wait, 60))} s") from e
         text = out_file.read_text(encoding="utf-8") if out_file.exists() else r.stdout

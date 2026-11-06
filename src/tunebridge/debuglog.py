@@ -158,7 +158,8 @@ def error(area: str, msg: str, exc: BaseException | None = None, **data) -> None
 # ------------------------------------------------------------------ Bericht
 def _cmd(*args: str) -> str:
     try:
-        return subprocess.run(args, capture_output=True, text=True, timeout=4).stdout.strip()
+        from .osutil import NO_WINDOW
+        return subprocess.run(args, capture_output=True, text=True, timeout=4, **NO_WINDOW).stdout.strip()
     except Exception:
         return ""
 

@@ -544,6 +544,11 @@ def _swap_and_restart() -> None:
     if not sw:
         raise RuntimeError("Update ist nicht installiert")
     pid, t, n, w = os.getpid(), sw["target"], sw["new"], sw["work"]
+    try:                      # Tray/Schwebe-Icon läuft aus demselben Ordner -> vor dem Tausch beenden
+        from .web import app as web
+        web.companion_stop()
+    except Exception:  # noqa: BLE001
+        pass
     if osutil.WINDOWS:
         q = lambda x: "'" + x.replace("'", "''") + "'"  # noqa: E731 – PowerShell-String
         script = Path(w) / "tausch.ps1"

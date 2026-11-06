@@ -75,6 +75,25 @@ try:
         out = q.stdout.read().decode("utf-8", "replace")[-4000:]
         sys.exit(f"App-Fenster beendet sich sofort (Code {q.returncode}):\n{out}")
     print("App-Fenster läuft – Rauchtest Fenster OK", win)
+    if sys.platform == "win32":
+        base = f"http://127.0.0.1:{app_port}"
+        post = lambda path, body: json.load(urllib.request.urlopen(urllib.request.Request(  # noqa: E731
+            base + path, data=json.dumps(body).encode(), headers={"Content-Type": "application/json"}), timeout=15))
+        # Begleiter (Tray + Schwebe-Icon): muss starten und laufen bleiben (0.9.1: fehlte unter Windows ganz)
+        c = post("/api/companion", {"tray": True, "bubble": True})
+        assert c["available"], c
+        time.sleep(8)
+        c = json.load(urllib.request.urlopen(base + "/api/companion", timeout=5))
+        assert c["running"], f"Begleiter läuft nicht: {c}"
+        print("Begleiter läuft – OK")
+        post("/api/companion", {"tray": False, "bubble": False})
+        # Zwischenablage: direkt über Windows lesen, ohne PowerShell-Fenster
+        url = "https://example.org/rauchtest"
+        if subprocess.run(["powershell", "-NoProfile", "-Command", f"Set-Clipboard -Value '{url}'"],
+                          capture_output=True).returncode == 0:
+            got = post("/api/clipboard/read", {})["text"]
+            assert got == url, f"Zwischenablage: {got!r}"
+            print("Zwischenablage OK")
 finally:
     q.kill()
     try:
