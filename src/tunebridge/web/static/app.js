@@ -3670,6 +3670,10 @@ const Consent = {
       "Je Song, den du eingeordnet hast (Playlist-Analyse oder „Genre festlegen“): Datum, Künstler, Titel, ISRC, Genre, Subgenre und Herkunft " +
       "(Playlist-Name / App / KI / von dir geändert). Nie gesendet: Playlist-Namen, ganze Playlists, Konten. Zweck: eine gemeinsame Genre-Datenbank, " +
       "die erst übernimmt, was mehrere Installationen unabhängig voneinander melden. Nur Einordnungen ab jetzt."],
+    ["bibliothek", "Genres meiner Bibliothek beitragen",
+      "Je Song, den die App schon kennt (Erkennen, Sortieren, „Alles einlesen“): Datum, Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit. Das Genre wird nur aus " +
+      "freien Quellen abgeleitet (MusicBrainz, Angaben im Titel) – nie aus Last.fm-, Deezer- oder Apple-Daten. Auch bereits vorhandene Songs, höchstens 2000 insgesamt. " +
+      "Nie Playlist-Namen, Playlists, Konten oder Hörzeiten. Zweck: die Gemeinschafts-Genre-Datenbank vergrößern."],
     ["genredb", "Gemeinschafts-Genre-Datenbank laden",
       "Lädt einmal am Tag die signierte Datenbank (nur Song → Genre, keine Nutzerdaten) von diesem Server und nutzt sie bei der Erkennung. " +
       "Gesendet wird dabei nichts außer der Anfrage selbst; die Signatur wird vor der Nutzung geprüft."],
@@ -3950,6 +3954,68 @@ const Misses = {
 const fmtBytes = n => n >= 1e9 ? `${(n / 1e9).toLocaleString("de-DE", { maximumFractionDigits: 2 })} GB` : n >= 1e6 ? `${(n / 1e6).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`
   : n >= 1e3 ? `${Math.round(n / 1e3)} KB` : `${n | 0} B`;
 const fmtRate = n => `${fmtBytes(n)}/s`;
+/* Einstellungen › Gemeinschaft: Genres beitragen (manuell/automatisch) und die Gemeinschafts-Datenbank laden */
+const Community = {
+  OPTS: [
+    ["genres", "Eigene Einordnungen beitragen", "Songs, deren Genre du selbst festgelegt oder beim Sortieren korrigiert hast: Künstler, Titel, ISRC, Genre, Subgenre, Herkunft. Zählen am meisten."],
+    ["bibliothek", "Genres meiner Bibliothek beitragen", "Für die Songs, die die App schon kennt (Erkennen, Sortieren, „Alles einlesen“): Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit. Das Genre wird dafür nur aus freien Quellen abgeleitet (MusicBrainz, Angaben im Titel) und nur gesendet, wenn es mit dem Ergebnis der App übereinstimmt – Daten von Last.fm, Deezer oder Apple fließen nicht ein. Nie Playlist-Namen, Playlists, Konten oder Hörzeiten."],
+    ["genredb", "Gemeinschafts-Datenbank laden", "Holt die signierte Datenbank (nur Song → Genre, keine Nutzerdaten) und nutzt sie beim Erkennen und Sortieren. Gesendet wird dabei nur die Anfrage."],
+  ],
+  async render(box) {
+    if (!box) return;
+    let d; try { d = await api("/api/community"); } catch (e) { box.innerHTML = `<div class="notice">${icon("info")}<div>${esc(e.message)}</div></div>`; return hydrateIcons(box); }
+    const ago = ts => ts ? new Date(ts * 1000).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie";
+    const ready = d.privacy && d.domain;
+    const any = Object.values(d.consent).some(Boolean);
+    const last = d.last ? `${ago(d.last.ts)}${["genres", "bibliothek", "genredb"].some(k => d.last[k]) ? ` – ${[d.last.genres && `${d.last.genres} Einordnungen`, d.last.bibliothek && `${d.last.bibliothek} Bibliotheks-Songs`, d.last.genredb && "Datenbank aktualisiert"].filter(Boolean).join(", ")}` : " – nichts Neues"}` : "noch nie";
+    box.innerHTML = `
+      ${ready ? "" : `<div class="card set-group" style="margin-bottom:14px"><div class="set-row" style="grid-template-columns:1fr"><div>
+        <div class="lbl">${icon("info")} Zuerst bestätigen</div>
+        <label class="cons-check"><input type="checkbox" id="cmP" ${d.privacy ? "checked disabled" : ""}><span>Ich habe die <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden.</span></label>
+        <label class="cons-check"><input type="checkbox" id="cmD"><span>Ich erlaube, dass die unten ausgewählten Daten an den Server des Entwicklers (Deutschland) gesendet bzw. von dort geladen werden.</span></label>
+      </div></div></div>`}
+      <div class="card set-group">
+        ${this.OPTS.map(([id, lbl, hint]) => `<div class="set-row"><div><div class="lbl">${esc(lbl)}</div><div class="hint">${esc(hint)}</div></div><div></div>
+          <label class="switch"><input type="checkbox" data-cm="${id}" ${d.consent[id] ? "checked" : ""}><span class="track"></span></label></div>`).join("")}
+        <div class="set-row"><div><div class="lbl">Abgleich</div><div class="hint">${d.mode === "auto" ? "Automatisch: im Hintergrund etwa alle 6 Stunden (Datenbank einmal am Tag)." : "Manuell: nur, wenn du unten auf „Jetzt abgleichen“ klickst."}</div></div>
+          <div class="segmented" id="cmMode"><button data-mode="manuell" class="${d.mode === "manuell" ? "on" : ""}">Manuell</button><button data-mode="auto" class="${d.mode === "auto" ? "on" : ""}">Automatisch</button></div><div></div></div>
+      </div>
+      <div class="section-title">Stand</div>
+      <div class="card set-group"><dl class="kv">
+        <dt>Eigene Einordnungen</dt><dd>${d.votes.total} gesamt · ${d.votes_pending} noch nicht beigetragen</dd>
+        <dt>Bibliothek</dt><dd>${d.lib_sent} von höchstens ${d.lib_max} beigetragen · ${d.lib_pending} bereit</dd>
+        <dt>Gemeinschafts-Datenbank</dt><dd>${d.community?.songs != null ? `${d.community.songs} Songs · Stand ${esc(d.community.created || "?")}` : "noch nicht geladen"}</dd>
+        <dt>Letzter Abgleich</dt><dd>${esc(last)}</dd>
+      </dl>
+      <div class="btn-row" style="padding:10px 14px 14px"><button class="btn btn--primary" id="cmSync" ${any && ready ? "" : "disabled"}>${icon("repeat")}Jetzt abgleichen</button>
+        <span class="cell-sub">Pro Abgleich höchstens ${d.lib_per_sync} Bibliotheks-Songs und 200 Einordnungen – der Rest folgt beim nächsten Mal.</span></div></div>
+      <p class="cell-sub" style="margin-top:10px">Widerrufen: Schalter aus. Bereits Gesendetes löschst du unter <a href="#/settings?tab=datenschutz">Datenschutz</a> („Meine Daten beim Entwickler löschen“).</p>`;
+    hydrateIcons(box);
+    $$("[data-cm]", box).forEach(i => i.onchange = async () => {
+      if (!ready && i.checked && !(($("#cmP", box)?.checked) && $("#cmD", box)?.checked)) {
+        i.checked = false; return toast("Bitte zuerst beide Punkte oben bestätigen", "err");
+      }
+      try {
+        await api("/api/consent", { method: "POST", body: { privacy: true, server: { ...(ready ? {} : { domain: true }), [i.dataset.cm]: i.checked } } });
+        toast(i.checked ? "Erlaubt" : "Ausgeschaltet"); this.render(box);
+      } catch (e) { i.checked = !i.checked; toast(e.message, "err"); }
+    });
+    $$("#cmMode button", box).forEach(b => b.onclick = async () => {
+      await api("/api/community/mode", { method: "POST", body: { mode: b.dataset.mode } }).catch(e => toast(e.message, "err"));
+      this.render(box);
+    });
+    $("#cmSync", box).onclick = async e => {
+      const b = e.currentTarget; b.disabled = true; b.innerHTML = `${icon("repeat")}Gleiche ab …`; hydrateIcons(b);
+      try {
+        const r = await api("/api/community/sync", { method: "POST" }), x = r.done || {};
+        const parts = [x.genres && `${x.genres} Einordnungen`, x.bibliothek && `${x.bibliothek} Bibliotheks-Songs`].filter(Boolean);
+        toast(`${parts.length ? `Beigetragen: ${parts.join(", ")}` : "Nichts Neues zu senden"}${x.genredb ? ` · Datenbank: ${x.genredb} Songs` : ""}`);
+      } catch (err) { toast(err.message, "err"); }
+      this.render(box);
+    };
+  },
+};
+
 const Traffic = {
   pend: new Map(), timer: null,
   // Was das Fenster selbst lädt (Cover, Hörproben) – Größen fremder Server verrät der Browser oft nicht -> Schätzwert
@@ -4090,7 +4156,7 @@ const DiscordUI = {
 const SETTING_GROUPS = [
   ["Allgemein", [["allgemein", "Version & Rechner", "sliders"], ["darstellung", "Darstellung", "palette"], ["dienste", "Konten & Dienste", "key"], ["discord", "Discord-Status", "chat"]]],
   ["Analyse", [["ki", "KI & API-Keys", "sparkle"], ["genres", "Genres", "disc"], ["erkennung", "Erkennung", "wave"]]],
-  ["Daten", [["sicherung", "Sicherung", "archive"], ["datenschutz", "Datenschutz", "info"], ["traffic", "Datenverbrauch", "transfer"], ["speicher", "Speicher & Cache", "archive"],
+  ["Daten", [["sicherung", "Sicherung", "archive"], ["gemeinschaft", "Gemeinschaft", "share"], ["datenschutz", "Datenschutz", "info"], ["traffic", "Datenverbrauch", "transfer"], ["speicher", "Speicher & Cache", "archive"],
              ["nichterkannt", "Nicht erkannt", "search"], ["debug", "Debug-Protokoll", "pencil"]]],
 ];
 const SETTING_TABS = SETTING_GROUPS.flatMap(g => g[1]);
@@ -4130,6 +4196,7 @@ Views.settings = async (main) => {
       ${sec("Shazam")}<div class="card set-group"><div class="set-row"><div><div class="lbl"><span class="status-dot on"></span>Shazam</div><div class="hint">Immer aktiv, braucht keinen Schlüssel.</div></div><div></div><div></div></div></div>
       ${sec("Weitere Erkennungsdienste", "Optional – nur mit deinem eigenen Schlüssel. Ob Audio dorthin gesendet werden darf, legst du unter Datenschutz fest.")}${keys(["AUDD_API_TOKEN", "ACRCLOUD_HOST", "ACRCLOUD_ACCESS_KEY", "ACRCLOUD_ACCESS_SECRET"])}`,
     datenschutz: () => `${sec("Datenschutz")}<div id="privacyBox"></div>`,
+    gemeinschaft: () => `${sec("Gemeinschafts-Genre-Datenbank", "Je mehr Installationen ihre Genres beitragen, desto besser wird die gemeinsame Datenbank – und davon profitiert die Erkennung bei allen. Übernommen wird ein Genre erst, wenn mehrere Installationen unabhängig dasselbe melden.")}<div id="communityBox"></div>`,
     sicherung: () => `<div class="cell-sub set-sub">Alles steckt in einer SQLite-Datenbank – hier sicherst du sie und holst sie auf einem neuen Rechner zurück.</div><div id="backupBox"></div>`,
     traffic: () => `${sec("Datenverbrauch", "Wie viel SH-Tunebridge über das Internet lädt und sendet – gerade, heute und insgesamt, aufgeteilt nach Dienst.")}<div id="trafficBox"></div>`,
     discord: () => `${sec("Discord-Status", "Zeig deinen Freunden in Discord, was gerade läuft – du bestimmst genau, was zu sehen ist.")}<div id="discordBox"></div>`,
@@ -4156,6 +4223,7 @@ Views.settings = async (main) => {
   if (tab === "darstellung") Look.render($("#lookBox"));
   if (tab === "genres") Genres.render($("#genreBox"));
   if (tab === "datenschutz") Privacy.render($("#privacyBox"));
+  if (tab === "gemeinschaft") Community.render($("#communityBox"));
   if (tab === "speicher") Storage.render($("#storageBox"));
   if (tab === "traffic") Traffic.render($("#trafficBox"));
   if (tab === "sicherung") await Views.backup($("#backupBox"));
@@ -4401,9 +4469,12 @@ Views.services = async (main, _, params) => {
     return `<div class="card platform svc-card ${off ? "planned" : ""}"><div class="p-logo" style="--pc:${c}">${m}</div>
       <div><h4>${esc(s.name)} ${badge}</h4><p>${esc(s.note)}</p>${s.error && !s.ready ? `<p class="svc-err">${icon("info")}${esc(s.error)}</p>` : ""}<div class="btn-row">${act}</div></div></div>`;
   };
-  $(".page", main).innerHTML = `<div class="page-head"><div><h1>Dienste</h1><p>Deine Playlists bei den Musikanbietern ansehen und als Vorschau sortieren lassen – vom passenden Mix bis zum Mikro-Genre. Gelesen werden nur Titel, Künstler und Album – nie Musik.</p></div></div>
+  const scanable = list.filter(s => (s.ready || s.import) && s.kind !== "none");
+  $(".page", main).innerHTML = `<div class="page-head"><div><h1>Dienste</h1><p>Deine Playlists bei den Musikanbietern ansehen und als Vorschau sortieren lassen – vom passenden Mix bis zum Mikro-Genre. Gelesen werden nur Titel, Künstler und Album – nie Musik.</p></div>
+      ${scanable.length ? `<div class="actions"><button class="btn btn--primary" id="scanAll">${icon("layers")}Alles einlesen</button></div>` : ""}</div>
     <div class="platforms">${list.map(card).join("")}</div>`;
   hydrateIcons(main);
+  const sa = $("#scanAll", main); if (sa) sa.onclick = () => scanAllDialog(scanable);
   $$("[data-open]", main).forEach(b => b.onclick = () => location.hash = `#/services?svc=${b.dataset.open}`);
   $$("[data-login]", main).forEach(b => b.onclick = async () => { const plats = await api("/api/platforms"); platformLogin(plats.find(p => p.id === b.dataset.login), main); });
   $$("[data-connect]", main).forEach(b => b.onclick = () => connectService(b.dataset.connect, main));
@@ -4488,12 +4559,36 @@ Views.svcPlaylist = async (main, sid, pid, name) => {
   $("#plReload").onclick = async () => { await svcTracks(sid, pid, true).catch(e => toast(e.message, "err")); Views.svcPlaylist(main, sid, pid, name); };
 };
 
+/* „Alles einlesen“: alle verbundenen Dienste auf einmal in die Sortier-Vorschau */
+function scanAllDialog(scanable) {
+  const row = (id, lbl, hint, on) => `<label class="cons-row"><span class="switch"><input type="checkbox" data-sa="${id}" ${on ? "checked" : ""}><span class="track"></span></span>
+    <div><div class="lbl">${lbl}</div>${hint ? `<div class="hint">${hint}</div>` : ""}</div></label>`;
+  modal({ title: "Alles einlesen", wide: true, confirm: "Einlesen starten",
+    body: `<div class="cons"><p class="cons-intro">Liest deine Musik aus allen gewählten Diensten auf einmal ein, führt doppelte Songs zusammen
+      und zeigt danach die Sortier-Vorschau – gespeichert wird erst, wenn du dort „Übernehmen“ klickst.</p>
+      <div class="cons-h">Dienste</div>
+      ${scanable.map(s => row(`svc:${s.id}`, esc(s.name), s.account ? esc(s.account) : s.import ? "importierte Datei" : "", true)).join("")}
+      <div class="cons-h">Was einlesen?</div>
+      ${row("k:liked", "Lieblingssongs", "Gelikte Songs / Loved Tracks", true)}
+      ${row("k:own", "Eigene Playlists", "", true)}
+      ${row("k:followed", "Gefolgte Playlists anderer", "Playlists, die du nur abonniert hast – oft sehr groß", false)}
+      <p class="hint" style="margin-top:10px">Grenzen: höchstens 300 Playlists pro Dienst und 10.000 verschiedene Songs. Bittet ein Dienst um eine Pause,
+      wartet die App sie ab – große Bibliotheken brauchen deshalb etwas Zeit (läuft im Hintergrund weiter). Gelesen wird nur über die offiziellen
+      Schnittstellen mit deinem eigenen Login.</p></div>`,
+    onConfirm: box => {
+      const on = $$("[data-sa]", box).filter(i => i.checked).map(i => i.dataset.sa);
+      const sids = on.filter(x => x.startsWith("svc:")).map(x => x.slice(4)), kinds = on.filter(x => x.startsWith("k:")).map(x => x.slice(2));
+      if (!sids.length || !kinds.length) { toast("Bitte mindestens einen Dienst und eine Art auswählen", "err"); throw { silent: true }; }
+      location.hash = `#/services?svc=__all__&pl=${encodeURIComponent(`${sids.join(",")}|${kinds.join(",")}`)}&name=${encodeURIComponent("Alle Dienste")}`;
+    } });
+}
+
 Views.sortPreview = async (main, sid, pid, name) => {
   const ai = await api("/api/ai").catch(() => null);
   const aiOk = !!ai?.ready?.[0];
   const same = Sorter.job && Sorter.svc === sid && Sorter.pl === pid;
   main.innerHTML = `<div class="page view-enter">
-    <div class="page-head"><div><a href="#/services${sid === "apple" ? "" : `?svc=${sid}`}" class="muted" style="font-size:13px">← zurück</a><h1>${esc(name || "Playlist")} sortieren</h1>
+    <div class="page-head"><div><a href="#/services${sid === "apple" || sid === "__all__" ? "" : `?svc=${sid}`}" class="muted" style="font-size:13px">← zurück</a><h1>${esc(name || "Playlist")} sortieren</h1>
       <p>Erst eine Vorschau: Die Songs werden analysiert (Genre, Mikro-Genre, Tempo, Tonart, Energie) und in Gruppen eingeteilt. Gespeichert wird erst, wenn du „Übernehmen“ klickst.</p></div></div>
     <div class="card sort-head">
       <div class="set-row"><div><div class="lbl">${icon("sparkle")} Mit KI prüfen</div><div class="hint">${aiOk ? `Die KI (${esc(ai.providers.find(p => p.id === ai.provider)?.name || ai.provider)}) kontrolliert die Genres und korrigiert nur, wo sie sich sicher ist. Gesendet werden Künstler, Titel, Tags.` : `Nicht eingerichtet: ${esc(ai?.ready?.[1] || "KI aus")} – <a href="#/settings?tab=ki">Einstellungen › KI</a>`}</div></div><div></div>
@@ -4532,17 +4627,32 @@ async function pollSort(main) {
   while (Sorter.job === jid && document.body.contains($("#srtJob"))) {
     let j; try { j = await api(`/api/sort/${jid}`); } catch (e) { toast(e.message, "err"); return; }
     const box = $("#srtJob"); if (!box) return;
-    if (j.state === "done") { box.innerHTML = ""; Sorter.items = j.items; Sorter.meta = j; return renderSort(main); }
+    if (j.state === "done") {
+      box.innerHTML = ""; Sorter.items = j.items; Sorter.meta = j;
+      if (j.scan) scanSummary(j.scan);
+      return renderSort(main);
+    }
     if (["error", "cancelled"].includes(j.state)) { box.innerHTML = `<div class="notice">${icon("info")}<div>${j.state === "error" ? esc(j.error) : "Abgebrochen."}</div></div>`; hydrateIcons(box); return; }
-    const pct = j.total ? Math.round(j.done / j.total * 100) : 0;
+    const sc = j.scan, scanning = sc && j.state === "loading";
+    const pct = scanning ? (sc.n ? Math.round(sc.i / sc.n * 100) : 0) : j.total ? Math.round(j.done / j.total * 100) : 0;
     const pause = (j.pausen || []).map(p => `${esc(p.label)} (noch ${p.s} s)`).join(", ");
-    box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>${esc(SORT_STATE[j.state] || j.state)}</b><span class="cell-sub">${j.done}/${j.total || "?"}</span>
+    box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>${esc(scanning ? "Lese deine Dienste ein …" : SORT_STATE[j.state] || j.state)}</b><span class="cell-sub">${scanning ? `Liste ${sc.i}/${sc.n || "?"}` : `${j.done}/${j.total || "?"}`}</span>
       <button class="btn btn--xs btn--ghost" id="srtCancel">Abbrechen</button></div><div class="llm-bar"><div style="width:${pct}%"></div></div>
       ${pause ? `<div class="cell-sub" style="margin-top:6px">Kurze Pause, weil ${pause} um Geduld bittet – danach geht es automatisch weiter. So bekommt jeder Song sein Genre.</div>` : ""}
+      ${scanning ? `<div class="cell-sub" style="margin-top:6px">${esc(sc.dienst || "")} › ${esc(sc.playlist || "")} · ${sc.songs} verschiedene Songs bisher${sc.doppelt ? `, ${sc.doppelt} doppelte zusammengeführt` : ""}</div>` : ""}
+      ${sc && !scanning ? `<div class="cell-sub" style="margin-top:6px">Eingelesen: ${sc.lists} Listen, ${sc.songs} verschiedene Songs${sc.doppelt ? ` (${sc.doppelt} doppelte zusammengeführt)` : ""}${sc.fehler.length ? ` · ${sc.fehler.length} Liste(n) übersprungen` : ""}.</div>` : ""}
       ${j.cut ? `<div class="cell-sub" style="margin-top:6px">Sehr große Liste: analysiert werden die ersten ${j.total} Songs, ${j.cut} bleiben außen vor.</div>` : ""}</div>`;
     $("#srtCancel").onclick = () => api(`/api/sort/${jid}/cancel`, { method: "POST" });
     await new Promise(r => setTimeout(r, 1200));
   }
+}
+
+function scanSummary(sc) {
+  const box = $("#srtJob"); if (!box) return;
+  const skipped = sc.fehler || [];
+  box.innerHTML = `<div class="notice">${icon("info")}<div>Eingelesen: <b>${sc.lists}</b> Listen, <b>${sc.songs}</b> verschiedene Songs${sc.doppelt ? ` (${sc.doppelt} doppelte zusammengeführt)` : ""}${sc.gekappt ? " – Obergrenze erreicht, nicht alles wurde eingelesen" : ""}.
+    ${skipped.length ? `<details style="margin-top:6px"><summary>${skipped.length} Liste(n) übersprungen</summary><ul class="cell-sub">${skipped.slice(0, 50).map(f => `<li>${esc(f.dienst)} › ${esc(f.playlist || "–")}: ${esc(f.grund)}</li>`).join("")}</ul></details>` : ""}</div></div>`;
+  hydrateIcons(box);
 }
 
 async function renderSort(main) {

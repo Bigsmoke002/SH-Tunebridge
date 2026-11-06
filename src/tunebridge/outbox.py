@@ -110,8 +110,9 @@ def _package(entries: list[dict]) -> dict:
             "eintraege": [{k: v for k, v in e.items() if not k.startswith("_")} for e in entries]}
 
 
-def flush() -> dict:
-    """Alles senden, was erlaubt ist und noch nicht gesendet wurde. -> {kategorie: anzahl}"""
+def flush(auto: bool = False) -> dict:
+    """Alles senden, was erlaubt ist und noch nicht gesendet wurde. -> {kategorie: anzahl}
+    auto=True: Hintergrund-Abgleich (Gemeinschafts-Teil nur im Modus „auto“)."""
     from . import upload
     from .web.app import _miss_export
     done: dict = {}
@@ -131,19 +132,9 @@ def flush() -> dict:
             rest = [e for e in _load() if e["uid"] not in {x["uid"] for x in q}]
             QUEUE.write_text(json.dumps(rest), encoding="utf-8") if rest else clear_errors()
         done["fehler"] = len(q)
-    if consent.server("genres"):
-        from . import genredb
-        since = float(store.meta_get("outbox:genres_since") or 0)
-        g = [e for e in genredb.upload_entries(1000) if _vote_ts(e) >= since][:200]
-        if g:
-            upload.send(_package(g))
-            genredb.mark_sent([e["_key"] for e in g])
-            done["genres"] = len(g)
-    if consent.server("genredb"):
-        from . import genredb
-        r = genredb.update()
-        if r.get("updated"):
-            done["genredb"] = r.get("songs")
+    from . import community
+    if not auto or community.mode() == "auto":   # Gemeinschaft: bei „manuell“ nur über den Knopf
+        community.send_part(done)
     if consent.server("songs") and (s := song_entries()):
         upload.send(_package(s))
         store.meta_set(_SONGS_SINCE, str(max(e["_ts"] for e in s)))
@@ -159,7 +150,7 @@ async def loop() -> None:
     while True:
         if consent.server_any():
             try:
-                await asyncio.to_thread(flush)
+                await asyncio.to_thread(flush, True)
             except Exception as e:     # Server nicht erreichbar o. Ä. – beim nächsten Mal wieder
                 dbg.problem("senden", f"Automatisches Senden fehlgeschlagen: {e}")
         await asyncio.sleep(INTERVAL_S)

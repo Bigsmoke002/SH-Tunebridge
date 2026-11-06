@@ -2312,6 +2312,37 @@ def genredb_update():
     return r
 
 
+# ------------------------------------------------------------------ Gemeinschaft (Einstellungen › Gemeinschaft)
+@app.get("/api/community")
+def community_status():
+    from .. import community
+    return community.status()
+
+
+class ModeReq(BaseModel):
+    mode: str
+
+
+@app.post("/api/community/mode")
+def community_mode(req: ModeReq):
+    from .. import community
+    try:
+        return {"mode": community.set_mode(req.mode)}
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.post("/api/community/sync")
+def community_sync():
+    from .. import community, upload
+    try:
+        return {"done": community.sync(), **community.status()}
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except upload.UploadError as e:
+        raise HTTPException(502, str(e))
+
+
 class SortStartReq(BaseModel):
     service: str
     playlist: str = ""

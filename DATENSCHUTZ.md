@@ -38,6 +38,9 @@ Ziel-Domain `shtunebridge.bs002.de` wählbar):
   Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor.
 - *Zur Gemeinschafts-Genre-Datenbank beitragen* – je Song, den du selbst eingeordnet hast: Datum, Künstler,
   Titel, ISRC, Genre, Subgenre, Herkunft (Playlist-Name / App / KI / von dir geändert). Siehe „Genre-Datenbank“.
+- *Genres meiner Bibliothek beitragen* – je Song, den die App schon kennt: Datum, Künstler, Titel, ISRC, Genre,
+  Subgenre, Sicherheit. Das Genre wird dafür nur aus freien Quellen abgeleitet (MusicBrainz, Angaben im Titel).
+  Siehe „Genre-Datenbank“.
 
 - *Playlists teilen* – nur verschlüsselte Blöcke, siehe „Playlists teilen“.
 
@@ -306,6 +309,14 @@ im Song-Detail legst du mit **„Genre festlegen“** ein Genre selbst fest.
   die Herkunft deiner Einordnung – **nie der Playlist-Name, nie ganze Playlists, kein Konto**. Es gelten dieselben
   Regeln wie im nächsten Abschnitt (pseudonyme Kennung, verschlüsselt, höchstens 12 Monate, selbst löschbar).
   Nur Einordnungen, die nach deiner Einwilligung entstehen, werden automatisch gesendet.
+- **Genres deiner Bibliothek beitragen (nur mit Einwilligung, Einstellungen › Gemeinschaft):** für Songs, die die App
+  schon kennt, wird das Genre **neu und nur aus freien Quellen** abgeleitet – MusicBrainz-Tags (CC0) und
+  Genre-Angaben im Titel – und nur gesendet, wenn es mit dem Ergebnis der App übereinstimmt. Gesendet werden je Song
+  Datum, Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit und die freie Quelle; höchstens 400 Songs pro Abgleich
+  und 2000 insgesamt. Hier zählen auch Songs, die schon vor der Einwilligung bekannt waren. Daten von Last.fm,
+  Deezer, Apple & Co. fließen **nicht** ein.
+- **Abgleich manuell oder automatisch:** unter Einstellungen › Gemeinschaft wählst du, ob Beiträge und das Laden der
+  Datenbank automatisch im Hintergrund (etwa alle 6 Stunden, Datenbank einmal am Tag) oder nur per Knopf passieren.
 - **Gemeinschafts-Datenbank:** Der Entwickler wertet die Beiträge auf seinem eigenen Rechner aus. Übernommen
   wird ein Genre erst, wenn **mehrere verschiedene Installationen** (mindestens drei) es übereinstimmend melden
   und mindestens eine Meldung nicht nur von einer KI stammt; Widersprüche prüft der Entwickler von Hand. Die

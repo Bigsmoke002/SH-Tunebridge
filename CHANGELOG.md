@@ -3,7 +3,16 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.8.1)
+## Unveröffentlicht (0.9.0)
+- **Alles einlesen** (Dienste): liest Lieblingssongs und eigene (auf Wunsch auch gefolgte) Playlists aus allen
+  verbundenen Diensten auf einmal ein, führt doppelte Songs zusammen und zeigt die gewohnte Sortier-Vorschau.
+  Grenzen: 300 Playlists pro Dienst, 10.000 verschiedene Songs; Pausen der Dienste werden abgewartet, zwischen zwei
+  Playlists eine kleine Pause; kaputte/private Listen werden übersprungen und am Ende aufgelistet.
+- **Einstellungen › Gemeinschaft:** eigene Einordnungen und – neu – die Genres deiner Bibliothek zur
+  Gemeinschafts-Genre-Datenbank beitragen und die Datenbank laden; Abgleich **manuell** (Knopf „Jetzt abgleichen“)
+  oder **automatisch**. Bibliotheks-Genres werden nur aus freien Quellen (MusicBrainz, Angaben im Titel) abgeleitet
+  und nur gesendet, wenn sie mit dem Ergebnis der App übereinstimmen – Last.fm-, Deezer- und Apple-Daten fließen
+  nicht in die Gemeinschafts-Datenbank. Höchstens 400 Songs pro Abgleich, 2000 insgesamt. Standard: aus.
 - Fehler behoben: **„Keine ähnlichen Songs gefunden“** bei fast jedem Song. Last.fm liefert seit etwa Oktober 2026
   für ähnliche Songs und Künstler meist gar nichts mehr (auch bei sehr bekannten Songs). Jetzt springt Deezer ein
   (ähnliche Künstler + Künstler-Radio, ohne Key, höchstens 2 Songs pro Künstler). Leere Antworten werden nicht

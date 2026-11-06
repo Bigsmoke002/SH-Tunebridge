@@ -94,10 +94,24 @@ def lookup(track: Track) -> dict[str, dict[str, float]]:
     return out
 
 
-def tags(track: Track) -> dict[str, float]:
-    """Zusammengeführte, auf 0–100 skalierte Tags (Aufnahme > Album > Künstler)."""
+def _merge(parts: dict) -> dict[str, float]:
     out: dict[str, float] = {}
-    for part, d in lookup(track).items():
+    for part, d in parts.items():
         for k, v in _norm(d, WEIGHTS.get(part, 40.0)).items():
             out[k] = max(out.get(k, 0), v)
     return out
+
+
+def tags(track: Track) -> dict[str, float]:
+    """Zusammengeführte, auf 0–100 skalierte Tags (Aufnahme > Album > Künstler)."""
+    return _merge(lookup(track))
+
+
+def tags_cached(track: Track) -> dict[str, float] | None:
+    """Wie tags(), aber nur aus dem Zwischenspeicher (keine Anfrage). None = noch nie nachgeschlagen."""
+    title, artists, _ = split_version(track.title, track.artists)
+    artist = main_artist(artists[0]) if artists else ""
+    if not title or not artist:
+        return None
+    hit = store.cache_get("musicbrainz", f"{normalize(artist)}|{normalize(title)}")
+    return None if hit is None else _merge(hit)

@@ -288,13 +288,18 @@ def _run_inner(job: dict) -> None:
     from . import audiofeat, linkimport
     try:
         job["state"] = "loading"
+        limit = MAX_TRACKS
         if job.get("preset") is not None:
             name, tracks = job.pop("preset")
+        elif job["service"] == "__all__":           # „Alles einlesen“: alle Dienste auf einmal
+            from . import scanall
+            name, tracks = scanall.collect(job["playlist"], job)
+            limit = scanall.MAX_TRACKS
         else:
             name, tracks = load(job["service"], job["playlist"])
         job["name"] = job.get("name") or name
-        job["cut"] = max(0, len(tracks) - MAX_TRACKS)
-        tracks = tracks[:MAX_TRACKS]
+        job["cut"] = max(0, len(tracks) - limit)
+        tracks = tracks[:limit]
         job["total"] = len(tracks)
         job["state"] = "analysing"
         for i, t in enumerate(tracks):
