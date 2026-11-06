@@ -545,9 +545,10 @@ def dupes_remove(req: DupesRemoveReq):
 # ------------------------------------------------------------------ Playlists
 @app.get("/api/playlists")
 def playlists():
-    out = []
+    out, times = [], store.playlist_times()
     for p in store.local_playlists():
-        out.append({"name": p.name, "count": len(p.tracks), "origin": "lokal",
+        created, updated = times.get(p.name, (0, 0))
+        out.append({"name": p.name, "count": len(p.tracks), "origin": "lokal", "created": created, "updated": updated,
                     "covers": [t.cover for t in p.tracks if t.cover][-4:],
                     "top": [[d["label"], d["count"], d["genre"], d["subgenre"]] for d in _dist(p.tracks)[:3]]})
     for p in store.exported_playlists():
@@ -558,6 +559,15 @@ def playlists():
 def _dist(tracks: list[Track]) -> list[dict]:
     c = Counter((t.genre, t.subgenre) for t in tracks)
     return [{"label": sub or g or "Unsortiert", "genre": g, "subgenre": sub, "count": n} for (g, sub), n in c.most_common()]
+
+
+@app.get("/api/search")
+def search(q: str = ""):
+    """Globale Suche (Seitenleiste): Songs in eigenen Playlists und Erkennungsverlauf. Playlists/Einstellungen sucht die App selbst."""
+    q = q.strip()[:100]
+    if len(q) < 2:
+        return {"songs": [], "history": []}
+    return {"songs": store.search_songs(q), "history": store.search_history(q)}
 
 
 @app.get("/api/playlists/{name:path}")

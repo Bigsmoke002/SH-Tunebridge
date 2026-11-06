@@ -28,6 +28,8 @@
       <button class="icon-btn side-toggle" id="sideToggle" aria-label="Leiste einklappen" title="Leiste ein-/ausklappen"><i data-icon="panel"></i></button>
     </div>
 
+    <button type="button" class="side-search" id="gsOpen" title="Alles durchsuchen (Strg+K)"><i data-icon="search"></i><span>Suchen …</span><kbd>Strg K</kbd></button>
+
     <div class="side-scroll" id="sideScroll">
     <nav class="nav" id="nav">
       <button type="button" class="nav-label nav-fold" data-fold="lib" aria-expanded="true"><span>Bibliothek</span><i data-icon="chevron"></i></button>
@@ -56,7 +58,8 @@
     <button type="button" class="nav-label nav-fold nav-label--svc hidden" data-fold="svc" id="sideSvcLabel" aria-expanded="true"><span>Deine Dienste</span><i data-icon="chevron"></i></button>
     <div class="side-services fold-body" id="sideServices" data-fold-body="svc"></div>
 
-    <button type="button" class="nav-label nav-fold nav-label--pl" data-fold="pl" aria-expanded="true"><span>Deine Playlists</span><i data-icon="chevron"></i></button>
+    <div class="side-pl-head"><button type="button" class="nav-label nav-fold nav-label--pl" data-fold="pl" aria-expanded="true"><span>Deine Playlists</span><i data-icon="chevron"></i></button>
+      <button type="button" class="icon-btn side-sort" id="sideSort" title="Playlists sortieren" aria-label="Playlists sortieren"><i data-icon="sort"></i></button></div>
     <div class="side-playlists fold-body" id="sidePlaylists" data-fold-body="pl"></div>
     </div>
 

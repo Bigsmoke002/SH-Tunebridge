@@ -44,6 +44,8 @@ const ICONS = {
   globe: `<circle cx="12" cy="12" r="9"/>` + P("M3 12h18", "M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"),
   flag: P("M5 21V4", "M5 4h11l-2 4 2 4H5"),
   prev: P("M6 5v14", "M19 5 9 12l10 7Z"),
+  sort: P("M7 4v16", "m3 8 4-4 4 4", "M17 20V4", "m13 16 4 4 4-4"),
+  dot: "",
   next: P("M18 5v14", "M5 5l10 7-10 7Z"),
   split: P("M16 3h5v5", "M8 3H3v5", "M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3", "m15 9 6-6"),
   transfer: P("M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"),
@@ -412,7 +414,9 @@ async function refreshMeta() {
   $("#cntHistory").textContent = st.stats.recognitions || "";
   $("#cntPlaylists").textContent = pls.length || "";
   Inbox.badge();
-  const local = pls.filter(p => p.origin === "lokal");
+  const sideBy = store.get("sideSort", "");
+  if ($("#sideSort")) $("#sideSort").title = `Playlists sortieren – jetzt: ${PL_SORTS.find(x => x[0] === sideBy)?.[1] || "A–Z"}`;
+  const local = sortPlaylists(pls.filter(p => p.origin === "lokal"), sideBy);
   $("#sidePlaylists").innerHTML = local.length ? local.map(p => {
     const top = p.top?.[0];
     return `<a href="#/playlists/${enc(p.name)}" data-pl="${esc(p.name)}"><span class="dot" style="background:${top ? genreColor(top[2], top[3]) : "var(--bg-4)"}"></span>
@@ -424,6 +428,20 @@ async function refreshMeta() {
     ${engs.map(e => `<span class="eng ${st.engines.includes(e) ? "on" : ""}"></span>`).join("")}</span>`;
   markNav();
 }
+
+/* Playlists sortieren: "" = A–Z, za, count (Größe), updated (zuletzt geändert), created (neueste zuerst) */
+function sortPlaylists(list, by) {
+  const l = [...list], abc = (a, b) => a.name.localeCompare(b.name, "de", { sensitivity: "base", numeric: true });
+  const f = { za: (a, b) => -abc(a, b), count: (a, b) => (b.count || 0) - (a.count || 0) || abc(a, b),
+    updated: (a, b) => (b.updated || 0) - (a.updated || 0) || abc(a, b), created: (a, b) => (b.created || 0) - (a.created || 0) || abc(a, b) }[by] || abc;
+  return l.sort(f);
+}
+const PL_SORTS = [["", "Name A–Z"], ["za", "Name Z–A"], ["count", "Größe"], ["updated", "Zuletzt geändert"], ["created", "Neueste zuerst"]];
+$("#sideSort")?.addEventListener("click", e => {
+  e.stopPropagation();
+  const cur = store.get("sideSort", ""), r = e.currentTarget.getBoundingClientRect();
+  CtxMenu.open(r.left, r.bottom + 4, PL_SORTS.map(([v, l]) => ({ icon: v === cur ? "check" : "dot", label: l, run: () => { store.set("sideSort", v); refreshMeta(); } })));
+});
 
 function markNav() {
   const h = location.hash || "#/listen";
@@ -1598,18 +1616,14 @@ Views.playlists = async (main) => {
         return `<button data-tab="${s.id}"><span class="ss-badge sm" style="--pc:${c}">${m}</span>${esc(s.name)}</button>`; }).join("")}</div>
       <div class="ph-tools">
         <label class="ph-search">${icon("search")}<input id="plsQ" placeholder="Playlist suchen" autocomplete="off" spellcheck="false"></label>
-        <select class="select select--sm" id="plsSort" aria-label="Sortieren"><option value="">Standard</option><option value="name">Name</option><option value="count">Größe</option></select>
+        <select class="select select--sm" id="plsSort" aria-label="Sortieren"><option value="">Name A–Z</option><option value="za">Name Z–A</option><option value="count">Größe</option><option value="updated">Zuletzt geändert</option><option value="created">Neueste zuerst</option></select>
       </div></div>
     <div id="plsOut"></div></div>`;
   hydrateIcons(main);
   let q = "", by = store.get("plSort", "");
+  if (by === "name") by = "";                      // alte Einstellung
   $("#plsSort").value = by;
-  const sorted = list => {
-    const l = list.filter(p => !q || p.name.toLowerCase().includes(q));
-    if (by === "name") l.sort((a, b) => a.name.localeCompare(b.name, "de"));
-    if (by === "count") l.sort((a, b) => (b.count || 0) - (a.count || 0));
-    return l;
-  };
+  const sorted = list => sortPlaylists(list.filter(p => !q || p.name.toLowerCase().includes(q)), by);
   const draw = async () => {
     $$("#plTabs button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
     const out = $("#plsOut");
@@ -4396,6 +4410,7 @@ Views.settings = async (main) => {
   main.innerHTML = `<div class="settings-shell">
     <aside class="set-side">
       <div class="set-side-head">Einstellungen</div>
+      <button type="button" class="side-search set-search" id="setSearch">${icon("search")}<span>In Einstellungen suchen …</span></button>
       ${SETTING_GROUPS.map(([label, tabs]) => `<div class="nav-label">${label}</div>
         ${tabs.map(([id, t, ic]) => `<a href="#/settings?tab=${id}" class="${id === tab ? "active" : ""}">${icon(ic)}<span>${t}</span></a>`).join("")}`).join("")}
       <div class="set-side-foot">Schlüssel werden nur lokal gespeichert – in deiner Konfigurationsdatei, lesbar nur für dich.</div>
@@ -4418,6 +4433,8 @@ Views.settings = async (main) => {
   if (tab === "discord") DiscordUI.render($("#discordBox"));
   if (tab === "nichterkannt") Misses.render($("#missBox"));
   if (tab === "debug") Debug.render($("#debugBox"));
+  $("#setSearch", main).onclick = () => GSearch.open("", "settings");
+  if (params.get("find")) settingsFind(params.get("find"));
   if (tab === "erkennung") $$("#vizSeg button").forEach(b => b.onclick = () => {
     Meter.setViz(b.dataset.viz);
     $$("#vizSeg button").forEach(x => x.classList.toggle("on", x === b));
@@ -5157,6 +5174,7 @@ async function route() {
   const params = new URLSearchParams(qs || "");
   const parts = path.split("/").filter(Boolean);
   closeDrawer();
+  GSearch.close();
   markNav();
   if (parts[0] && parts[0] !== "listen") Meter.stop();
   DiscordUI.view(params.get("pl") ? "sort" : parts[0] || "listen");
@@ -5168,6 +5186,175 @@ async function route() {
   }
   main.scrollTop = 0;
   Player.sync();
+}
+
+/* ================================================================= Globale Suche (Seitenleiste, Strg+K) */
+const SEARCH_PAGES = [
+  ["#/listen", "Erkennen", "wave", "song erkennen shazam mikrofon aufnehmen hören dauer-modus"],
+  ["#/history", "Verlauf", "clock", "erkennungsverlauf erkannte songs"],
+  ["#/stats", "Statistik", "chart", "auswertung jahr top künstler genres"],
+  ["#/playlists", "Playlists", "stack", "bibliothek sammlungen"],
+  ["#/services", "Dienste", "grid", "spotify tidal youtube soundcloud deezer verbinden alles einlesen sortieren"],
+  ["#/inbox", "Neu für dich", "inbox", "automatischer abgleich neue songs likes einsortieren filter"],
+  ["#/links", "Link einfügen", "external", "url link öffnen playlist link"],
+  ["#/discover", "Entdecken", "compass", "ähnliche songs neue musik finden bpm tonart"],
+  ["#/share", "Teilen", "share", "playlists teilen freunde schlüssel verschlüsselt"],
+  ["#/directory", "Verzeichnis", "globe", "öffentliche playlists veröffentlichen melden stöbern"],
+  ["#/genredb", "Genre-Datenbank", "tag", "genre festlegen einordnungen gemeinschaft"],
+  ["#/setplan", "Set-Planer", "disc", "dj set reihenfolge mix energie"],
+  ["#/dupes", "Doppelte Songs", "dupe", "duplikate doppelt aufräumen"],
+  ["#/split", "Aufteilen", "split", "playlist aufteilen nach genre"],
+  ["#/transfer", "Übertragen", "transfer", "playlist übertragen kopieren zwischen diensten"],
+  ["#/settings", "Einstellungen", "sliders", "optionen konfiguration"],
+];
+// [Reiter, Bezeichnung, Suchwörter] – Treffer öffnen den Reiter und heben die Stelle hervor
+const SETTINGS_INDEX = [
+  ["allgemein", "Version & Updates", "update aktualisieren version neu changelog jetzt prüfen"],
+  ["allgemein", "Dieser Rechner", "rechner pfad daten konfiguration lizenz"],
+  ["darstellung", "Darstellung", "aussehen theme hell dunkel modus farbe"],
+  ["darstellung", "Akzentfarbe", "farbe akzent"],
+  ["darstellung", "Hintergrund", "hintergrundbild bild wallpaper"],
+  ["darstellung", "Größe", "schrift zoom skalierung größe"],
+  ["darstellung", "Ecken", "rundung radius"],
+  ["darstellung", "Abstände", "kompakt dichte"],
+  ["darstellung", "Animationen", "bewegung animation reduziert"],
+  ["darstellung", "Seitenleiste", "sidebar leiste einklappen"],
+  ["darstellung", "Schwebe-Icon", "bubble overlay schwebe icon vordergrund"],
+  ["darstellung", "Symbol in der Statusleiste", "tray statusleiste symbol uhr"],
+  ["dienste", "Konten verbinden", "login konto last.fm anmelden"],
+  ["dienste", "Musikdienste", "spotify client id youtube api key schlüssel"],
+  ["dienste", "YouTube-Login", "youtube oauth client"],
+  ["dienste", "SoundCloud-Login", "soundcloud client"],
+  ["discord", "Discord-Status", "discord rich presence status freunde"],
+  ["discord", "Application ID", "discord application id"],
+  ["ki", "KI-Anbieter", "ki claude openai gemini codex ollama lm studio llama"],
+  ["ki", "Lokales LLM", "llm llama.cpp modell lokal server"],
+  ["ki", "Beim Sortieren mitprüfen", "ki sortieren prüfen"],
+  ["genres", "Quellen", "genre quellen last.fm musicbrainz deezer apple"],
+  ["genres", "Gelernte Genres", "genres lernen tags"],
+  ["erkennung", "Anzeige im Kreis", "visualisierung spektrum pegel kreis"],
+  ["erkennung", "Shazam", "shazam erkennung"],
+  ["erkennung", "Weitere Erkennungsdienste", "audd acrcloud erkennung schlüssel"],
+  ["sicherung", "Sicherung", "backup sichern wiederherstellen export import datenbank"],
+  ["gemeinschaft", "Gemeinschafts-Genre-Datenbank", "gemeinschaft community genres beitragen"],
+  ["gemeinschaft", "Genres meiner Bibliothek beitragen", "bibliothek beitragen genres"],
+  ["gemeinschaft", "Abgleich", "manuell automatisch abgleichen sync"],
+  ["datenschutz", "Einwilligungen", "datenschutz einwilligung senden server dsgvo privatsphäre"],
+  ["datenschutz", "Offizielle Player (eingebettet)", "player eingebettet youtube spotify laden"],
+  ["datenschutz", "Öffentliches Playlist-Verzeichnis nutzen", "verzeichnis öffentlich einwilligung"],
+  ["datenschutz", "Playlists teilen", "teilen einwilligung verschlüsselt"],
+  ["traffic", "Datenverbrauch", "traffic daten mb internet verbrauch"],
+  ["speicher", "Zwischenspeicher", "cache speicher leeren song-speicher fingerabdrücke"],
+  ["nichterkannt", "Nicht erkannt", "unerkannt fehlende songs senden"],
+  ["debug", "Debug-Protokoll", "debug log fehler protokoll"],
+  ["debug", "Bericht für den Entwickler", "fehlerbericht bericht senden"],
+];
+const _norm = s => String(s || "").toLocaleLowerCase("de").normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/ß/g, "ss");
+function _match(words, label, extra = "") {
+  const l = _norm(label), all = l + " " + _norm(extra);
+  if (!words.every(w => all.includes(w))) return 0;
+  return (l.startsWith(words[0]) ? 3 : 0) + words.filter(w => l.includes(w)).length + 1;
+}
+const GSearch = {
+  sel: 0, items: [], timer: null, seq: 0, scope: "",
+  open(q = "", scope = "") {
+    this.scope = scope;
+    let el = $("#gs");
+    if (!el) {
+      document.body.insertAdjacentHTML("beforeend", `<div class="gs" id="gs" role="dialog" aria-label="Suche"><div class="gs-box">
+        <div class="gs-in">${icon("search")}<input id="gsQ" autocomplete="off" spellcheck="false"><kbd>Esc</kbd></div>
+        <div class="gs-res" id="gsRes"></div></div></div>`);
+      el = $("#gs"); hydrateIcons(el);
+      el.onclick = e => { if (e.target === el) this.close(); };
+      $("#gsQ").oninput = () => { clearTimeout(this.timer); this.timer = setTimeout(() => this.run(), 160); };
+      $("#gsQ").onkeydown = e => {
+        if (e.key === "Escape") { e.preventDefault(); this.close(); }
+        else if (e.key === "ArrowDown" || e.key === "ArrowUp") { e.preventDefault(); this.move(e.key === "ArrowDown" ? 1 : -1); }
+        else if (e.key === "Enter") { e.preventDefault(); this.go(this.sel); }
+      };
+    }
+    $("#gsQ").placeholder = scope === "settings" ? "In den Einstellungen suchen …" : "Suchen: Seiten, Einstellungen, Playlists, Songs, Verlauf …";
+    $("#gsQ").value = q; el.classList.add("open"); $("#gsQ").focus(); this.run();
+  },
+  close() { $("#gs")?.classList.remove("open"); },
+  local(q) {
+    const words = _norm(q).split(/\s+/).filter(Boolean), out = [];
+    const add = (group, list, max = 8) => { const l = list.filter(x => x.s).sort((a, b) => b.s - a.s).slice(0, max); if (l.length) out.push([group, l]); };
+    if (this.scope !== "settings") add("Seiten & Funktionen", SEARCH_PAGES.map(([h, l, ic, kw]) => ({ s: words.length ? _match(words, l, kw) : 1, ic, title: l, sub: "", href: h })));
+    add("Einstellungen", [...SETTING_TABS.map(([id, l, ic]) => ({ s: !words.length ? (this.scope === "settings" ? 1 : 0) : _match(words, l) ? _match(words, l) + 1 : 0, ic, title: l, sub: "Einstellungen", href: `#/settings?tab=${id}` })),
+      ...SETTINGS_INDEX.map(([tab, l, kw]) => ({ s: words.length ? _match(words, l, kw) : 0, ic: "sliders", title: l,
+        sub: `Einstellungen › ${(SETTING_TABS.find(t => t[0] === tab) || [])[1] || ""}`, href: `#/settings?tab=${tab}&find=${enc(l)}` }))]
+      .filter((x, i, a) => a.findIndex(y => y.href === x.href) === i), this.scope === "settings" ? 30 : 8);
+    if (this.scope !== "settings" && words.length) {
+      add("Deine Playlists", (S.playlists || []).filter(p => p.origin === "lokal").map(p => ({ s: _match(words, p.name), ic: "stack", title: p.name, sub: `${p.count} Songs`, href: `#/playlists/${enc(p.name)}` })));
+      const svc = [];
+      for (const s of SideSvc.list) for (const p of (Array.isArray(SideSvc.pls[s.id]) ? SideSvc.pls[s.id] : []))
+        svc.push({ s: _match(words, p.name), ic: "grid", title: p.name, sub: `${s.name}${p.count != null ? ` · ${p.count} Songs` : ""}`, href: svcPlHref(s.id, p) });
+      add("Playlists deiner Dienste", svc);
+    }
+    return out;
+  },
+  async run() {
+    const q = $("#gsQ").value.trim(), my = ++this.seq;
+    let groups = this.local(q);
+    this.render(groups, q.length >= 2 && this.scope !== "settings");
+    if (q.length < 2 || this.scope === "settings") return;
+    let r; try { r = await api(`/api/search?q=${encodeURIComponent(q)}`); } catch { r = { songs: [], history: [] }; }
+    if (my !== this.seq) return;
+    const fmt = t => (t.artists || []).join(", ");
+    if (r.songs.length) groups.push(["Songs in deinen Playlists", r.songs.map(t => ({ ic: "disc", title: t.title, sub: `${fmt(t)} · in ${t.playlists.slice(0, 3).join(", ")}${t.playlists.length > 3 ? " …" : ""}`,
+      cover: t.cover, play: t.preview_url ? t : null, act: () => openDrawer(() => api("/api/track", { method: "POST", body: { key: t.key } })) }))]);
+    if (r.history.length) groups.push(["Erkennungsverlauf", r.history.map(h => ({ ic: "clock", title: h.title, sub: `${fmt(h)} · ${new Date(h.ts * 1000).toLocaleDateString("de-DE")}`,
+      cover: h.cover, act: () => openDrawer(() => api(`/api/recognition/${h.id}`)) }))]);
+    this.render(groups, false);
+  },
+  render(groups, loading) {
+    this.items = groups.flatMap(g => g[1]); this.sel = 0;
+    let n = 0;
+    $("#gsRes").innerHTML = groups.length ? groups.map(([g, l]) => `<div class="gs-group">${esc(g)}</div>${l.map(x => { const i = n++;
+      return `<div class="gs-item" data-i="${i}" role="option">${x.cover ? `<img src="${esc(x.cover)}" alt="" loading="lazy">` : `<span class="gs-ic">${icon(x.ic)}</span>`}
+        <div class="gs-txt"><b>${esc(x.title)}</b>${x.sub ? `<span>${esc(x.sub)}</span>` : ""}</div>
+        ${x.play ? `<button class="icon-btn" ${playAttr(x.play)} title="Reinhören">${icon("play")}</button>` : ""}</div>`; }).join("")}`).join("")
+      + (loading ? `<div class="gs-more">Suche Songs …</div>` : "")
+      : `<div class="gs-empty">${loading ? "Suche …" : "Nichts gefunden."}</div>`;
+    hydrateIcons($("#gsRes")); this.move(0);
+    $$(".gs-item", $("#gsRes")).forEach(el => {
+      el.onclick = e => { if (!e.target.closest("[data-play]")) this.go(+el.dataset.i); };
+      el.onmousemove = () => { if (this.sel !== +el.dataset.i) { this.sel = +el.dataset.i; this.move(0); } };
+    });
+  },
+  move(d) {
+    if (!this.items.length) return;
+    this.sel = (this.sel + d + this.items.length) % this.items.length;
+    $$(".gs-item", $("#gsRes")).forEach(el => el.classList.toggle("on", +el.dataset.i === this.sel));
+    $(`.gs-item[data-i="${this.sel}"]`, $("#gsRes"))?.scrollIntoView({ block: "nearest" });
+  },
+  go(i) {
+    const x = this.items[i]; if (!x) return;
+    this.close();
+    if (x.act) return x.act();
+    if (location.hash === x.href) route(); else location.hash = x.href;
+  },
+};
+$("#gsOpen")?.addEventListener("click", () => GSearch.open());
+document.addEventListener("keydown", e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") { e.preventDefault(); GSearch.open(); }
+});
+/* Einstellungen: Stelle aus der Suche hervorheben (?find=…) – wartet, bis nachgeladene Bereiche da sind */
+function settingsFind(label) {
+  const want = _norm(label);
+  let tries = 0;
+  const look = () => {
+    const root = $("#setMain"); if (!root) return;
+    const els = $$(".section-title, .lbl, h3, h4, label, dt, .cons-row b, .set-row div", root);
+    const hit = els.find(el => _norm(el.firstChild?.textContent || el.textContent).trim().startsWith(want))
+      || els.find(el => _norm(el.textContent).includes(want));
+    if (!hit) { if (++tries < 12) setTimeout(look, 250); return; }
+    const box = hit.closest(".set-row, .cons-row, .card") || hit;
+    box.scrollIntoView({ block: "center", behavior: "smooth" });
+    box.classList.remove("find-flash"); void box.offsetWidth; box.classList.add("find-flash");
+  };
+  setTimeout(look, 150);
 }
 
 /* ================================================================= Tastatur */

@@ -257,6 +257,74 @@ def get_recognition(rid: int) -> tuple[Track, dict] | None:
     return (_t(r["track"]), json.loads(r["extra"])) if r else None
 
 
+# ------------------------------------------------------------ Suche
+def _like(q: str) -> str:
+    return "%" + q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%"
+
+
+def _prefilter(words: list[str]) -> tuple[str, tuple]:
+    """SQL-Vorfilter mit dem längsten ASCII-Wort (LIKE ignoriert Groß/klein nur bei ASCII) – Rest prüft _hit."""
+    ascii_words = [w for w in words if w.isascii()]
+    if not ascii_words:
+        return "", ()
+    return "WHERE track LIKE ? ESCAPE '\\'", (_like(max(ascii_words, key=len)),)
+
+
+def _hit(d: dict, words: list[str]) -> bool:
+    hay = " ".join([d.get("title") or "", *(d.get("artists") or []), d.get("album") or ""]).casefold()
+    return all(w in hay for w in words)
+
+
+def search_songs(q: str, limit: int = 30) -> list[dict]:
+    """Songs in eigenen Playlists (je Song einmal, mit den Playlists, in denen er steckt)."""
+    words = q.casefold().split()
+    if not words:
+        return []
+    out: dict[str, dict] = {}
+    with _conn() as c:
+        where, args = _prefilter(words)
+        rows = c.execute(f"SELECT playlist, track, key FROM entries {where} ORDER BY ts DESC LIMIT 20000", args).fetchall()
+    for r in rows:
+        d = json.loads(r["track"])
+        if not _hit(d, words):
+            continue
+        hit = out.setdefault(r["key"], {"key": r["key"], "title": d.get("title"), "artists": d.get("artists") or [],
+                                         "cover": d.get("cover"), "preview_url": d.get("preview_url"), "isrc": d.get("isrc"),
+                                         "ids": d.get("ids") or {}, "genre": d.get("genre"), "playlists": []})
+        if r["playlist"] not in hit["playlists"]:
+            hit["playlists"].append(r["playlist"])
+        if len(out) >= limit:
+            break
+    return list(out.values())
+
+
+def search_history(q: str, limit: int = 15) -> list[dict]:
+    words = q.casefold().split()
+    if not words:
+        return []
+    with _conn() as c:
+        where, args = _prefilter(words)
+        rows = c.execute(f"SELECT id, ts, track FROM recognitions {where} ORDER BY ts DESC LIMIT 5000", args).fetchall()
+    out, seen = [], set()
+    for r in rows:
+        d = json.loads(r["track"])
+        k = ((d.get("title") or "").casefold(), tuple(a.casefold() for a in d.get("artists") or []))
+        if k in seen or not _hit(d, words):
+            continue
+        seen.add(k)
+        out.append({"id": r["id"], "ts": r["ts"], "title": d.get("title"), "artists": d.get("artists") or [], "cover": d.get("cover")})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def playlist_times() -> dict[str, tuple[float, float]]:
+    """Name -> (angelegt, zuletzt geändert)."""
+    with _conn() as c:
+        rows = c.execute("SELECT p.name, p.created, MAX(e.ts) FROM playlists p LEFT JOIN entries e ON e.playlist = p.name GROUP BY p.name").fetchall()
+    return {r[0]: (r[1] or 0, r[2] or r[1] or 0) for r in rows}
+
+
 # ------------------------------------------------------------ Playlists
 def local_playlists() -> list[Playlist]:
     with _conn() as c:

@@ -4,6 +4,11 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## 0.9.0 – 2026-11-06
+- **Alles durchsuchen** (oben in der Seitenleiste oder Strg+K): Seiten und Funktionen, Einstellungen, deine Playlists,
+  Playlists deiner Dienste, Songs in deinen Playlists und der Erkennungsverlauf. Pfeiltasten + Enter; Einstellungen
+  öffnen sich direkt an der richtigen Stelle (hervorgehoben). In den Einstellungen gibt es ein eigenes Suchfeld.
+- **Playlists sortieren:** in der Seitenleiste (⇅ neben „Deine Playlists“) und in der Playlists-Ansicht – Name A–Z/Z–A,
+  Größe, zuletzt geändert, neueste zuerst. Wird gemerkt.
 - **„Neu für dich“ filtern:** Suche (Titel, Künstler, Album), Dienst, Quelle (Lieblingssongs/Playlist), Genre,
   Status (offen / automatisch einsortiert), BPM-Bereich und Sortierung. Wird gemerkt; „Alle erledigt“ wirkt bei
   aktivem Filter nur auf die gefilterten Songs.
