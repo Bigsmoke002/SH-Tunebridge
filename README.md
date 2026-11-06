@@ -131,9 +131,59 @@ tunebridge app       # eigenes Desktop-Fenster (Startmenü: „SH-Tunebridge“)
 tunebridge ui        # dasselbe im Browser
 tunebridge listen    # schnell im Terminal
 ```
-Bereiche (Sidebar): **Erkennen · Verlauf · Playlists · Entdecken · Aufteilen · Übertragen · Einstellungen**.
-Tastatur: `Leertaste` erkennen/abspielen, `Strg+1…6` Bereiche, `Strg+,` Einstellungen, `Esc` Panel schließen.
+Bereiche (Seitenleiste): **Erkennen · Verlauf · Statistik · Playlists · Dienste · Neu für dich · Link einfügen ·
+Entdecken · Teilen · Verzeichnis · Genre-Datenbank · Set-Planer · Doppelte Songs · Aufteilen · Übertragen ·
+Einstellungen**. Darunter deine eigenen Playlists (sortierbar über ⇅).
+
+Tastatur:
+
+| Taste | Wirkung |
+|---|---|
+| `Strg+K` | alles durchsuchen (Seiten, Einstellungen, Playlists, Songs, Verlauf) |
+| `Alt+←` / `Alt+→` | zurück / vor (auch die Pfeile rechts im Suchfeld) |
+| `Leertaste` | Hörprobe abspielen/anhalten – startet **nie** eine Erkennung (das geht nur per Klick) |
+| `Strg+1…6` | Erkennen, Verlauf, Playlists, Entdecken, Aufteilen, Übertragen |
+| `Strg+7` / `Strg+,` | Sicherung / Einstellungen |
+| `Esc` | Fenster bzw. Seitenpanel schließen |
+
 Keys lassen sich direkt unter *Einstellungen* eintragen.
+
+## Funktionen im Überblick
+
+**Erkennen & Entdecken**
+- *Erkennen*: Mikrofon, Desktop-Ton oder (Linux) eine einzelne Anwendung; Shazam plus optional AudD/ACRCloud,
+  Slowed/Sped-up/Nightcore-Varianten, lokale Wiedererkennung bekannter Songs, Dauer-Modus für DJ-Sets,
+  „Was spielt gerade?“ (Linux, MPRIS). Die Ansicht unter dem Song ist anpassbar (Reihenfolge, Bereiche ausblenden).
+- *Song-Details*: Genre/Subgenre mit Quelle, Hörprobe, „Öffnen in …“, Kaufen ohne Provision, offizieller Player
+  (erst nach Klick), Mehr vom Künstler, KI-Musik-Hinweis, Einsortieren, Ähnliche Songs, „Passt dazu“.
+- *Ähnliche Songs* zeigen BPM, Camelot-Tonart und Energie (lokal aus der Hörprobe gemessen) und „mixbar“.
+- *Entdecken*: ähnliche Songs zu Künstler + Titel; *Verlauf* und *Statistik* (mit Jahresrückblick) nur lokal.
+- *Player*: Hörproben mit ⏮ ▶ ⏭ – alle Songs der aktuellen Ansicht bilden die Warteschlange.
+
+**Playlists**
+- *Playlists*: eigene lokale Playlists, sortierbar (Name, Größe, zuletzt geändert, neueste); *Sortieren* in
+  6 Stufen (von „passende Mixes“ bis „Mikro-Genre“) mit Vorschau – jede Playlist einzeln oder alle zusammen übernehmen.
+- *Dienste*: Playlists von Spotify, TIDAL, YouTube, SoundCloud, Last.fm, Deezer ansehen und sortieren lassen;
+  „Alles einlesen“ holt alle Lieblingssongs und Playlists auf einmal.
+- *Neu für dich*: neue Likes und Playlist-Songs der verbundenen Dienste mit Einsortier-Vorschlägen; filterbar nach
+  Text, Dienst, Quelle, Genre, Status, BPM und sortierbar.
+- *Link einfügen*: Song-, Album- und Playlist-Links aller großen Dienste einlesen und analysieren.
+- *Aufteilen*: große Playlist → Genre-Playlists. *Übertragen*: zwischen lokal, TIDAL und Spotify.
+- *Set-Planer*: DJ-taugliche Reihenfolge nach Tempo und Tonart. *Doppelte Songs*: Duplikate finden
+  (Remix/Edit/Bootleg/VIP zählen **nicht** als doppelt).
+- *Teilen*: Playlists Ende-zu-Ende verschlüsselt per Schlüssel mit Freunden teilen.
+- *Verzeichnis*: öffentliches Playlist-Verzeichnis – stöbern, übernehmen, eigene Playlists unter Pseudonym
+  veröffentlichen, melden (standardmäßig aus).
+
+**Genres**
+- *Genre-Datenbank*: Playlists einordnen lassen und Vorschläge bestätigen/korrigieren; gelernte Genres.
+- *Gemeinschaft* (Einstellungen): signierte Gemeinschafts-Genre-Datenbank laden (vorausgewählt, abwählbar),
+  eigene Einordnungen bzw. Bibliotheks-Genres beitragen (standardmäßig aus).
+
+**Sonstiges**
+- *Einstellungen* (durchsuchbar): Allgemein, Darstellung, Dienste, Discord-Status, KI, Genres, Erkennung,
+  Sicherung, Gemeinschaft, Datenschutz, Datenverbrauch, Zwischenspeicher, Nicht erkannt, Debug.
+- Desktop-Begleiter: Schwebe-Icon und Tray-Symbol; Discord Rich Presence (nur wenn eingeschaltet).
 
 ## Daten, Sicherung & neuer Rechner
 Alles liegt in **einer SQLite-Datenbank** (`$TUNEBRIDGE_DATA/tunebridge.db`, WAL, versioniertes Schema
@@ -153,8 +203,7 @@ oder in der App: *Sicherung → Datei importieren → Wiederherstellen*.
 ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch gesichert.
 
 ## Updates & Releases
-- Repo-Zugang von diesem Rechner: Host-Alias `github-sh-tunebridge` (Deploy-Key `~/.ssh/sh_tunebridge_github_deploy`).
-- Releases werden **signiert** (`~/.ssh/sh_tunebridge_signing`); der öffentliche Schlüssel steht in
+- Releases werden **signiert** (SSH-Signatur des Herausgebers); der öffentliche Schlüssel steht in
   `src/tunebridge/release_signers` und wird mit ausgeliefert.
 - Neue Version veröffentlichen – immer in dieser Reihenfolge:
   1. `uv run pytest -q`, committen, pushen, dann `gh workflow run build --ref main` – Tests und Bau auf
@@ -170,7 +219,8 @@ ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch 
   Release, dessen Dateien noch hochgeladen werden, wird einfach später erkannt. Der Signier-Schlüssel darf nie
   ins Repo und nie verloren gehen (Kopie mit ins Backup).
 - Gemeinschafts-Genre-Datenbank: wird auf dem Rechner des Herausgebers gebaut und mit demselben Schlüssel
-  signiert (Namespace `sh-tunebridge-genredb`); die App lädt sie höchstens einmal am Tag und nur mit Einwilligung.
+  signiert (Namespace `sh-tunebridge-genredb`); die App lädt sie höchstens einmal am Tag – vorausgewählt im
+  Einrichtungsdialog, jederzeit abwählbar, nie vor dem Speichern des Dialogs.
 
 ## Song erkennen („Shazam“)
 - Erkennung parallel über **Shazam** (kein Key), **AudD**, **ACRCloud** (Keys optional);
@@ -280,7 +330,9 @@ Titel/Künstler/Dauer. Remix/VIP/Edit wird **nicht** mit dem Original verwechsel
 - [x] Spotify (offiziell), Links einfügen & analysieren, KI-Anbieter (lokal/eigen/Claude/OpenAI/Gemini)
 - [x] Kauf-Links ohne Provision, Hinweise auf KI-Musik
 - [x] Windows und macOS (erste Version)
-- [ ] Android
+- [x] Gemeinschafts-Genre-Datenbank, Playlists teilen (E2E), öffentliches Verzeichnis
+- [x] Set-Planer, Doppelte Songs, „Neu für dich“ mit Filtern, globale Suche, BPM/Tonart bei ähnlichen Songs
+- [ ] Android (in Planung)
 - [ ] Windows/macOS: „Was spielt gerade?“ über die System-Mediensteuerung
 - [ ] Lokale Audio-Prüfung auf KI-Musik (offenes Modell, optional)
 - [ ] `transfer` mit Report unsicherer Treffer (CSV/HTML zum Abhaken)

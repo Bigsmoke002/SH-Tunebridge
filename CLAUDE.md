@@ -40,3 +40,15 @@ Höchstens Grauzone, nie klar rechtswidrig – niemand darf zu Schaden kommen. S
 7. **Pushen und Releases** nur auf Ansage („pushe und baue zu github“) – auch reine Doku-Änderungen.
 8. **Versionen:** Fehlerkorrektur = letzte Stelle (0.6.x), neue Funktion = mittlere (0.x.0).
    Jedes Release bekommt einen Eintrag in `CHANGELOG.md`.
+
+## Android (vereinbart 2026-11-06)
+- Native App (Kotlin + Jetpack Compose) im Ordner `android/` dieses Repos; APK in denselben GitHub-Releases,
+  Update über die App selbst (signiertes Manifest wie am Desktop). Kein Google Play.
+- Gemeinsame Daten (Genre-Baum u. a.) werden aus dem Python-Code als JSON erzeugt, nicht abgeschrieben.
+- Formate und Server-Schnittstellen (Teilen, Verzeichnis, Gemeinschaft, Sicherung) bleiben mit dem Desktop kompatibel.
+- **Android-Keystore** nie ins Repo oder in die CI; sofort offline sichern (Verlust = keine Updates mehr möglich).
+- **Keine** Google-Play-Dienste, kein Firebase, keine Analyse-, Absturz- oder Werbe-SDKs. Nur nötige Berechtigungen,
+  jede in DATENSCHUTZ.md; Mikrofon erst beim ersten Klick auf Erkennen, im Hintergrund nur mit sichtbarer Benachrichtigung.
+- **Desktop darf nicht leiden:** Desktop-Tests und CI (Linux/Windows/macOS) müssen grün bleiben.
+- **Vor jedem Android-Release** Test auf einem echten Handy per adb; Emulator nur ergänzend, GPU-Einstellungen nie ändern.
+- Android-SDK nur im Docker-Build-Container, kein Eingriff ins System.
