@@ -4,6 +4,12 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.9.0)
+- **Sortier-Vorschau: einzeln oder alle bestätigen.** Jede Playlist hat „Diese übernehmen“; „Alle ausgewählten
+  übernehmen“ legt den Rest an. Bereits angelegte Playlists sind markiert und werden beim Sammel-Knopf nicht doppelt angelegt.
+- **Erkennen aufgeräumt:** Hinweistexte stehen nur noch als ⓘ-Icon da – Text beim Drüberfahren (oder per Tab-Taste).
+- **Erkennen nach deinem Geschmack:** „Ansicht anpassen“ – Reihenfolge der Bereiche unter dem Song (Anhören & öffnen,
+  Kaufen, Offizieller Player, Mehr vom Künstler, KI-Hinweis, Einsortieren, Ähnliche Songs, Passt dazu) ändern und
+  Bereiche ausblenden. Gilt auch für die Song-Details, gemerkt pro Rechner.
 - Fehler behoben: **Remixe, Flips, Bootlegs, VIPs, Cover und Live-Fassungen** wurden beim Nachschlagen dem Original
   zugeordnet (Abzug nur 15 von 100 Punkten, „Song (X Remix)“ landete bei 85) und bekamen dessen ISRC – danach galten
   sie als derselbe Song. Jetzt sind „harte“ Fassungen eigene Songs (auch „A Remix“ ≠ „B Remix“), Radio Edit /

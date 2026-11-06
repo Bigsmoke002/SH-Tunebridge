@@ -1530,3 +1530,38 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .hist-nav .hist-back i[data-icon] { transform: rotate(180deg); }
 .main > .page { padding-top: 54px; }
 .main > .settings-shell .set-side { padding-top: 50px; }
+
+/* Sortier-Vorschau: einzeln übernommene Playlists */
+.sort-card.done { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.sort-card .chip--ok { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); }
+.sort-card .chip--ok i[data-icon] { width: 12px; height: 12px; }
+
+/* Hinweise als Icon mit Text beim Drüberfahren */
+.tip { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 4px; vertical-align: middle; color: var(--text-3);
+       cursor: help; border-radius: 50%; }
+.tip:hover, .tip:focus-visible { color: var(--accent); outline: none; }
+.tip i[data-icon], .tip svg { width: 14px; height: 14px; }
+.tip-pop { position: fixed; z-index: 9999; max-width: 300px; padding: 8px 11px; border-radius: var(--radius-sm); background: var(--bg-4);
+           color: var(--text); font-size: 12.5px; line-height: 1.45; box-shadow: 0 6px 24px rgba(0, 0, 0, .35); pointer-events: none;
+           opacity: 0; transform: translateY(2px); transition: opacity .12s ease, transform .12s ease; }
+.tip-pop.on { opacity: 1; transform: none; }
+.opt-row { display: flex; align-items: center; gap: 4px; }
+.opt-label .tip { margin-left: 6px; }
+.track-kicker .tip { margin-left: 6px; }
+/* Song-Ansicht anpassen */
+.song-tools { display: flex; justify-content: flex-end; margin-bottom: 6px; }
+.lsec + .lsec { margin-top: 14px; }
+.lsec .section-title { margin-top: 10px; }
+.sl-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.sl-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border-radius: var(--radius-sm); background: var(--bg-2); }
+.sl-row > i[data-icon], .sl-row > svg { width: 16px; height: 16px; color: var(--text-3); flex: none; }
+.sl-row span { flex: 1; }
+.sl-row.off span { color: var(--text-3); text-decoration: line-through; }
+.sl-row [data-up] i[data-icon] { transform: rotate(-90deg); }
+.sl-row .sl-down i[data-icon] { transform: rotate(90deg); }
+.sl-row .icon-btn { width: 28px; height: 28px; }
+.sort-card-act { display: flex; align-items: center; gap: 8px; margin: 2px 0 8px; }
+.sort-card-act .btn { margin-left: auto; }
+.sort-card-act { flex-wrap: wrap; }
+.sort-card-act .cnt { flex: 1 1 100%; margin: 0; }
+#modalBox .sl-intro { white-space: normal; }

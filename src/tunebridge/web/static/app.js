@@ -455,6 +455,66 @@ function coverHtml(t, size = "") {
   return `<div class="cover-col"><div class="cover-wrap ${size}">${img}${t.preview_url ? `<button class="cover-play" ${playAttr(t)} aria-label="Hörprobe">${icon("play")}</button>` : ""}</div>${coverSrc(t)}</div>`;
 }
 
+/* Hinweis nur als Icon – der Text erscheint beim Drüberfahren (oder per Tastatur-Fokus) */
+const tip = (text, ic = "info") => `<span class="tip" tabindex="0" role="note" aria-label="${esc(text)}" data-tip="${esc(text)}">${icon(ic)}</span>`;
+const Tip = {
+  el: null,
+  show(t) {
+    if (!this.el) { this.el = document.createElement("div"); this.el.className = "tip-pop"; document.body.append(this.el); }
+    this.el.textContent = t.dataset.tip; this.el.classList.add("on");
+    const r = t.getBoundingClientRect(), w = this.el.offsetWidth, h = this.el.offsetHeight;
+    const x = Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2));
+    const y = r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8;
+    this.el.style.left = `${x}px`; this.el.style.top = `${y}px`;
+  },
+  hide() { this.el?.classList.remove("on"); },
+};
+document.addEventListener("mouseover", e => { const t = e.target.closest?.(".tip"); if (t) Tip.show(t); });
+document.addEventListener("mouseout", e => { if (e.target.closest?.(".tip")) Tip.hide(); });
+document.addEventListener("focusin", e => { const t = e.target.closest?.(".tip"); if (t) Tip.show(t); });
+document.addEventListener("focusout", e => { if (e.target.closest?.(".tip")) Tip.hide(); });
+
+/* Song-Ansicht (Erkennen & Song-Details): Reihenfolge der Bereiche und ausgeblendete Bereiche – gemerkt pro Rechner */
+const SongLayout = {
+  SECS: [["links", "Anhören & öffnen", "external"], ["buy", "Kaufen", "download"], ["player", "Offizieller Player", "play"],
+    ["artist", "Mehr vom Künstler", "disc"], ["ai", "KI-Musik-Hinweis", "sparkle"], ["sort", "Einsortieren", "stack"],
+    ["similar", "Ähnliche Songs", "compass"], ["mix", "Passt dazu – zum Mixen", "shuffle"]],
+  get() {
+    const d = store.get("songLayout", {}) || {}, ids = this.SECS.map(x => x[0]);
+    const order = (Array.isArray(d.order) ? d.order : []).filter(id => ids.includes(id));
+    return { order: [...order, ...ids.filter(id => !order.includes(id))], hidden: (Array.isArray(d.hidden) ? d.hidden : []).filter(id => ids.includes(id)) };
+  },
+  render(parts) {
+    const l = this.get();
+    // ausgeblendet = nicht sichtbar, bleibt aber im Dokument (die Knöpfe darin werden weiter verdrahtet)
+    return l.order.filter(id => parts[id]).map(id => `<div class="lsec" data-sec="${id}" ${l.hidden.includes(id) ? "hidden" : ""}>${parts[id]}</div>`).join("");
+  },
+  dialog(onSave) {
+    let l = this.get();
+    const draw = box => {
+      const name = id => this.SECS.find(x => x[0] === id);
+      $("#slList", box).innerHTML = l.order.map((id, i) => `<li class="sl-row ${l.hidden.includes(id) ? "off" : ""}">
+        ${icon(name(id)[2])}<span>${esc(name(id)[1])}</span>
+        <button class="icon-btn" data-up="${i}" ${i === 0 ? "disabled" : ""} aria-label="Nach oben" title="Nach oben">${icon("chevron")}</button>
+        <button class="icon-btn sl-down" data-down="${i}" ${i === l.order.length - 1 ? "disabled" : ""} aria-label="Nach unten" title="Nach unten">${icon("chevron")}</button>
+        <label class="switch" title="Anzeigen"><input type="checkbox" data-show="${id}" ${l.hidden.includes(id) ? "" : "checked"}><span class="track"></span></label></li>`).join("");
+      hydrateIcons(box);
+      const mv = (i, d) => { const o = l.order; [o[i], o[i + d]] = [o[i + d], o[i]]; draw(box); };
+      $$("[data-up]", box).forEach(b => b.onclick = () => mv(+b.dataset.up, -1));
+      $$("[data-down]", box).forEach(b => b.onclick = () => mv(+b.dataset.down, 1));
+      $$("[data-show]", box).forEach(c => c.onchange = () => {
+        l.hidden = c.checked ? l.hidden.filter(x => x !== c.dataset.show) : [...l.hidden, c.dataset.show]; draw(box);
+      });
+    };
+    modal({ title: "Ansicht anpassen", confirm: "Speichern",
+      body: `<p class="cell-sub sl-intro" style="margin:0 0 10px">Reihenfolge der Bereiche unter dem Song (Erkennen und Song-Details). Was du ausschaltest, wird nicht angezeigt.</p>
+        <ul class="sl-list" id="slList"></ul><button class="btn btn--sm btn--ghost" id="slReset" style="margin-top:10px">${icon("repeat")}Standard wiederherstellen</button>`,
+      onConfirm: () => { store.set("songLayout", l); toast("Ansicht gespeichert"); onSave?.(); } });
+    const box = $("#modalBox"); draw(box);
+    $("#slReset", box).onclick = () => { l = { order: this.SECS.map(x => x[0]), hidden: [] }; draw(box); };
+  },
+};
+
 function detailHtml(r) {
   const t = r.track, x = r.extra || {};
   const meta = [t.album, x.label, x.year].filter(Boolean).map(esc).join("  ·  ");
@@ -481,12 +541,11 @@ function detailHtml(r) {
   <div class="track-hero">
     ${coverHtml(t)}
     <div style="min-width:0">
-      ${engines ? `<div class="track-kicker">${esc(engines)}</div>` : ""}
+      ${engines || origin || x.alternatives?.length ? `<div class="track-kicker">${esc(engines)}${origin ? tip(origin, "check") : ""}${x.alternatives?.length ? tip(`Andere Dienste meinten: ${x.alternatives.join("; ")}`, "info") : ""}</div>` : ""}
       <h2 class="track-title">${esc(t.title)}</h2>
       <p class="track-artist">${esc(t.artists.join(", "))}</p>
       ${meta ? `<div class="track-meta">${meta}</div>` : ""}
       <div class="track-chips">${chips}</div>
-      ${origin ? `<div class="origin-note">${icon("check")}${esc(origin)}</div>` : ""}
       <div class="track-actions">
         <button class="btn btn--primary btn--sm" ${playAttr(t)}>${icon("play")}Reinhören</button>
         ${links}
@@ -495,35 +554,34 @@ function detailHtml(r) {
         ${r.id != null || r.key ? `<button class="btn btn--sm btn--ghost" data-role="setgenre" title="Genre selbst festlegen – gilt sofort für diesen Song und verbessert die Erkennung">${icon("pencil")}Genre festlegen</button>` : ""}
         ${x.local && location.hash.startsWith("#/listen") ? `<button class="btn btn--sm btn--ghost" data-role="recheck" title="Nochmal aufnehmen und bei Shazam prüfen">${icon("wave")}Online prüfen</button>` : ""}
       </div>
-      ${x.alternatives?.length ? `<div class="alt-note">Andere Dienste meinten: ${x.alternatives.map(esc).join("; ")}</div>` : ""}
     </div>
   </div>
-  <div class="det-stack">
-    <section class="det-card">
-      <div class="det-h">${icon("external")}<b>Anhören & öffnen</b><span class="det-legend"><span class="lg lg--d"></span>direkt <span class="lg"></span>Suche</span></div>
+  ${SongLayout.render({
+    links: `<section class="det-card">
+      <div class="det-h">${icon("external")}<b>Anhören & öffnen</b><span class="det-legend">${tip("Ausgefüllter Punkt: direkter Link zum Song · Ring: Suche beim Dienst")}</span></div>
       <div class="open-grid" data-role="links">${PLATFORM_IDS.map(() => `<span class="otile otile--sk"></span>`).join("")}</div>
-    </section>
-    <details class="det-card det-fold" ${store.get("buyOpen", false) ? "open" : ""}>
-      <summary class="det-h">${icon("download")}<b>Kaufen</b><span class="det-legend">beste Qualität zuerst</span><i class="det-chev">${icon("chevron")}</i></summary>
+    </section>`,
+    buy: `<details class="det-card det-fold" ${store.get("buyOpen", false) ? "open" : ""}>
+      <summary class="det-h">${icon("download")}<b>Kaufen</b><span class="det-legend">${tip("Beste Qualität zuerst – ohne Provision.")}</span><i class="det-chev">${icon("chevron")}</i></summary>
       <div data-role="buy">${skelBuy()}</div>
-    </details>
-  </div>
-  <section class="det-card det-player hidden" data-role="embeds">
-    <div class="det-h">${icon("play")}<b>Offizieller Player</b><span class="det-legend">lädt erst nach deinem Klick · Hörprobe oben bleibt ohne Drittanbieter</span></div>
-    <div class="emb-tabs" data-role="embtabs"></div><div class="emb-box" data-role="embbox"></div>
-  </section>
-  <div data-role="artist"></div>
-  <div class="ai-mark det-ai" data-role="aimark">${aiMarkHtml(x.ai)}</div>
-  <div class="section-title">Einsortieren</div>
-  <div class="sug-list">${sugs}${extra}${!sugs && !extra ? `<div class="cell-sub" style="padding:4px 12px">Noch keine passende Playlist – leg einfach eine an.</div>` : ""}</div>
-  <div class="add-row">
-    <input class="input" data-role="newpl" list="plnames" placeholder="In andere oder neue Playlist …">
-    <button class="btn" data-role="addpl">${icon("plus")}Hinzufügen</button>
-  </div>
-  <div class="section-title">Ähnliche Songs</div>
-  <div data-role="similar"><button class="btn btn--sm" data-role="loadsim">${icon("compass")}Ähnliche Songs laden</button></div>
-  ${r.id != null || r.key ? `<div class="section-title">Passt dazu – zum Mixen</div>
-  <div data-role="mix"><button class="btn btn--sm" data-role="loadmix" title="Songs aus deinen Playlists mit passendem Tempo und passender Tonart">${icon("disc")}Mixbare Songs aus deiner Bibliothek</button></div>` : ""}`;
+    </details>`,
+    player: `<section class="det-card det-player hidden" data-role="embeds">
+      <div class="det-h">${icon("play")}<b>Offizieller Player</b><span class="det-legend">${tip("Lädt erst nach deinem Klick. Die Hörprobe oben kommt ohne Drittanbieter aus.")}</span></div>
+      <div class="emb-tabs" data-role="embtabs"></div><div class="emb-box" data-role="embbox"></div>
+    </section>`,
+    artist: `<div data-role="artist"></div>`,
+    ai: `<div class="ai-mark det-ai" data-role="aimark">${aiMarkHtml(x.ai)}</div>`,
+    sort: `<div class="section-title">Einsortieren</div>
+    <div class="sug-list">${sugs}${extra}${!sugs && !extra ? `<div class="cell-sub" style="padding:4px 12px">Noch keine passende Playlist – leg einfach eine an.</div>` : ""}</div>
+    <div class="add-row">
+      <input class="input" data-role="newpl" list="plnames" placeholder="In andere oder neue Playlist …">
+      <button class="btn" data-role="addpl">${icon("plus")}Hinzufügen</button>
+    </div>`,
+    similar: `<div class="section-title">Ähnliche Songs</div>
+    <div data-role="similar"><button class="btn btn--sm" data-role="loadsim">${icon("compass")}Ähnliche Songs laden</button></div>`,
+    mix: r.id != null || r.key ? `<div class="section-title">Passt dazu – zum Mixen</div>
+    <div data-role="mix"><button class="btn btn--sm" data-role="loadmix" title="Songs aus deinen Playlists mit passendem Tempo und passender Tonart">${icon("disc")}Mixbare Songs aus deiner Bibliothek</button></div>` : "",
+  })}`;
 }
 
 function sugRow(s, inside) {
@@ -1045,7 +1103,7 @@ Views.listen = async (main, _, params) => {
               <button data-mode="desktop" class="${L.mode === "desktop" ? "on" : ""}">${icon("monitor")}Desktop</button>
               <button data-mode="mic" class="${L.mode === "mic" ? "on" : ""}">${icon("mic")}Mikrofon</button>
             </div></div>
-          <div><div class="opt-label">Gerät</div>
+          <div><div class="opt-label">Gerät${L.mode === "desktop" ? tip("Anwendung wählen, um nur z. B. den Browser oder Spotify zu hören – Sprachchats (Discord, Teams …) werden nie angeboten.") : ""}</div>
             <select class="select" id="device">
               <option value="${L.mode}">Standard${L.mode === "desktop" ? "-Ausgabe" : "-Mikrofon"}</option>
               <optgroup label="Geräte">${devices.map(d => `<option value="${esc(d.name)}" ${L.source === d.name ? "selected" : ""}>${esc(d.description.replace(/^Monitor of /, ""))}</option>`).join("")}</optgroup>
@@ -1055,12 +1113,12 @@ Views.listen = async (main, _, params) => {
                 ${!appSrcs.length && !savedApp ? `<option disabled>${S.status?.apps === false ? "nur mit PipeWire" : "keine Anwendung spielt gerade Ton ab"}</option>` : ""}
               </optgroup>` : ""}
             </select>
-            ${L.mode === "desktop" ? `<div class="cell-sub opt-hint">${icon("info")}Anwendung wählen, um nur z. B. den Browser oder Spotify zu hören – Sprachchats (Discord, Teams …) werden nie angeboten.</div>` : ""}</div>
+</div>
           <div class="scan-wrap"><button class="link-btn" id="scanBtn">${icon("search")}Gerät mit Signal finden</button><div id="scanOut"></div></div>
           <div><div class="opt-label">Aufnahmedauer</div>
             <div class="segmented" id="secSeg">${[6, 10, 15, 20].map(s => `<button data-s="${s}" class="${L.seconds === s ? "on" : ""}">${s} s</button>`).join("")}</div></div>
-          <label class="switch"><input type="checkbox" id="autoSw" ${L.auto ? "checked" : ""}><span class="track"></span>Dauer-Modus – erkennt jeden neuen Song</label>
-          <div class="cell-sub opt-hint">${icon("info")}Gesendet wird erst, wenn du auf den Kreis klickst – im Dauer-Modus bis zum nächsten Klick.</div>
+          <div class="opt-row"><label class="switch"><input type="checkbox" id="autoSw" ${L.auto ? "checked" : ""}><span class="track"></span>Dauer-Modus – erkennt jeden neuen Song</label>
+            ${tip("Gesendet wird erst, wenn du auf den Kreis klickst – im Dauer-Modus bis zum nächsten Klick.")}</div>
           <a class="link-btn" href="#/settings?tab=erkennung">${icon("sliders")}Anzeige im Kreis: ${esc((VIZ.find(x => x[0] === Meter.viz) || VIZ[0])[1])} – ändern</a>
         </div>
       </div>
@@ -1143,7 +1201,12 @@ function renderListenResult() {
     }).catch(() => {});
     return;
   }
-  const render = rr => { S.listen.current = rr; box.innerHTML = `<div class="view-enter">${detailHtml(rr)}</div>`; bindDetail(box, rr, render); };
+  const render = rr => {
+    S.listen.current = rr;
+    box.innerHTML = `<div class="view-enter"><div class="song-tools"><button class="btn btn--xs btn--ghost" data-role="layout" title="Reihenfolge der Bereiche ändern oder Bereiche ausblenden">${icon("sliders")}Ansicht anpassen</button></div>${detailHtml(rr)}</div>`;
+    $("[data-role=layout]", box).onclick = () => SongLayout.dialog(() => render(S.listen.current));
+    bindDetail(box, rr, render);
+  };
   render(r);
 }
 
@@ -4679,26 +4742,36 @@ async function renderSort(main) {
     <div class="card sort-apply">
       <div class="field"><label>Anlegen in</label><select class="select" id="srtTarget">${targets.map(([v, n]) => `<option value="${v}">${esc(n)}</option>`).join("")}</select></div>
       <div class="field grow"><label>Präfix (optional)</label><input class="input" id="srtPre" placeholder="z. B. „${esc(meta.name || "Playlist")} · “"></div>
-      <div class="field"><label>&nbsp;</label><button class="btn btn--primary" id="srtApply">${icon("check")}Übernehmen</button></div>
-    </div>`;
+      <div class="field"><label>&nbsp;</label><button class="btn btn--primary" id="srtApply">${icon("check")}Alle ausgewählten übernehmen</button></div>
+    </div>
+    <div class="cell-sub" style="margin-top:6px">Einzeln geht auch: „Übernehmen“ oben auf jeder Playlist. Bereits angelegte Playlists sind markiert und werden nicht doppelt angelegt.</div>`;
   hydrateIcons(out);
   $$("#srtLv button").forEach(b => b.onclick = () => { Sorter.level = +b.dataset.lv; store.set("sortLevel", Sorter.level); renderSort(main); });
   let tmo; $("#srtMin").oninput = e => { clearTimeout(tmo); tmo = setTimeout(() => { Sorter.min = Math.max(1, Math.min(50, +e.target.value || 1)); store.set("sortMin", Sorter.min); renderSort(main); }, 400); };
   bindSortCards(out);
-  $("#srtApply").onclick = async () => {
-    const plan = Sorter.groups.filter(g => g.keep && g.items.length).map(g => ({ name: g.name, items: g.items }));
-    if (!plan.length) return toast("Keine Gruppe ausgewählt", "err");
-    const target = $("#srtTarget").value, tname = targets.find(t => t[0] === target)[1];
-    modal({ title: `${plan.length} Playlists in ${tname} anlegen?`, text: `${plan.reduce((a, g) => a + g.items.length, 0)} Songs. Die Original-Playlist bleibt unverändert.${target !== "local" ? " Songs, die es dort nicht gibt, werden übersprungen." : ""}`,
-      confirm: "Anlegen", onConfirm: async () => {
-        try {
-          const r = await api(`/api/sort/${Sorter.job}/apply`, { method: "POST", body: { plan, target, prefix: $("#srtPre").value } });
-          refreshMeta();
-          setTimeout(() => modal({ title: "Fertig", text: `${r.playlists.length} Playlists angelegt${r.missing ? `, ${r.missing} Songs nicht gefunden` : ""}.`, cancel: null, confirm: "OK",
-            body: `<ul class="sort-done">${r.playlists.map(p => `<li>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)} · ${p.count}</li>`).join("")}</ul>` }), 200);
-        } catch (e) { toast(e.message, "err"); }
-      } });
-  };
+  $("#srtApply").onclick = () => sortApply(Sorter.groups.filter(g => g.keep && !g.done && g.items.length), targets);
+  Sorter.applyOne = gi => sortApply([Sorter.groups[gi]], targets, true);
+}
+
+/* Übernehmen: alle ausgewählten Playlists auf einmal oder eine einzelne (Knopf auf der Karte) */
+function sortApply(groups, targets, single = false) {
+  groups = groups.filter(g => g && g.items.length);
+  if (!groups.length) return toast(Sorter.groups.some(g => g.done) ? "Alles Ausgewählte ist schon angelegt" : "Keine Playlist ausgewählt", "err");
+  const plan = groups.map(g => ({ name: g.name, items: g.items }));
+  const target = $("#srtTarget").value, tname = targets.find(t => t[0] === target)[1];
+  const again = single && groups[0].done ? ` Achtung: „${groups[0].name}“ wurde schon angelegt – die Songs kommen noch einmal dazu.` : "";
+  modal({ title: single ? `„${groups[0].name}“ in ${tname} anlegen?` : `${plan.length} Playlists in ${tname} anlegen?`,
+    text: `${plan.reduce((a, g) => a + g.items.length, 0)} Songs. Die Original-Playlist bleibt unverändert.${target !== "local" ? " Songs, die es dort nicht gibt, werden übersprungen." : ""}${again}`,
+    confirm: "Anlegen", onConfirm: async () => {
+      try {
+        const r = await api(`/api/sort/${Sorter.job}/apply`, { method: "POST", body: { plan, target, prefix: $("#srtPre").value } });
+        groups.forEach(g => { g.done = target; g.keep = false; });
+        refreshMeta(); sortRedraw();
+        if (single) return toast(`„${r.playlists[0]?.name || groups[0].name}“ angelegt · ${r.playlists[0]?.count ?? 0} Songs${r.missing ? `, ${r.missing} nicht gefunden` : ""}`);
+        setTimeout(() => modal({ title: "Fertig", text: `${r.playlists.length} Playlists angelegt${r.missing ? `, ${r.missing} Songs nicht gefunden` : ""}.`, cancel: null, confirm: "OK",
+          body: `<ul class="sort-done">${r.playlists.map(p => `<li>${p.url ? `<a href="${esc(p.url)}" target="_blank" rel="noopener">${esc(p.name)}</a>` : esc(p.name)} · ${p.count}</li>`).join("")}</ul>` }), 200);
+      } catch (e) { toast(e.message, "err"); }
+    } });
 }
 
 // Hörprobe für einen Song der Sortier-Vorschau (offizielle 30-s-Hörprobe; fehlt sie, sucht der Server bei Deezer)
@@ -4710,14 +4783,16 @@ function sortCard(g, gi) {
   const meta = [`${g.items.length} ${g.items.length === 1 ? "Song" : "Songs"}`, i.bpm ? `${i.bpm[0]}–${i.bpm[1]} BPM` : "", i.minuten ? `~${i.minuten} Min.` : "",
     i.energie != null ? `Energie ${Math.round(i.energie * 100)} %` : ""].filter(Boolean).join(" · ");
   const first = it[g.items[0]] || {};
-  return `<div class="card split-card sort-card ${g.keep ? "" : "off"}" data-g="${gi}">
+  return `<div class="card split-card sort-card ${g.keep || g.done ? "" : "off"} ${g.done ? "done" : ""}" data-g="${gi}">
     <div class="sort-card-head"><label class="check"><input type="checkbox" data-keep="${gi}" ${g.keep ? "checked" : ""}></label>
       <span class="dot" style="background:${genreColor(first.genre, first.subgenre)}"></span>
       <input class="sort-name" data-rename="${gi}" value="${esc(g.name)}" spellcheck="false">
       ${!g.nomusic && g.items.length && g.items.every(n => !it[n].genre) ? `<button class="btn btn--xs btn--ghost" data-aiuns title="Die eingestellte KI ordnet nur Songs ein, die sie wirklich kennt">${icon("sparkle")}Mit KI prüfen</button>` : ""}
       <button class="btn btn--xs btn--ghost" data-listen="${gi}" title="Alle Songs dieser Playlist nacheinander anhören (je 30 s Hörprobe)">${icon("play")}Anhören</button></div>
     ${!g.nomusic && g.items.length && g.items.every(n => !it[n].genre) ? `<div class="cell-sub sort-hint">Song anklicken → „Genre selbst festlegen“. Was du festlegst, merkt sich die App für die Zukunft.</div>` : ""}
-    <div class="cnt">${esc(meta)}</div>
+    <div class="sort-card-act"><span class="cnt">${esc(meta)}</span>
+      ${g.done ? `<span class="chip chip--ok" title="Schon angelegt">${icon("check")}angelegt</span>` : ""}
+      <button class="btn btn--xs ${g.done ? "btn--ghost" : ""}" data-one="${gi}" title="Nur diese Playlist jetzt anlegen">${icon("check")}${g.done ? "Nochmal anlegen" : "Diese übernehmen"}</button></div>
     <ul>${g.items.map(n => { const t = it[n];
       const sub = [t.ki ? "KI" : "", t.own ? "von dir" : "", Sorter.level <= 4 ? (t.subgenre || t.genre || "") : "", !t.genre && !t.nomusic && t.why ? t.why : "",
         t.bpm ? `${Math.round(t.bpm)} BPM` : "", t.camelot || ""].filter(Boolean);
@@ -4757,6 +4832,7 @@ async function sortSetGenre(n) {
 }
 
 function bindSortCards(root) {
+  $$("[data-one]", root).forEach(b => b.onclick = e => { e.stopPropagation(); Sorter.applyOne?.(+b.dataset.one); });
   $$("[data-aiuns]", root).forEach(b => b.onclick = async () => {
     try {
       const r = await api(`/api/sort/${Sorter.job}/ai-unsorted`, { method: "POST" });
