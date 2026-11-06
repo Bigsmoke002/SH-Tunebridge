@@ -43,6 +43,8 @@ const ICONS = {
   compass: `<circle cx="12" cy="12" r="9"/>` + P("m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"),
   globe: `<circle cx="12" cy="12" r="9"/>` + P("M3 12h18", "M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"),
   flag: P("M5 21V4", "M5 4h11l-2 4 2 4H5"),
+  prev: P("M6 5v14", "M19 5 9 12l10 7Z"),
+  next: P("M18 5v14", "M5 5l10 7-10 7Z"),
   split: P("M16 3h5v5", "M8 3H3v5", "M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3", "m15 9 6-6"),
   transfer: P("M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"),
   panel: P("M3 4h18v16H3z", "M9 4v16"),
@@ -226,6 +228,8 @@ const Player = {
     this.audio.volume = vol; $("#pVol").value = vol;
     $("#pVol").oninput = e => { this.audio.volume = +e.target.value; store.set("volume", +e.target.value); };
     $("#pPlay").onclick = () => this.toggle();
+    $("#pPrev").onclick = () => this.prev();
+    $("#pNext").onclick = () => this.skip();
     $("#pBar").onclick = e => {
       if (!this.audio.duration) return;
       const r = e.currentTarget.getBoundingClientRect();
@@ -256,16 +260,31 @@ const Player = {
     this.queue = l; this.qi = 0; this.track = null;
     this.play(l[0], true);
   },
+  // Ende einer Hörprobe: nächster Song der Liste; am Listenende stoppen (Liste bleibt für Zurück erhalten)
   next() {
-    if (this.qi < 0) return;
-    if (this.qi + 1 >= this.queue.length) { this.queue = []; this.qi = -1; return; }
+    if (this.qi < 0 || this.qi + 1 >= this.queue.length) { DiscordUI.preview(null); return this.nav(); }
     this.qi++; this.track = null;
     this.play(this.queue[this.qi], true);
   },
-  play(t, fromQueue = false) {
+  skip() {
+    if (this.qi < 0 || this.qi + 1 >= this.queue.length) return toast("Kein weiterer Song in dieser Liste");
+    this.next();
+  },
+  prev() {
+    if (!this.track) return;
+    if (this.audio.currentTime > 3 || this.qi <= 0) { this.audio.currentTime = 0; return this.audio.play().catch(() => {}); }
+    this.qi--; this.track = null;
+    this.play(this.queue[this.qi], true);
+  },
+  nav() {
+    $("#pPrev").disabled = !this.track;
+    $("#pNext").disabled = !(this.qi >= 0 && this.qi + 1 < this.queue.length);
+  },
+  play(t, fromQueue = false, context = null) {
     if (!t?.preview_url) return toast("Für diesen Song gibt es keine Hörprobe", "err");
     if (this.track?.preview_url === t.preview_url) return this.toggle();
-    if (!fromQueue) {   // einzelner Klick: in der laufenden Liste weiterspielen oder Liste beenden
+    if (!fromQueue) {   // einzelner Klick: Liste = alle Songs dieser Ansicht (für Vor/Zurück), sonst laufende Liste
+      if (context?.length > 1) { this.queue = context; }
       const i = this.queue.findIndex(x => x.preview_url === t.preview_url);
       this.qi = i; if (i < 0) this.queue = [];
     }
@@ -294,6 +313,7 @@ const Player = {
     $("#pArtist").textContent = (t.artists || []).join(", ");
     $("#pCover").style.backgroundImage = t.cover ? `url("${t.cover}")` : "";
     $("#pPlay").disabled = false;
+    this.nav();
   },
   // Datenverbrauch: geladene Sekunden × 128 kbit/s (Hörproben sind MP3/AAC um 128–256 kbit/s) – Schätzung
   countAudio() {
@@ -358,7 +378,11 @@ document.addEventListener("click", e => {
   const b = e.target.closest("[data-play]");
   if (!b) return;
   e.stopPropagation();
-  Player.play(JSON.parse(b.dataset.play));
+  // Warteschlange für Vor/Zurück: alle Play-Knöpfe im selben Bereich (Dialog oder Seite), in Reihenfolge, ohne Doppelte
+  const scope = b.closest("#modalBox, #drawerBody, #main") || document;
+  const seen = new Set(), ctx = [];
+  $$("[data-play]", scope).forEach(x => { try { const t = JSON.parse(x.dataset.play); if (t.preview_url && !seen.has(t.preview_url)) { seen.add(t.preview_url); ctx.push(t); } } catch { /* kaputt */ } });
+  Player.play(JSON.parse(b.dataset.play), false, ctx);
 });
 const playAttr = t => t.preview_url
   ? `data-play="${esc(JSON.stringify({ title: t.title, artists: t.artists, cover: t.cover, preview_url: t.preview_url, isrc: t.isrc || null, ids: t.ids || {} }))}" data-play-url="${esc(t.preview_url)}"`
@@ -826,6 +850,7 @@ async function loadSimilar(box, r) {
     box.innerHTML = similarRows(list);
     bindSimilar(box, list);
     lazyCovers(box, list);
+    if (list.length) measureSimilar(box, list, r.id != null ? `/api/audiofeat?id=${r.id}` : `/api/audiofeat?key=${encodeURIComponent(r.key)}`);
   } catch (e) { box.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; }
 }
 
@@ -864,14 +889,51 @@ function bindSimilar(box, list) {
   Player.sync();
 }
 
+/* Ähnliche Songs: Tempo, Tonart, Energie nacheinander messen (Hörprobe, wie „Passt dazu“; Gemessenes kommt aus dem Speicher) */
+const camelotDist = (a, b) => {
+  if (!a || !b) return null;
+  const na = parseInt(a), nb = parseInt(b), d = Math.min((na - nb + 12) % 12, (nb - na + 12) % 12);
+  return d + (a.slice(-1) === b.slice(-1) ? 0 : 1);             // wie audiofeat.camelot_distance
+};
+const tempoJump = (a, b) => a && b ? Math.min(...[b, b * 2, b / 2].map(c => Math.abs(a - c) / a * 100)) : null;
+const featQuery = t => new URLSearchParams({ artist: (t.artists || [])[0] || "", title: t.title || "", ...(t.isrc ? { isrc: t.isrc } : {}), ...(t.ids?.deezer ? { dz: t.ids.deezer } : {}) });
+async function measureSimilar(box, list, base) {
+  const head = $(".sim-me", box);
+  let me = null;
+  try { me = await api(base); } catch { /* ohne Vergleich */ }
+  if (head) head.innerHTML = me?.bpm || me?.camelot
+    ? `Dieser Song: <b>${me.bpm ? Math.round(me.bpm) + " BPM" : "Tempo unbekannt"}</b>${me.camelot ? ` · <b>${esc(me.camelot)}</b>${me.key ? ` (${esc(me.key)})` : ""}` : ""}${me.energy != null ? ` · Energie ${Math.round(me.energy * 100)} %` : ""} – „mixbar“ = ±6 % Tempo (auch halb/doppelt) und gleiche Tonart oder Camelot-Nachbar`
+    : `Tempo und Tonart dieses Songs sind unbekannt (keine Hörprobe) – Werte der Treffer zum Vergleich.`;
+  let i = 0;
+  const one = async () => {
+    while (i < list.length) {
+      const k = i++, cell = $(`[data-feat="${k}"]`, box);
+      if (!cell || !box.isConnected) return;
+      let f = null;
+      try { f = await api(`/api/audiofeat?${featQuery(list[k])}`); } catch { /* bleibt leer */ }
+      if (!cell.isConnected) return;
+      if (!f || !(f.bpm || f.camelot)) { cell.innerHTML = `<span class="cell-muted" title="Keine Hörprobe gefunden">Tempo unbekannt</span>`; continue; }
+      Object.assign(list[k], { bpm: f.bpm, camelot: f.camelot, energy: f.energy });
+      const tj = tempoJump(me?.bpm, f.bpm), kd = camelotDist(me?.camelot, f.camelot);
+      const mix = tj != null && tj <= 6 && (kd == null || kd <= 1);
+      cell.innerHTML = `${f.bpm ? `<span class="chip num" title="Tempo${tj != null ? ` – ${tj < 0.5 ? "gleich" : String(Math.round(tj * 10) / 10).replace(".", ",") + " % Abstand"}` : ""}">${Math.round(f.bpm)} BPM</span>` : ""}
+        ${f.camelot ? `<span class="chip" title="Tonart ${esc(f.key || "")}${kd != null ? ` – ${kd === 0 ? "gleiche Tonart" : kd === 1 ? "Camelot-Nachbar" : kd + " Schritte entfernt"}` : ""}">${esc(f.camelot)}</span>` : ""}
+        ${f.energy != null ? `<span class="chip num" title="Energie (Lautheit/Dichte der Hörprobe)">E ${Math.round(f.energy * 100)}</span>` : ""}
+        ${mix ? `<span class="chip chip--mix" title="Passt zum Mixen mit diesem Song">mixbar</span>` : ""}`;
+    }
+  };
+  await Promise.all([one(), one()]);           // höchstens 2 gleichzeitig – schont Deezer
+}
+
 function similarRows(list) {
   if (!list.length) return `<div class="cell-sub">Keine ähnlichen Songs gefunden.</div>`;
-  return `<div class="rows">${list.map((s, i) => `
+  return `<div class="cell-sub sim-me">Tempo und Tonart werden gemessen …</div><div class="rows">${list.map((s, i) => `
     <div class="row row--sim" data-i="${i}" title="Klicken: auf Spotify, YouTube & Co. öffnen">
       <div class="thumb-wrap"><div class="thumb" style="display:grid;place-items:center;color:var(--text-3)">${icon("disc")}</div>
         <button class="thumb-play" ${playAttr(s)} aria-label="Hörprobe">${icon("play")}</button></div>
       <div class="cell-main"><div class="cell-title">${esc(s.title)}</div><div class="cell-sub">${esc(s.artists.join(", "))}</div></div>
       <div>${s.genre ? genreChip(s.genre, s.subgenre) : `<span class="cell-muted">–</span>`}</div>
+      <div class="sim-feat" data-feat="${i}"><span class="cell-muted">Tempo …</span></div>
       <div class="meter-wrap"><div class="meter"><b style="width:${Math.round(s.match * 100)}%"></b></div>${Math.round(s.match * 100)} % ähnlich</div>
       <div class="row-act"><span class="icon-btn" aria-hidden="true">${icon("external")}</span></div>
     </div>`).join("")}</div>`;
@@ -1860,6 +1922,7 @@ Views.discover = async (main) => {
     const same = $("#dSame").checked;
     const list = same ? data.similar.filter(s => s.subgenre && s.subgenre === data.subgenre) : data.similar;
     $("#dOut").innerHTML = similarRows(list); bindSimilar($("#dOut"), list); lazyCovers($("#dOut"), list);
+    if (list.length) measureSimilar($("#dOut"), list, `/api/audiofeat?${featQuery({ artists: [$("#dArtist").value.trim()], title: $("#dTitle").value.trim() })}`);
   };
   const go = async () => {
     const a = $("#dArtist").value.trim(), t = $("#dTitle").value.trim();

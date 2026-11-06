@@ -4,6 +4,11 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.9.0)
+- **Player: Vor und Zurück.** Neben ▶ gibt es ⏮/⏭. Klickst du einen Song an, bilden alle Songs der Ansicht die
+  Warteschlange; ⏮ springt erst an den Anfang, dann zum vorigen Song.
+- **Ähnliche Songs mit Tempo, Tonart und Energie:** jede Zeile zeigt BPM, Camelot-Tonart und Energie (gemessen aus
+  der Hörprobe, nacheinander im Hintergrund, Gemessenes kommt aus dem Speicher) und „mixbar“, wenn Tempo (±6 %,
+  auch halb/doppelt) und Tonart zum Ausgangssong passen. Gilt für „Erkennen“ und „Entdecken“.
 - **Neu: Öffentliches Playlist-Verzeichnis** (Werkzeuge › Verzeichnis). Playlists anderer Nutzer durchsuchen
   (Name, Künstler, Pseudonym, Genre), ansehen und in eigene Playlists übernehmen. Eigene Playlists einzeln und mit
   Bestätigung veröffentlichen – unter einem Pseudonym, ohne Cover und Musik; aktualisieren und löschen jederzeit.

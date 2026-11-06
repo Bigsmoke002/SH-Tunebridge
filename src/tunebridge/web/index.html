@@ -84,7 +84,11 @@
       </div>
     </div>
     <div class="player-center">
-      <button class="icon-btn play-btn" id="pPlay" aria-label="Abspielen" disabled><i data-icon="play"></i></button>
+      <div class="player-btns">
+        <button class="icon-btn skip-btn" id="pPrev" aria-label="Zurück" title="Zurück (zum Anfang / voriger Song)" disabled><i data-icon="prev"></i></button>
+        <button class="icon-btn play-btn" id="pPlay" aria-label="Abspielen" disabled><i data-icon="play"></i></button>
+        <button class="icon-btn skip-btn" id="pNext" aria-label="Weiter" title="Nächster Song" disabled><i data-icon="next"></i></button>
+      </div>
       <div class="player-progress">
         <span id="pCur">0:00</span>
         <div class="bar" id="pBar"><div class="bar-fill" id="pFill"></div></div>

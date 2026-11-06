@@ -823,6 +823,24 @@ def similar(rid: int, limit: int = 15):
     return _similar(got[0], limit)
 
 
+@app.get("/api/audiofeat")
+def audiofeat_get(id: int | None = None, key: str | None = None, artist: str = "", title: str = "", isrc: str = "", dz: str = ""):
+    """Tempo / Tonart / Energie eines Songs (Speicher oder 30-s-Hörprobe von Deezer). {} = keine Hörprobe."""
+    from .. import audiofeat
+    extra = {}
+    if id is not None and (got := store.get_recognition(id)):
+        t, extra = got
+    elif key and (t := store.find_track(key)):
+        pass
+    elif artist.strip() and title.strip():
+        t = Track(title=title.strip()[:300], artists=[artist.strip()[:200]], isrc=isrc.strip().upper()[:12] or None,
+                  ids={"deezer": dz} if dz.isdigit() else {})
+    else:
+        raise HTTPException(400, "Song fehlt")
+    f = audiofeat.features(t, deezer_bpm=(extra or {}).get("bpm")) or {}
+    return {k: f.get(k) for k in ("bpm", "camelot", "key", "energy")} if f else {}
+
+
 @app.get("/api/mixmatch")
 def mixmatch(id: int | None = None, key: str | None = None):
     """„Passt dazu“: mixbare Songs (Tempo + Tonart) aus den eigenen Playlists."""
