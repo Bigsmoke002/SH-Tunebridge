@@ -3,7 +3,10 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.9.0)
+## 0.9.0 – 2026-11-06
+- **„Neu für dich“ filtern:** Suche (Titel, Künstler, Album), Dienst, Quelle (Lieblingssongs/Playlist), Genre,
+  Status (offen / automatisch einsortiert), BPM-Bereich und Sortierung. Wird gemerkt; „Alle erledigt“ wirkt bei
+  aktivem Filter nur auf die gefilterten Songs.
 - **Player: Vor und Zurück.** Neben ▶ gibt es ⏮/⏭. Klickst du einen Song an, bilden alle Songs der Ansicht die
   Warteschlange; ⏮ springt erst an den Anfang, dann zum vorigen Song.
 - **Ähnliche Songs mit Tempo, Tonart und Energie:** jede Zeile zeigt BPM, Camelot-Tonart und Energie (gemessen aus

@@ -2468,6 +2468,38 @@ const Inbox = {
     if (s.running && !this.timer) this.timer = setTimeout(() => { this.timer = null; this.badge(); }, 4000);
   },
 };
+/* Filter für „Neu für dich“ */
+const INBOX_FILTER0 = { q: "", sid: "", source: "", genre: "", status: "", bmin: null, bmax: null, sort: "neu" };
+Inbox.filter = { ...INBOX_FILTER0, ...store.get("inboxFilter", {}) };
+const inboxFiltered = F => !!(F.q || F.sid || F.source || F.genre || F.status || F.bmin != null || F.bmax != null);
+function inboxApply(items, F) {
+  const q = (F.q || "").toLowerCase().trim();
+  const out = items.filter(it => (!q || `${it.title} ${(it.artists || []).join(" ")} ${it.album || ""}`.toLowerCase().includes(q))
+    && (!F.sid || it.sid === F.sid) && (!F.source || it.source === F.source)
+    && (!F.genre || (F.genre === "?" ? !it.genre : it.genre === F.genre))
+    && (!F.status || (F.status === "auto" ? !!it.auto : !it.auto))
+    && (F.bmin == null || (it.bpm && it.bpm >= F.bmin)) && (F.bmax == null || (it.bpm && it.bpm <= F.bmax)));
+  const by = { neu: (a, b) => b.ts - a.ts, alt: (a, b) => a.ts - b.ts,
+    kuenstler: (a, b) => ((a.artists || [])[0] || "").localeCompare((b.artists || [])[0] || "", "de"),
+    titel: (a, b) => (a.title || "").localeCompare(b.title || "", "de"),
+    bpm: (a, b) => (a.bpm || 999) - (b.bpm || 999), genre: (a, b) => (a.genre || "~").localeCompare(b.genre || "~", "de") }[F.sort] || null;
+  return by ? out.sort(by) : out;
+}
+function inboxFilterBar(items) {
+  const F = Inbox.filter, uniq = k => [...new Set(items.map(it => it[k]).filter(Boolean))].sort((a, b) => String(a).localeCompare(String(b), "de"));
+  const opt = (k, v, label) => `<option value="${esc(v)}" ${F[k] === v ? "selected" : ""}>${esc(label)}</option>`;
+  const svcs = [...new Map(items.map(it => [it.sid, it.service])).entries()];
+  return `<div class="card ib-filter">
+    <input class="input" data-f="q" placeholder="Suchen: Titel, Künstler, Album …" value="${esc(F.q)}">
+    <select class="select select--sm" data-f="sid">${opt("sid", "", "Alle Dienste")}${svcs.map(([k, v]) => opt("sid", k, v)).join("")}</select>
+    <select class="select select--sm" data-f="source">${opt("source", "", "Alle Quellen")}${uniq("source").map(v => opt("source", v, v)).join("")}</select>
+    <select class="select select--sm" data-f="genre">${opt("genre", "", "Alle Genres")}${uniq("genre").map(v => opt("genre", v, v)).join("")}${items.some(it => !it.genre) ? opt("genre", "?", "Genre unbekannt") : ""}</select>
+    <select class="select select--sm" data-f="status">${opt("status", "", "Jeder Status")}${opt("status", "offen", "Noch offen")}${opt("status", "auto", "Automatisch einsortiert")}</select>
+    <span class="ib-bpm">BPM <input class="input num" type="number" min="40" max="250" data-f="bmin" value="${F.bmin ?? ""}" placeholder="von"> – <input class="input num" type="number" min="40" max="250" data-f="bmax" value="${F.bmax ?? ""}" placeholder="bis"></span>
+    <select class="select select--sm" data-f="sort" title="Sortierung">${opt("sort", "neu", "Neueste zuerst")}${opt("sort", "alt", "Älteste zuerst")}${opt("sort", "kuenstler", "Künstler A–Z")}${opt("sort", "titel", "Titel A–Z")}${opt("sort", "bpm", "Tempo (BPM)")}${opt("sort", "genre", "Genre")}</select>
+    <button class="btn btn--sm btn--ghost" id="ibReset" title="Alle Filter zurücksetzen">${icon("x")}Zurücksetzen</button>
+  </div>`;
+}
 const ago = ts => { const m = Math.round((Date.now() / 1000 - ts) / 60); return m < 1 ? "gerade eben" : m < 60 ? `vor ${m} min` : m < 1440 ? `vor ${Math.round(m / 60)} h` : `vor ${Math.round(m / 1440)} Tagen`; };
 
 Views.inbox = async (main) => {
@@ -2500,7 +2532,7 @@ Views.inbox = async (main) => {
       <button class="btn btn--sm btn--ghost" id="ibMore" title="Mehr">${icon("sliders")}</button>
     </div>
     ${errs.length ? `<div class="notice">${icon("info")}<div>${errs.map(([k, v]) => `<b>${esc(SVC_NAME(k))}:</b> ${esc(v)}`).join("<br>")}</div></div>` : ""}
-    ${items.length ? `<div class="ib-head"><span>${items.length} neue Songs</span><button class="btn btn--sm btn--ghost" id="ibClear">Alle erledigt</button></div><div class="ib-list">${items.map(row).join("")}</div>`
+    ${items.length ? `${inboxFilterBar(items)}<div class="ib-head"><span id="ibCount"></span><button class="btn btn--sm btn--ghost" id="ibClear">Alle erledigt</button></div><div class="ib-list" id="ibList"></div>`
       : `<div class="empty">${icon("inbox")}<h3>Nichts Neues</h3><p>${cfg.last_run ? "Seit dem letzten Abgleich ist in deinen Diensten nichts dazugekommen." : "Beim ersten Abgleich merkt sich SH-Tunebridge nur, was schon da ist – ab dann erscheinen hier neue Songs."}<br><a href="#/services">Dienste verbinden</a></p></div>`}
   </div>`;
   hydrateIcons(main);
@@ -2514,12 +2546,35 @@ Views.inbox = async (main) => {
   $("#ibRun").onclick = async () => { await api("/api/autosync/run", { method: "POST" }); toast("Abgleich läuft …"); setTimeout(() => route(), 600); Inbox.badge(); };
   $("#ibMore").onclick = () => modal({ title: "Abgleich zurücksetzen?", text: "SH-Tunebridge vergisst, welche Songs es schon gesehen hat, und leert diese Liste. Der nächste Abgleich merkt sich nur wieder den Ist-Stand.", confirm: "Zurücksetzen", danger: true,
     onConfirm: async () => { await api("/api/autosync/reset", { method: "POST" }); Inbox.badge(); route(); } });
-  const clr = $("#ibClear"); if (clr) clr.onclick = async () => { await api("/api/autosync/inbox/clear", { method: "POST" }); Inbox.badge(); route(); };
-  const gone = id => { $(`.ib-row[data-id="${CSS.escape(id)}"]`, main)?.remove(); Inbox.badge(); if (!$(".ib-row", main)) route(); };
+  // Filter (nur in der Ansicht, gemerkt pro Rechner)
+  let shown = items;
+  const F = Inbox.filter;
+  const draw = () => {
+    const list = $("#ibList", main); if (!list) return;
+    shown = inboxApply(items, F);
+    list.innerHTML = shown.length ? shown.map(row).join("") : `<div class="cell-sub" style="padding:14px">Kein Song passt zum Filter.</div>`;
+    $("#ibCount", main).textContent = inboxFiltered(F) ? `${shown.length} von ${items.length} neuen Songs` : `${items.length} neue Songs`;
+    $("#ibClear", main).textContent = inboxFiltered(F) ? `${shown.length} gefilterte erledigt` : "Alle erledigt";
+    $("#ibClear", main).disabled = !shown.length;
+    hydrateIcons(list); bindRows(); Player.sync();
+  };
+  $$("[data-f]", main).forEach(el => el[el.tagName === "SELECT" ? "onchange" : "oninput"] = () => {
+    F[el.dataset.f] = el.type === "number" ? (el.value === "" ? null : +el.value) : el.value;
+    store.set("inboxFilter", F); draw();
+  });
+  const fr = $("#ibReset", main);
+  if (fr) fr.onclick = () => { Object.assign(F, INBOX_FILTER0); store.set("inboxFilter", F); route(); };
+  const clr = $("#ibClear"); if (clr) clr.onclick = async () => {
+    if (!inboxFiltered(F)) { await api("/api/autosync/inbox/clear", { method: "POST" }); Inbox.badge(); return route(); }
+    for (const it of shown) await api(`/api/autosync/inbox/${it.id}/done`, { method: "POST" }).catch(() => null);
+    toast(`${shown.length} Songs erledigt`); Inbox.badge(); route();
+  };
+  const gone = id => { const i = items.findIndex(x => x.id === id); if (i >= 0) items.splice(i, 1); Inbox.badge(); if (!items.length) return route(); draw(); };
   const add = async (id, pl) => {
     try { const r = await api(`/api/autosync/inbox/${id}/add`, { method: "POST", body: { playlist: pl } }); toast(r.added ? `In „${pl}“ einsortiert` : `War schon in „${pl}“`); gone(id); refreshMeta(); }
     catch (e) { toast(e.message, "err"); }
   };
+  const bindRows = () => {
   $$("[data-add]", main).forEach(b => b.onclick = () => add(b.dataset.add, b.dataset.pl));
   $$("[data-undo]", main).forEach(b => b.onclick = async () => {
     try { const r = await api(`/api/autosync/inbox/${b.dataset.undo}/undo`, { method: "POST" }); toast(`Aus „${r.playlist}“ genommen – entscheide selbst`); refreshMeta(); route(); }
@@ -2528,7 +2583,8 @@ Views.inbox = async (main) => {
   $$("[data-done]", main).forEach(b => b.onclick = async () => { await api(`/api/autosync/inbox/${b.dataset.done}/done`, { method: "POST" }); gone(b.dataset.done); });
   $$("[data-other]", main).forEach(b => b.onclick = () => modal({ title: "In welche Playlist?", body: `<input class="input" id="ibPl" list="plnames" placeholder="Name einer Playlist (neu oder vorhanden)" style="width:100%" autocomplete="off">`, confirm: "Einsortieren",
     onConfirm: async box => { const v = $("#ibPl", box).value.trim(); if (!v) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; } await add(b.dataset.other, v); } }));
-  Player.sync();
+  };
+  draw();
   if (d.running) setTimeout(() => location.hash.startsWith("#/inbox") && route(), 3000);
 };
 
