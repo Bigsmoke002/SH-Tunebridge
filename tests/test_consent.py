@@ -16,7 +16,8 @@ def test_default_nothing_to_server_and_onboarding_needed(db):
     from tunebridge import consent
     c = consent.get()
     assert c["needs_onboarding"] and not consent.server_any()
-    assert all(c["local"].values()) and not any(c["server"].values())
+    assert all(c["local"].values()) and not consent.server("genredb")
+    assert {k for k, v in c["server"].items() if v} == {"genredb"}      # nur Laden vorausgewählt
 
 
 def test_privacy_required_and_domain_required(db):
@@ -24,7 +25,7 @@ def test_privacy_required_and_domain_required(db):
     with pytest.raises(ValueError):
         consent.save({"server": {"domain": True, "misses": True}})
     c = consent.save({"privacy": True, "server": {"misses": True, "songs": True}})   # Domain fehlt
-    assert not any(c["server"].values()) and not consent.server("misses")
+    assert not consent.server("misses") and not consent.server("songs")
     consent.save({"privacy": True, "server": {"domain": True, "fehler": True}})
     assert consent.server("fehler") and not consent.server("songs") and not consent.get()["needs_onboarding"]
 
@@ -60,3 +61,14 @@ def test_player_minimal_drops_local_paths_and_tracking():
     assert players.clean_url("https://soundcloud.com/a/b?utm_source=x") == "https://soundcloud.com/a/b"
     p = players.minimal({"player": "vlc", "title": "T", "trackid": "/org/x", "url": "file:///home/max/a.mp3"})
     assert "trackid" not in p and p["url"] == ""
+
+
+def test_genredb_preselected_but_only_after_dialog_and_without_domain(db):
+    from tunebridge import consent
+    assert not consent.server("genredb")                       # vor dem Einrichtungsdialog nichts laden
+    consent.save({"privacy": True, "server": {"domain": False}})
+    assert consent.server("genredb") and not consent.server_any()   # Laden ok, Senden nicht
+    consent.save({"privacy": True, "server": {"genredb": False}})
+    assert not consent.server("genredb")                       # abwählbar
+    consent.save({"privacy": True, "server": {"domain": True, "misses": True}})
+    assert not consent.server("genredb") and consent.server_any()   # Abwahl bleibt erhalten

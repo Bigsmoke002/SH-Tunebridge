@@ -3872,9 +3872,6 @@ const Consent = {
       "Je Song, den die App schon kennt (Erkennen, Sortieren, „Alles einlesen“): Datum, Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit. Das Genre wird nur aus " +
       "freien Quellen abgeleitet (MusicBrainz, Angaben im Titel) – nie aus Last.fm-, Deezer- oder Apple-Daten. Auch bereits vorhandene Songs, höchstens 2000 insgesamt. " +
       "Nie Playlist-Namen, Playlists, Konten oder Hörzeiten. Zweck: die Gemeinschafts-Genre-Datenbank vergrößern."],
-    ["genredb", "Gemeinschafts-Genre-Datenbank laden",
-      "Lädt einmal am Tag die signierte Datenbank (nur Song → Genre, keine Nutzerdaten) von diesem Server und nutzt sie bei der Erkennung. " +
-      "Gesendet wird dabei nichts außer der Anfrage selbst; die Signatur wird vor der Nutzung geprüft."],
     ["share", "Playlists teilen (Ende-zu-Ende verschlüsselt)",
       "Nur wenn du unter „Teilen“ Playlists freigibst oder Playlists von Freunden ansiehst: Die Playlists (Titel, Künstler, Album, ISRC, Genre – nie Musik oder Cover) " +
       "werden auf deinem Rechner mit AES-256 verschlüsselt; der Server speichert nur unlesbare Blöcke, eine zufällige Kennung und das Datum der letzten Änderung. " +
@@ -3887,13 +3884,19 @@ const Consent = {
       "Je erkanntem Song: Datum, Künstler, Titel, ISRC, ermitteltes Genre/Subgenre/Nische, Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor, KI-Musik-Hinweis. " +
       "Kein Hörverlauf mit Uhrzeit, keine Playlists, kein Konto. Zweck: Genre-Zuordnung und Song-Analyse für alle verbessern."],
   ],
+  LOAD: [
+    ["genredb", "Gemeinschafts-Genre-Datenbank laden",
+      "Lädt einmal am Tag eine signierte Datei (nur Song → Genre, keine Nutzerdaten) von https://shtunebridge.bs002.de und nutzt sie beim Erkennen und Sortieren. " +
+      "Gesendet wird nichts – technisch sieht der Server nur die Anfrage mit deiner IP-Adresse. Die Signatur wird vor der Nutzung geprüft. " +
+      "Vorausgewählt, weil es die Genre-Erkennung deutlich verbessert (berechtigtes Interesse); einfach abwählen, wenn du das nicht möchtest."],
+  ],
   async dialog(first = false) {
     const c = await api("/api/consent");
     const comp = first ? await api("/api/companion").catch(() => null) : null;
     const compRow = (id, lbl, hint) => `<div class="cons-row">
         <label class="switch"><input type="checkbox" data-comp="${id}" checked><span class="track"></span></label>
         <div><div class="lbl">${esc(lbl)}</div><div class="hint">${esc(hint)}</div></div></div>`;
-    const compSec = comp?.available ? `<div class="cons-h">3 · Bedienung am Desktop <span>(jederzeit unter Einstellungen → Darstellung änderbar)</span></div>
+    const compSec = comp?.available ? `<div class="cons-h">4 · Bedienung am Desktop <span>(jederzeit unter Einstellungen → Darstellung änderbar)</span></div>
       ${compRow("bubble", "Schwebe-Icon anzeigen", "Kleines Icon, das immer im Vordergrund bleibt: ein Klick erkennt die Musik, die gerade am Rechner läuft. Lässt sich frei verschieben.")}
       ${compRow("tray", "Symbol in der Statusleiste (Tray)", "Symbol neben der Uhr: Erkennen, App öffnen, Beenden. Solange es an ist, legt das Fenster-✕ die App dorthin, statt sie zu beenden.")}` : "";
     const sw = (group, [id, lbl, hint]) => `<div class="cons-row">
@@ -3904,7 +3907,9 @@ const Consent = {
         Alles lässt sich später unter <b>Einstellungen → Datenschutz</b> ändern oder widerrufen.</p>
       <div class="cons-h">1 · Auf diesem Rechner speichern <span>(nur lokal, verlässt den Rechner nicht)</span></div>
       ${this.LOCAL.map(r => sw("local", r)).join("")}
-      <div class="cons-h">2 · An den Entwickler senden <span>(freiwillig – standardmäßig aus)</span></div>
+      <div class="cons-h">2 · Vom Entwickler laden <span>(nichts wird gesendet – vorausgewählt, abwählbar)</span></div>
+      ${this.LOAD.map(r => sw("server", r)).join("")}
+      <div class="cons-h">3 · An den Entwickler senden <span>(freiwillig – standardmäßig aus)</span></div>
       <div class="cons-box">
         <label class="cons-check"><input type="checkbox" data-c="server.domain" ${c.server.domain ? "checked" : ""}>
           <span>Ich erlaube, dass die unten ausgewählten Daten <b>ohne Namen, Konto, Rechnernamen oder Ton</b> ausschließlich an
@@ -3918,7 +3923,7 @@ const Consent = {
           <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:6px"><button type="button" class="btn btn--sm btn--ghost" data-cons-none>Alle abwählen</button><button type="button" class="btn btn--sm" data-cons-all>Alle erlauben</button></div></div>
       </div>
       ${compSec}
-      <div class="cons-h">${compSec ? 4 : 3} · Datenschutzerklärung</div>
+      <div class="cons-h">${compSec ? 5 : 4} · Datenschutzerklärung</div>
       <label class="cons-check"><input type="checkbox" data-c="privacy" ${c.privacy_at ? "checked" : ""}>
         <span>Ich habe die <a href="${PRIVACY_URL}" target="_blank" rel="noopener">Datenschutzerklärung</a> gelesen und bin einverstanden.
         Kontakt für Datenschutzanfragen: <a href="mailto:info@smokes-hub.de">info@smokes-hub.de</a> · Discord: Bigsmoke002.de</span></label>
@@ -3933,11 +3938,13 @@ const Consent = {
         const body = { privacy: true, local: {}, server: { domain: v("server.domain") } };
         this.LOCAL.forEach(([id]) => body.local[id] = v(`local.${id}`));
         this.SERVER.forEach(([id]) => body.server[id] = body.server.domain && v(`server.${id}`));
+        this.LOAD.forEach(([id]) => body.server[id] = v(`server.${id}`));
         await api("/api/consent", { method: "POST", body });
         if (compSec) await api("/api/companion", { method: "POST", body: { bubble: v2("bubble"), tray: v2("tray") } })
           .catch(e => toast(e.message, "err"));
         toast("Gespeichert");
         const pb = $("#privacyBox"); if (pb) Privacy.render(pb);
+        if (body.server.genredb) toast("Genre-Datenbank wird im Hintergrund geladen");
       },
     });
     const dom = $('[data-c="server.domain"]');
@@ -3970,7 +3977,7 @@ const Privacy = {
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
       ["Genre-Datenbank", "deine Einordnungen bleiben lokal; Playlist-Namen werden nur lokal ausgewertet", c.server.genres ? "Beiträge: mit deiner Einwilligung" : "Beiträge: aus"],
-      [`${c.domain} (Gemeinschafts-Genre-Datenbank)`, "nur die Anfrage – Datei ist signiert, enthält nur Song → Genre", c.server.genredb ? "einmal am Tag" : "aus"],
+      [`${c.domain} (Gemeinschafts-Genre-Datenbank)`, "nur die Anfrage – Datei ist signiert, enthält nur Song → Genre", c.server.genredb && c.privacy_at ? "einmal am Tag (abwählbar)" : "aus"],
       [`${c.domain} (Playlists teilen)`, "nur verschlüsselte Blöcke – Server kann sie nicht lesen", c.server.share ? "beim Teilen / Ansehen von Freunde-Playlists" : "aus"],
       ["Offizielle Player (YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer)", "IP-Adresse, Geräteinfos, ggf. Cookies des Anbieters", "erst nach deinem Klick auf „Player laden“"],
       ["Deezer / Apple (Cover, Hörproben)", "deine IP-Adresse beim Laden", "beim Anzeigen/Abspielen"],
@@ -4168,7 +4175,7 @@ const Community = {
     let d; try { d = await api("/api/community"); } catch (e) { box.innerHTML = `<div class="notice">${icon("info")}<div>${esc(e.message)}</div></div>`; return hydrateIcons(box); }
     const ago = ts => ts ? new Date(ts * 1000).toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" }) : "noch nie";
     const ready = d.privacy && d.domain;
-    const any = Object.values(d.consent).some(Boolean);
+    const any = Object.values(d.consent).some(Boolean), canSync = d.privacy && (ready || d.consent.genredb);
     const last = d.last ? `${ago(d.last.ts)}${["genres", "bibliothek", "genredb"].some(k => d.last[k]) ? ` – ${[d.last.genres && `${d.last.genres} Einordnungen`, d.last.bibliothek && `${d.last.bibliothek} Bibliotheks-Songs`, d.last.genredb && "Datenbank aktualisiert"].filter(Boolean).join(", ")}` : " – nichts Neues"}` : "noch nie";
     box.innerHTML = `
       ${ready ? "" : `<div class="card set-group" style="margin-bottom:14px"><div class="set-row" style="grid-template-columns:1fr"><div>
@@ -4189,16 +4196,18 @@ const Community = {
         <dt>Gemeinschafts-Datenbank</dt><dd>${d.community?.songs != null ? `${d.community.songs} Songs · Stand ${esc(d.community.created || "?")}` : "noch nicht geladen"}</dd>
         <dt>Letzter Abgleich</dt><dd>${esc(last)}</dd>
       </dl>
-      <div class="btn-row" style="padding:10px 14px 14px"><button class="btn btn--primary" id="cmSync" ${any && ready ? "" : "disabled"}>${icon("repeat")}Jetzt abgleichen</button>
+      <div class="btn-row" style="padding:10px 14px 14px"><button class="btn btn--primary" id="cmSync" ${any && canSync ? "" : "disabled"}>${icon("repeat")}Jetzt abgleichen</button>
         <span class="cell-sub">Pro Abgleich höchstens ${d.lib_per_sync} Bibliotheks-Songs und 200 Einordnungen – der Rest folgt beim nächsten Mal.</span></div></div>
       <p class="cell-sub" style="margin-top:10px">Widerrufen: Schalter aus. Bereits Gesendetes löschst du unter <a href="#/settings?tab=datenschutz">Datenschutz</a> („Meine Daten beim Entwickler löschen“).</p>`;
     hydrateIcons(box);
     $$("[data-cm]", box).forEach(i => i.onchange = async () => {
-      if (!ready && i.checked && !(($("#cmP", box)?.checked) && $("#cmD", box)?.checked)) {
-        i.checked = false; return toast("Bitte zuerst beide Punkte oben bestätigen", "err");
+      const load = i.dataset.cm === "genredb";                    // nur laden: Domain-Freigabe nicht nötig
+      const privOk = d.privacy || $("#cmP", box)?.checked;
+      if (!ready && i.checked && !(privOk && (load || $("#cmD", box)?.checked))) {
+        i.checked = false; return toast(load ? "Bitte zuerst die Datenschutzerklärung bestätigen" : "Bitte zuerst beide Punkte oben bestätigen", "err");
       }
       try {
-        await api("/api/consent", { method: "POST", body: { privacy: true, server: { ...(ready ? {} : { domain: true }), [i.dataset.cm]: i.checked } } });
+        await api("/api/consent", { method: "POST", body: { privacy: true, server: { ...(ready || load ? {} : { domain: true }), [i.dataset.cm]: i.checked } } });
         toast(i.checked ? "Erlaubt" : "Ausgeschaltet"); this.render(box);
       } catch (e) { i.checked = !i.checked; toast(e.message, "err"); }
     });

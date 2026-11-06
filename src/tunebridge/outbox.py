@@ -148,7 +148,7 @@ async def loop() -> None:
     """Hintergrund: 2 Minuten nach Start, danach alle 6 Stunden – nur wenn etwas erlaubt ist."""
     await asyncio.sleep(120)
     while True:
-        if consent.server_any():
+        if consent.server_any() or consent.server("genredb"):   # Senden bzw. Genre-Datei laden
             try:
                 await asyncio.to_thread(flush, True)
             except Exception as e:     # Server nicht erreichbar o. Ä. – beim nächsten Mal wieder

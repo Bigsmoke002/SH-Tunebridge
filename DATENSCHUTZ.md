@@ -47,8 +47,12 @@ Ziel-Domain `shtunebridge.bs002.de` wählbar):
   du **einzeln und mit Bestätigung** freigibst; diese Angaben sind dann für alle sichtbar. Siehe
   „Öffentliches Playlist-Verzeichnis“.
 
-**Laden** (standardmäßig aus): *Gemeinschafts-Genre-Datenbank laden* – einmal am Tag eine signierte Datei
-(nur Song → Genre) vom selben Server. Gesendet wird dabei nur die Anfrage selbst.
+**Laden** (im Einrichtungsdialog vorausgewählt, abwählbar): *Gemeinschafts-Genre-Datenbank laden* – einmal am
+Tag eine signierte Datei (nur Song → Genre) vom selben Server. Gesendet werden keine Inhalte; technisch erhält der
+Server nur die Anfrage mit deiner IP-Adresse. Geladen wird erst, nachdem du den Einrichtungsdialog mit bestätigter
+Datenschutzerklärung gespeichert hast. Rechtsgrundlage: berechtigtes Interesse (Art. 6 Abs. 1 lit. f DSGVO) an einer
+besseren Genre-Erkennung; du kannst jederzeit widersprechen, indem du den Schalter abwählst (Einstellungen ›
+Datenschutz oder › Gemeinschaft) – die geladene Datei wird dann sofort entfernt.
 
 Nie gesendet: Ton/Aufnahmen, Rechner-, Benutzer- oder Gerätenamen, Konten, Tokens, ganze Playlists,
 Playlist-Namen, Uhrzeiten.
@@ -91,7 +95,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
 | Entwickler (`shtunebridge.bs002.de`) – Playlists teilen | nur Ende-zu-Ende-verschlüsselte Blöcke, zufällige Bereichs-Kennung, Prüfwert des Schreib-Schlüssels (technisch deine IP-Adresse) | beim Teilen, Aktualisieren und Ansehen von Freunde-Playlists, **nur mit Einwilligung** „Playlists teilen“ |
 | Entwickler (`shtunebridge.bs002.de`) – Öffentliches Playlist-Verzeichnis | Suchanfrage; beim Veröffentlichen Playlist-Name, Pseudonym, Genre, Beschreibung, Songliste, Kennung deiner Installation (technisch deine IP-Adresse) | beim Stöbern, Veröffentlichen, Melden, **nur mit Einwilligung** „Verzeichnis“ |
-| Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, **nur mit Einwilligung** „laden“ |
+| Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, vorausgewählt und jederzeit abwählbar (erst nach dem Einrichtungsdialog) |
 
 Für diese Dienste gelten deren eigene Datenschutzbestimmungen.
 

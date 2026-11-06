@@ -3,6 +3,11 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht (0.9.1)
+- **Gemeinschafts-Genre-Datenbank laden ist jetzt vorausgewählt** – im Einrichtungsdialog als eigener Punkt
+  „Vom Entwickler laden“ (abwählbar). Es wird nichts gesendet; geladen wird erst nach dem Speichern des Dialogs und
+  unabhängig von der Freigabe zum Senden. Bestehende Einstellungen bleiben unverändert.
+
 ## 0.9.0 – 2026-11-06
 - **Alles durchsuchen** (oben in der Seitenleiste oder Strg+K): Seiten und Funktionen, Einstellungen, deine Playlists,
   Playlists deiner Dienste, Songs in deinen Playlists und der Erkennungsverlauf. Pfeiltasten + Enter; Einstellungen
