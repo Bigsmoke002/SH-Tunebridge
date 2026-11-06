@@ -13,6 +13,8 @@ os.environ["TUNEBRIDGE_DATA"] = os.path.join(_SAFE, "data")
 os.environ["XDG_CONFIG_HOME"] = os.path.join(_SAFE, "config")
 os.environ["TUNEBRIDGE_DOWNLOADS"] = os.path.join(_SAFE, "downloads")
 os.makedirs(os.environ["TUNEBRIDGE_DOWNLOADS"], exist_ok=True)
+# TestClient schickt Host „testserver“ – die Host-Prüfung (web/guard.py) testet tests/test_guard.py gezielt
+os.environ["TUNEBRIDGE_OPEN_HOST"] = "1"
 
 
 @pytest.fixture(autouse=True)

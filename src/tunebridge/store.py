@@ -109,6 +109,8 @@ def _conn(path: Path | None = None):
         if str(path) not in _migrated:
             migrate(c)
             _migrated.add(str(path))
+            for f in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+                config.private(f)   # Datenbank nur für den eigenen Benutzer lesbar
         with c:  # Transaktion: commit bei Erfolg, rollback bei Fehler
             yield c
     finally:

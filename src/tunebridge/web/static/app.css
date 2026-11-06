@@ -1519,3 +1519,14 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .ba-dir { display: flex; gap: 8px; }
 .ba-dir .input { flex: 1; min-width: 0; font-family: ui-monospace, monospace; font-size: 12.5px; }
 .ba-state { margin-top: 10px; white-space: normal; }
+
+/* Vor/Zurück oben links über dem Inhalt (bleibt beim Scrollen stehen) */
+.hist-nav { grid-area: main; align-self: start; justify-self: start; z-index: 6; display: flex; gap: 2px; margin: 12px 0 0 14px;
+            padding: 2px; border-radius: var(--radius-sm); background: color-mix(in srgb, var(--bg-2) 82%, transparent);
+            border: 1px solid var(--line, var(--bg-4)); backdrop-filter: blur(6px); }
+.hist-nav .icon-btn { width: 28px; height: 28px; color: var(--text-2); }
+.hist-nav .icon-btn:hover:not(:disabled) { color: var(--text); }
+.hist-nav .icon-btn:disabled { opacity: .3; cursor: default; }
+.hist-nav .hist-back i[data-icon] { transform: rotate(180deg); }
+.main > .page { padding-top: 54px; }
+.main > .settings-shell .set-side { padding-top: 50px; }

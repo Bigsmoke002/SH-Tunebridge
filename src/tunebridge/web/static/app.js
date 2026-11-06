@@ -2599,7 +2599,7 @@ const KIND = { manuell: ["Manuell", "manual", "archive"], auto: ["Automatisch", 
 
 // Sicherung lebt unter Einstellungen › Sicherung (#backupBox); alte Links #/backup leiten dorthin um
 Views.backup = async (main) => {
-  if (main.id === "main") { location.replace("#/settings?tab=sicherung"); return; }
+  if (main.id === "main") { Hist.replacing = true; location.replace("#/settings?tab=sicherung"); return; }
   const d = await api("/api/backups");
   main.innerHTML = `<div class="backup-embed">
     <div class="backup-hero">
@@ -4766,6 +4766,55 @@ Player.init();
 Traffic.initClient();
 DiscordUI.init();
 setInterval(() => Traffic.pill(), 2500); Traffic.pill();
+/* Vor/Zurück wie im Browser: Pfeile oben links, Alt+←/→, Maus-Seitentasten.
+   Jeder Eintrag im Fensterverlauf bekommt eine Nummer (history.state.tbIdx) – so wissen die Pfeile,
+   ob es noch zurück bzw. vor geht. */
+const Hist = {
+  idx: 0, max: 0, replacing: false,
+  init() {
+    try { this.max = +sessionStorage.getItem("tb:histMax") || 0; } catch { /* ohne Speicher: nur diese Sitzung */ }
+    const st = history.state;
+    if (st && typeof st.tbIdx === "number") this.idx = st.tbIdx;
+    else history.replaceState({ tbIdx: 0 }, "");
+    this.max = Math.max(this.max, this.idx);
+    $("#navBack").onclick = () => this.go(-1);
+    $("#navFwd").onclick = () => this.go(1);
+    document.addEventListener("keydown", e => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.target.closest("input, textarea, select, [contenteditable=true]")) return;
+      if (e.key === "ArrowLeft") { e.preventDefault(); this.go(-1); }
+      if (e.key === "ArrowRight") { e.preventDefault(); this.go(1); }
+    });
+    // Maus-Seitentasten (3 = zurück, 4 = vor); preventDefault verhindert, dass das Fenster selbst noch einmal springt
+    document.addEventListener("mousedown", e => { if (e.button === 3 || e.button === 4) e.preventDefault(); });
+    document.addEventListener("mouseup", e => {
+      if (e.button === 3 || e.button === 4) { e.preventDefault(); this.go(e.button === 3 ? -1 : 1); }
+    });
+    this.render();
+  },
+  go(d) {
+    if (d < 0 && this.idx > 0) history.back();
+    else if (d > 0 && this.idx < this.max) history.forward();
+  },
+  changed() {
+    const st = history.state;
+    if (st && typeof st.tbIdx === "number") this.idx = st.tbIdx;            // vor/zurück zu bekanntem Eintrag
+    else {                                                                  // neue Ansicht (oder ersetzt)
+      if (!this.replacing) this.idx += 1;
+      this.max = this.idx;                                                  // „Vor“-Einträge sind jetzt weg
+      history.replaceState({ tbIdx: this.idx }, "");
+    }
+    this.replacing = false;
+    try { sessionStorage.setItem("tb:histMax", String(this.max)); } catch { /* egal */ }
+    this.render();
+  },
+  render() {
+    $("#navBack").disabled = this.idx <= 0;
+    $("#navFwd").disabled = this.idx >= this.max;
+  },
+};
+Hist.init();
+window.addEventListener("hashchange", () => Hist.changed());
 window.addEventListener("hashchange", route);
 setTimeout(() => Update.check(), 4000);
 Limits.refresh();   // Limit-Hinweis auf allen Seiten

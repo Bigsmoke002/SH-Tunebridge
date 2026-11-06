@@ -35,6 +35,20 @@ DATA = data_dir()
 DATA.mkdir(parents=True, exist_ok=True)
 
 
+def private(path: Path, mode: int = 0o600) -> None:
+    """Nur für den eigenen Benutzer lesbar machen (Linux/macOS; unter Windows regeln das die Benutzerordner)."""
+    if os.name != "posix":
+        return
+    try:
+        if path.exists() and path.stat().st_uid == os.getuid() and (path.stat().st_mode & 0o777) != mode:
+            path.chmod(mode)
+    except OSError:
+        pass
+
+
+private(DATA, 0o700)   # Datenbank, Tokens, Sicherungs-Schlüssel: andere Benutzer des Rechners haben hier nichts zu suchen
+
+
 def opt(key: str) -> str | None:
     return os.environ.get(key) or None
 

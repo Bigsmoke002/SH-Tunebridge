@@ -30,6 +30,8 @@ from ..split import split_by_genre
 from ..suggest import suggest
 
 app = FastAPI(title="SH-Tunebridge")
+from .guard import GuardMiddleware  # noqa: E402
+app.add_middleware(GuardMiddleware)   # fremde Webseiten / DNS-Rebinding abweisen
 
 
 @app.middleware("http")

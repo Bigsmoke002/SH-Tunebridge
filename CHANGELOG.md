@@ -4,6 +4,14 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.8.1)
+- **Vor/Zurück:** Pfeile oben links über jeder Ansicht, dazu Alt+←/→ und die Seitentasten der Maus –
+  wie im Browser. Ist kein Schritt zurück/vor möglich, ist der Pfeil ausgegraut.
+- **Sicherheit:** Die App nimmt nur noch Anfragen von sich selbst an. Fremde Webseiten im Browser konnten bisher im
+  Hintergrund Anfragen an die App auf 127.0.0.1 schicken (bzw. per DNS-Rebinding Daten mitlesen) – jetzt werden
+  fremder Host, fremde Herkunft und Anfragen von fremden Seiten abgewiesen (auch Live-Verbindungen).
+  Rückleitungen nach dem Login bei Spotify & Co. funktionieren weiter.
+- **Sicherheit:** Datenordner und Datenbank sind unter Linux/macOS nur noch für den eigenen Benutzer lesbar
+  (vorher konnten andere Benutzer desselben Rechners die Datenbank lesen). Wird beim Start automatisch gesetzt.
 - Fehler behoben: Playlists mit „/“ im Namen (z. B. „Ambient / Chill“, „Rock / Metal“) ließen sich nicht öffnen,
   umbenennen oder löschen – es kam nur „Da ist etwas schiefgelaufen – Not Found“.
 

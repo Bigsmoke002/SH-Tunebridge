@@ -140,6 +140,7 @@ def companion(port: int = 8765):
 @app.command()
 def ui(port: int = 8765, host: str = "127.0.0.1", browser: bool = True):
     """Startet die Oberfläche (Erkennen, Reinhören, Einsortieren) im Browser."""
+    import os
     import socket
     import threading
     import webbrowser
@@ -156,6 +157,8 @@ def ui(port: int = 8765, host: str = "127.0.0.1", browser: bool = True):
     if browser:
         threading.Timer(1.2, webbrowser.open, args=(url,)).start()
     con.print(f"SH-Tunebridge läuft auf [bold]{url}[/]  (Strg+C beendet)")
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        os.environ["TUNEBRIDGE_OPEN_HOST"] = "1"   # bewusst im Netz geöffnet -> Host-Prüfung aus (Herkunft weiter geprüft)
     uvicorn.run("tunebridge.web.app:app", host=host, port=port, log_level="warning")
 
 
