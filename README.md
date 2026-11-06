@@ -51,8 +51,9 @@ geht die Erkennung über das Mikrofon. Beim ersten Mal fragt macOS nach der Mikr
 Unterschiede zu Linux: einzelne Anwendungen lassen sich nur unter Linux getrennt aufnehmen, und „Was spielt
 gerade?“ (Player-Erkennung) gibt es vorerst nur unter Linux. Updates: Die App prüft auf neue **signierte**
 Versionen und installiert sie auf Klick (Windows/macOS: Austausch beim Neustart, vorher automatische Sicherung).
-**Windows mit Version 0.6.0:** Diese Version startet nicht (Fehler im Fenstersymbol) und kann sich deshalb nicht
-selbst aktualisieren – bitte 0.6.3 oder neuer einmal von Hand laden.
+**Windows mit Version 0.9.1 oder älter:** Das Selbst-Update tauscht dort die Programmdateien nicht aus (Fehler im
+Austausch-Skript) – bitte 0.9.2 oder neuer **einmal von Hand** mit dem Setup installieren; danach aktualisiert sich
+die App wieder selbst.
 Gebaut und getestet werden diese Versionen auf GitHubs eigenen Windows- und Mac-Rechnern.
 
 ## Datenschutz

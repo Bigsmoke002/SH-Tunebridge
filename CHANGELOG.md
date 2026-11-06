@@ -4,6 +4,11 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.9.2)
+- **Windows: Selbst-Update repariert.** Das Hilfsskript, das beim Neustart die alte gegen die neue Version tauscht,
+  startete aus der fensterlosen App heraus nicht – die App beendete sich, das Update blieb liegen. Jetzt läuft der
+  Tausch (geprüft in der Windows-VM: Update bei laufendem Schwebe-Icon, Neustart, Begleiter wieder da). Ein Protokoll
+  des Tauschs liegt in `%TEMP%\sh-tunebridge-tausch.log`. **Wichtig:** Da der Tausch von der *alten* Version
+  ausgeführt wird, bitte 0.9.2 unter Windows **einmal von Hand** installieren (Setup) – danach klappen Updates selbst.
 - **Schwebe-Icon und Tray-Symbol unter Linux (AppImage) repariert:** Sie stürzten beim Start ab, weil das AppImage
   eine nicht passende Tastatur-Bibliothek (libxkbcommon) mit der des Systems mischte. Jetzt liegen beide passend bei.
 - **Schwebe-Icon und Tray-Symbol jetzt auch unter Windows** (bisher nur Hinweis „kommt mit einem späteren Update“).

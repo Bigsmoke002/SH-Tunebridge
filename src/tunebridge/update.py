@@ -128,7 +128,8 @@ def _releases() -> list[dict]:
     if not slug:
         raise RuntimeError("Update-Quelle ist kein GitHub-Repo")
     with _http() as c:
-        r = c.get(f"https://api.github.com/repos/{slug}/releases", params={"per_page": 15})
+        api = (config.opt("UPDATE_API") or "https://api.github.com").rstrip("/")   # nur für Update-Tests umlenkbar;
+        r = c.get(f"{api}/repos/{slug}/releases", params={"per_page": 15})            # Signatur gilt trotzdem
         if r.status_code == 404:
             raise RuntimeError("Keine Releases gefunden (Repo privat?)")
         r.raise_for_status()
@@ -552,21 +553,26 @@ def _swap_and_restart() -> None:
     if osutil.WINDOWS:
         q = lambda x: "'" + x.replace("'", "''") + "'"  # noqa: E731 – PowerShell-String
         script = Path(w) / "tausch.ps1"
+        log = Path(tempfile.gettempdir()) / "sh-tunebridge-tausch.log"   # zur Fehlersuche, wird jedes Mal überschrieben
         script.write_text(f"""$ErrorActionPreference = 'Stop'
+Start-Transcript -Path {q(str(log))} -Force | Out-Null
 while (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 300 }}
 Start-Sleep -Milliseconds 500
 $t = {q(t)}; $n = {q(n)}; $b = $t + '.alt'
 if (Test-Path $b) {{ Remove-Item -Recurse -Force $b }}
-try {{ Move-Item $t $b; Move-Item $n $t }}
-catch {{ if ((Test-Path $b) -and -not (Test-Path $t)) {{ Move-Item $b $t }} }}
+try {{ Move-Item $t $b; Move-Item $n $t; 'Ausgetauscht' }}
+catch {{ "Austausch fehlgeschlagen: $_"; if ((Test-Path $b) -and -not (Test-Path $t)) {{ Move-Item $b $t }} }}
 Start-Process (Join-Path $t 'SH-Tunebridge.exe')
 Start-Sleep -Seconds 3
 Remove-Item -Recurse -Force $b -ErrorAction SilentlyContinue
 Remove-Item -Recurse -Force {q(w)} -ErrorAction SilentlyContinue
 """, encoding="utf-8-sig")
-        flags = 0x00000008 | 0x00000200 | 0x08000000      # DETACHED_PROCESS | NEW_PROCESS_GROUP | NO_WINDOW
+        # NICHT DETACHED_PROCESS: PowerShell ohne Konsole startet aus der fensterlosen App gar nicht (bis 0.9.1 blieb
+        # das Update deshalb liegen). Unsichtbare eigene Konsole + gültige Ein-/Ausgabe statt der ungültigen der App.
+        flags = 0x00000200 | 0x08000000                    # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
         subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-                          "-File", str(script)], creationflags=flags, close_fds=True)
+                          "-File", str(script)], creationflags=flags, close_fds=True,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         import shlex
         T, N, W = shlex.quote(t), shlex.quote(n), shlex.quote(w)
