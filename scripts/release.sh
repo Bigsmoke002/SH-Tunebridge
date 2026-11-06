@@ -13,6 +13,7 @@ git rev-parse -q --verify "refs/tags/v$VER" >/dev/null && { echo "v$VER existier
 uv run pytest -q
 sed -i "s/^version = \".*\"/version = \"$VER\"/" pyproject.toml
 uv lock -q
+sed -i "s/^## Unveröffentlicht ($VER)$/## $VER – $(date +%F)/" CHANGELOG.md
 git commit -qam "Release v$VER"
 MSG="$SUBJ"$'\n'; for line in "$@"; do MSG+=$'\n'"- $line"; done
 git tag -s "v$VER" -m "$MSG"

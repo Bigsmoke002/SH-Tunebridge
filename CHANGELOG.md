@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.9.2)
+## 0.9.2 – 2026-11-06
 - **Windows: Selbst-Update repariert.** Das Hilfsskript, das beim Neustart die alte gegen die neue Version tauscht,
   startete aus der fensterlosen App heraus nicht – die App beendete sich, das Update blieb liegen. Jetzt läuft der
   Tausch (geprüft in der Windows-VM: Update bei laufendem Schwebe-Icon, Neustart, Begleiter wieder da). Ein Protokoll
