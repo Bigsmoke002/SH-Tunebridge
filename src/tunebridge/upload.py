@@ -80,7 +80,9 @@ def _signed_post(path: str, payload: dict, timeout: float = 20) -> dict:
     except ValueError:
         data = {}
     if resp.status_code >= 400:
-        msg = data.get("error") or f"HTTP {resp.status_code}"
+        msg = data.get("error") or {413: "Anfrage zu groß für den Server", 429: "Zu viele Anfragen – bitte später erneut",
+                                    502: "Server gerade nicht erreichbar", 503: "Server gerade nicht bereit"}.get(resp.status_code,
+                                                                                                         f"HTTP {resp.status_code}")
         dbg.problem("senden", f"Server lehnt ab: {msg}", status=resp.status_code)
         raise UploadError(msg)
     return data

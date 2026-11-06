@@ -1110,6 +1110,10 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
   .nav-fold { display: none; }
   .side-scroll { width: 100%; align-items: center; margin: 0; padding: 0; }
   .fold-body { width: 100%; align-items: center; }
+  /* schmales Fenster = Icon-Leiste: Playlist-Namen und Datenverbrauch-Text ausblenden (wie eingeklappte Leiste) */
+  .sidebar .side-playlists.fold-body, .nav-label--pl { display: none; }
+  .traffic-pill { width: 40px; height: 34px; padding: 0; justify-content: center; margin: 2px auto; }
+  .traffic-pill span, .traffic-pill em { display: none; }
 }
 
 /* ================================================================= Song-Details: Öffnen & Kaufen */

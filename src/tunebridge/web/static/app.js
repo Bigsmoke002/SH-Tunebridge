@@ -4360,6 +4360,7 @@ const Share = {
 };
 
 /* ================================================================= Öffentliches Playlist-Verzeichnis */
+const nSongs = n => `${n} ${n === 1 ? "Song" : "Songs"}`;
 const PubDir = {
   q: "", genre: "", page: 0, reasons: {},
   day: ts => new Date(ts * 1000).toLocaleDateString("de-DE"),
@@ -4378,19 +4379,19 @@ const PubDir = {
   card(p) {
     return `<button class="card pd-card" data-pd="${p.id}">
       <div class="pd-top"><span class="li-title">${esc(p.name)}</span>${p.info ? tip(p.info) : ""}</div>
-      <div class="cell-sub">von ${esc(p.alias)} · ${p.n} Songs${p.genre ? ` · ${esc(p.genre)}` : ""} · ${this.day(p.updated)}</div></button>`;
+      <div class="cell-sub">von ${esc(p.alias)} · ${nSongs(p.n)}${p.genre ? ` · ${esc(p.genre)}` : ""} · ${this.day(p.updated)}</div></button>`;
   },
   async open(id) {
     let p; try { p = await api(`/api/pubdir/item/${id}`); } catch (e) { return toast(e.message, "err"); }
     const rows = (p.tracks || []).map((t, i) => `<li><span class="pd-n">${i + 1}</span><span class="pd-t">${esc(t.title)}</span><span class="cell-sub">${esc((t.artists || []).join(", "))}</span></li>`).join("");
     modal({ title: p.name, wide: true, cancel: "Schließen", confirm: "In meine Playlists übernehmen",
-      text: `von ${esc(p.alias)} · ${p.n} Songs${p.genre ? ` · ${esc(p.genre)}` : ""} · aktualisiert ${this.day(p.updated)}`,
+      text: `von ${esc(p.alias)} · ${nSongs(p.n)}${p.genre ? ` · ${esc(p.genre)}` : ""} · aktualisiert ${this.day(p.updated)}`,
       body: `${p.info ? `<p class="pd-info">${esc(p.info)}</p>` : ""}<ol class="pd-tracks">${rows}</ol>
         <div class="pd-foot"><button class="btn btn--sm btn--ghost" id="pdReport">${icon("flag")}Melden</button>
         <span class="cell-sub">Inhalte stammen von Nutzern. Rechtswidriges oder Persönliches bitte melden.</span></div>`,
       onConfirm: async () => {
         const r = await api("/api/pubdir/copy", { method: "POST", body: { id } });
-        toast(`„${r.name}“ angelegt · ${r.count} Songs`); refreshMeta();
+        toast(`„${r.name}“ angelegt · ${nSongs(r.count)}`); refreshMeta();
       } });
     const box = $("#modalBox"); hydrateIcons(box);
     $("#pdReport", box).onclick = () => this.report(p);
@@ -4426,7 +4427,7 @@ const PubDir = {
         if (!$("#pdOk1", box).checked || !$("#pdOk2", box).checked) { toast("Bitte beide Punkte bestätigen", "err"); throw { silent: true }; }
         const r = await api("/api/pubdir/publish", { method: "POST", body: { name: $("#pdPl", box).value, alias: $("#pdAl", box).value,
           genre: $("#pdGe", box).value, info: $("#pdIn", box).value, confirm: true } });
-        toast(`Veröffentlicht · ${r.n} Songs${r.gekappt ? " (auf 500 gekürzt)" : ""}`); route();
+        toast(`Veröffentlicht · ${nSongs(r.n)}${r.gekappt ? " (auf 500 gekürzt)" : ""}`); route();
       } });
     const box = $("#modalBox"); hydrateIcons(box);
     const fill = () => {        // schon veröffentlicht: bisheriges Genre / bisherige Beschreibung vorbelegen
@@ -4441,7 +4442,7 @@ const PubDir = {
     const names = Object.fromEntries(Object.entries(d.map || {}).map(([k, v]) => [v, k]));
     box.innerHTML = d.playlists.length ? d.playlists.map(p => `<div class="sh-pl pd-mine">
         <div style="min-width:0"><div class="li-title">${esc(p.name)} ${p.status === "sichtbar" ? `<span class="chip chip--ok">sichtbar</span>` : `<span class="chip chip--warn">${esc(p.status)}</span>`}</div>
-          <div class="cell-sub">${p.n} Songs · als ${esc(p.alias)} · aktualisiert ${this.day(p.updated)} · wird gelöscht am ${this.day(p.loeschung)} ohne Aktualisierung${p.grund ? ` · Grund: ${esc(p.grund)}` : ""}</div></div>
+          <div class="cell-sub">${nSongs(p.n)} · als ${esc(p.alias)} · aktualisiert ${this.day(p.updated)} · wird gelöscht am ${this.day(p.loeschung)} ohne Aktualisierung${p.grund ? ` · Grund: ${esc(p.grund)}` : ""}</div></div>
         ${names[p.id] ? `<button class="btn btn--sm btn--ghost" data-pdup="${esc(names[p.id])}" title="Mit dem aktuellen Stand deiner Playlist neu veröffentlichen">${icon("repeat")}Aktualisieren</button>` : ""}
         <button class="icon-btn" data-pddel="${p.id}" title="Aus dem Verzeichnis löschen">${icon("trash")}</button></div>`).join("")
         + `<div class="btn-row" style="padding:10px 14px"><button class="btn btn--sm btn--ghost" id="pdDelAll">${icon("trash")}Alle meine Veröffentlichungen löschen</button></div>`
@@ -4457,7 +4458,8 @@ const PubDir = {
 };
 
 Views.directory = async (main, _x, params) => {
-  if (params) { PubDir.q = params.get("q") ?? PubDir.q; PubDir.genre = params.get("genre") ?? PubDir.genre; PubDir.page = +(params.get("page") || 0); }
+  // Zustand kommt immer aus der Adresse – so stimmen Zurück/Vor und Lesezeichen
+  PubDir.q = params?.get("q") || ""; PubDir.genre = params?.get("genre") || ""; PubDir.page = Math.max(0, +(params?.get("page") || 0) || 0);
   main.innerHTML = `<div class="page view-enter">${skeletonRows(3)}</div>`;
   const head = `<div class="page-head"><div><h1>Playlist-Verzeichnis</h1><p>Öffentliche Playlists anderer Nutzer durchstöbern und übernehmen – oder eigene veröffentlichen.
     Nur Songlisten, keine Musik. ${tip("Veröffentlicht wird nur, was du einzeln freigibst – unter einem Pseudonym. Du kannst jederzeit löschen. Gemeldete Inhalte werden geprüft.")}</p></div></div>`;

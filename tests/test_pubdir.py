@@ -85,3 +85,18 @@ def test_report_needs_known_reason(srv):
         pubdir.report("a" * 24, "weil")
     pubdir.report("a" * 24, "spam", "Werbung")
     assert srv[-1] == ("/v1/pub/" + "a" * 24 + "/report", {"grund": "spam", "text": "Werbung"})
+
+
+def test_huge_playlist_is_trimmed_to_server_limit(srv):
+    allow()
+    for i in range(500):
+        store.add_to_playlist("Riesig", Track(title=f"{i} " + "T" * 290, artists=[f"K{j}" + "x" * 190 for j in range(6)],
+                                               album="A" * 200, isrc=f"DEABC24{i:05d}"))
+    pubdir.publish("Riesig", "BassKatze", confirm=True)
+    p = srv[-1][1]
+    assert len(p["tracks"]) == 500 and pubdir._size(p) <= pubdir.MAX_BYTES
+
+
+def test_mail_message_before_link_message():
+    with pytest.raises(pubdir.PubError, match="E-Mail"):
+        pubdir.check_text("a@b.de", "Pseudonym", 2, 32)

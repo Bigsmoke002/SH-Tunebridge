@@ -26,6 +26,7 @@ from .models import Track
 from .share import _tr
 
 MAX_TRACKS = 500
+MAX_BYTES = 450_000            # Server nimmt höchstens 512 KB pro Anfrage
 REASONS = {
     "rechtswidrig": "Rechtswidriger Inhalt",
     "beleidigend": "Beleidigend / Hass",
@@ -59,10 +60,10 @@ def check_text(value: str, feld: str, lo: int, hi: int) -> str:
     s = re.sub(r"[\x00-\x1f\x7f​-‏ -‮⁠-⁯﻿]", "", (value or "")).strip()
     if not lo <= len(s) <= hi:
         raise PubError(f"{feld}: {lo} bis {hi} Zeichen")
-    if _URL.search(s):
-        raise PubError(f"{feld}: bitte keine Links")
     if _MAIL.search(s):
         raise PubError(f"{feld}: bitte keine E-Mail-Adressen")
+    if _URL.search(s):
+        raise PubError(f"{feld}: bitte keine Links")
     if _PHONE.search(s):
         raise PubError(f"{feld}: bitte keine Telefonnummern")
     return s
@@ -178,6 +179,7 @@ def publish(name: str, alias_: str, genre: str = "", info: str = "", confirm: bo
     payload = {"format": 1, "name": check_text(name, "Name", 2, 80), "alias": check_text(alias_, "Pseudonym", 2, 32),
                "genre": check_text(genre, "Genre", 0, 60), "info": check_text(info, "Beschreibung", 0, 300),
                "tracks": [_pub_track(t) for t in pl.tracks[:MAX_TRACKS]]}
+    _fit(payload)
     m = _map()
     if m.get(name):
         payload["id"] = m[name]
@@ -195,6 +197,23 @@ def publish(name: str, alias_: str, genre: str = "", info: str = "", confirm: bo
     _cache.clear()
     dbg.event("verzeichnis", "Playlist veröffentlicht", songs=r.get("n"))
     return {**r, "name": name, "gekappt": len(pl.tracks) > MAX_TRACKS}
+
+
+def _size(payload: dict) -> int:
+    return len(json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode())
+
+
+def _fit(payload: dict) -> None:
+    """Sehr große Playlists (viele lange Titel/Künstlerlisten) auf die Server-Grenze bringen: erst kürzen, dann melden."""
+    if _size(payload) <= MAX_BYTES:
+        return
+    for t in payload["tracks"]:
+        t["artists"] = [a[:100] for a in t["artists"][:3]]
+        t["title"] = t["title"][:150]
+        t.pop("album", None)
+        t.pop("genre", None)
+    if _size(payload) > MAX_BYTES:
+        raise PubError("Die Playlist ist zu groß zum Veröffentlichen – bitte auf weniger Songs kürzen")
 
 
 def _pub_track(t: Track) -> dict:
