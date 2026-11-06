@@ -748,17 +748,17 @@ def _lastfm():
 def _similar(track: Track, limit: int):
     from concurrent.futures import ThreadPoolExecutor
 
-    from .. import ratelimit
-    lf = _lastfm()
+    from .. import ratelimit, similar
+    lf = _lastfm() if config.opt("LASTFM_API_KEY") else None   # Genres der Treffer nur mit Last.fm-Key
     try:
-        cands = lf.similar(track, limit=limit)
+        cands = similar.find(track, limit=limit)                 # Last.fm, sonst/zusätzlich Deezer
     except ratelimit.LimitReached as e:
         raise HTTPException(429, f"{e} – bitte gleich nochmal versuchen")
 
     def row(cm):
         cand, m = cm
         try:
-            c = classify(lf.tags(cand))
+            c = classify(lf.tags(cand) if lf else {})
         except Exception:
             c = classify({})
         a = cand.artists[0] if cand.artists else ""
@@ -845,9 +845,8 @@ class DiscoverReq(BaseModel):
 
 @app.post("/api/discover")
 def discover(req: DiscoverReq):
-    lf = _lastfm()
     base = Track(title=req.title.strip(), artists=[req.artist.strip()])
-    c = classify(lf.tags(base))
+    c = classify(_lastfm().tags(base) if config.opt("LASTFM_API_KEY") else {})   # ähnliche Songs gehen auch ohne Key
     return {"genre": c.genre, "subgenre": c.subgenre, "confidence": c.confidence,
             "similar": _similar(base, req.limit)}
 

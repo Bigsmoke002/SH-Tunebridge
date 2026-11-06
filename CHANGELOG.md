@@ -4,6 +4,10 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.8.1)
+- Fehler behoben: **„Keine ähnlichen Songs gefunden“** bei fast jedem Song. Last.fm liefert seit etwa Oktober 2026
+  für ähnliche Songs und Künstler meist gar nichts mehr (auch bei sehr bekannten Songs). Jetzt springt Deezer ein
+  (ähnliche Künstler + Künstler-Radio, ohne Key, höchstens 2 Songs pro Künstler). Leere Antworten werden nicht
+  mehr 7 Tage lang gemerkt. „Ähnliche Songs“ funktioniert damit auch ohne Last.fm-Key.
 - **Vor/Zurück:** Pfeile oben links über jeder Ansicht, dazu Alt+←/→ und die Seitentasten der Maus –
   wie im Browser. Ist kein Schritt zurück/vor möglich, ist der Pfeil ausgegraut.
 - **Sicherheit:** Die App nimmt nur noch Anfragen von sich selbst an. Fremde Webseiten im Browser konnten bisher im

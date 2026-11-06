@@ -128,7 +128,7 @@ class LastFM:
 
         lt = lookup_track(track)
         key = f"{lt.artist.lower()}|{lt.title.lower()}|{limit}"
-        if (hit := store.cache_get("lastfm_similar", key, max_age=_SIM_TTL)) is not None:
+        if hit := store.cache_get("lastfm_similar", key, max_age=_SIM_TTL):   # leer = nicht gemerkt
             return [(Track(**t), m) for t, m in hit]
         out = self._similar_tracks(lt, limit)
         if len(out) < min(limit, 8):
@@ -136,8 +136,9 @@ class LastFM:
             for t, m in self._via_artists(lt, limit - len(out)):
                 if (t.artists[0].lower(), t.title.lower()) not in have:
                     out.append((t, m))
-        from dataclasses import asdict
-        store.cache_set("lastfm_similar", key, [(asdict(t), m) for t, m in out])
+        if out:   # leere Antworten nicht merken – Last.fm liefert seit Okt. 2026 oft gar nichts (Störung)
+            from dataclasses import asdict
+            store.cache_set("lastfm_similar", key, [(asdict(t), m) for t, m in out])
         return out
 
     def _similar_tracks(self, track: Track, limit: int) -> list[tuple[Track, float]]:
