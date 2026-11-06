@@ -28,7 +28,13 @@
       <button class="icon-btn side-toggle" id="sideToggle" aria-label="Leiste einklappen" title="Leiste ein-/ausklappen"><i data-icon="panel"></i></button>
     </div>
 
-    <button type="button" class="side-search" id="gsOpen" title="Alles durchsuchen (Strg+K)"><i data-icon="search"></i><span>Suchen …</span><kbd>Strg K</kbd></button>
+    <div class="side-search">
+      <button type="button" class="side-search-open" id="gsOpen" title="Alles durchsuchen (Strg+K)"><i data-icon="search"></i><span>Suchen …</span></button>
+      <div class="hist-nav" id="histNav" role="group" aria-label="Verlauf der Ansichten">
+        <button type="button" class="icon-btn hist-back" id="navBack" aria-label="Zurück" title="Zurück (Alt+←)" disabled><i data-icon="chevron"></i></button>
+        <button type="button" class="icon-btn" id="navFwd" aria-label="Vor" title="Vor (Alt+→)" disabled><i data-icon="chevron"></i></button>
+      </div>
+    </div>
 
     <div class="side-scroll" id="sideScroll">
     <nav class="nav" id="nav">
@@ -71,10 +77,6 @@
     </div>
   </aside>
 
-  <div class="hist-nav" id="histNav" role="group" aria-label="Verlauf der Ansichten">
-    <button type="button" class="icon-btn hist-back" id="navBack" aria-label="Zurück" title="Zurück (Alt+←)" disabled><i data-icon="chevron"></i></button>
-    <button type="button" class="icon-btn" id="navFwd" aria-label="Vor" title="Vor (Alt+→)" disabled><i data-icon="chevron"></i></button>
-  </div>
   <main class="main" id="main"></main>
 
   <footer class="player" id="player">

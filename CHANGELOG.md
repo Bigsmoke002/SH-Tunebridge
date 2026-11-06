@@ -48,7 +48,7 @@ Der Updater installiert nur signierte Versionen.
   für ähnliche Songs und Künstler meist gar nichts mehr (auch bei sehr bekannten Songs). Jetzt springt Deezer ein
   (ähnliche Künstler + Künstler-Radio, ohne Key, höchstens 2 Songs pro Künstler). Leere Antworten werden nicht
   mehr 7 Tage lang gemerkt. „Ähnliche Songs“ funktioniert damit auch ohne Last.fm-Key.
-- **Vor/Zurück:** Pfeile oben links über jeder Ansicht, dazu Alt+←/→ und die Seitentasten der Maus –
+- **Vor/Zurück:** Pfeile rechts im Suchfeld der Seitenleiste, dazu Alt+←/→ und die Seitentasten der Maus –
   wie im Browser. Ist kein Schritt zurück/vor möglich, ist der Pfeil ausgegraut.
 - **Sicherheit:** Die App nimmt nur noch Anfragen von sich selbst an. Fremde Webseiten im Browser konnten bisher im
   Hintergrund Anfragen an die App auf 127.0.0.1 schicken (bzw. per DNS-Rebinding Daten mitlesen) – jetzt werden

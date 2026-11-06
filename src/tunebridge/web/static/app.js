@@ -4410,7 +4410,7 @@ Views.settings = async (main) => {
   main.innerHTML = `<div class="settings-shell">
     <aside class="set-side">
       <div class="set-side-head">Einstellungen</div>
-      <button type="button" class="side-search set-search" id="setSearch">${icon("search")}<span>In Einstellungen suchen …</span></button>
+      <button type="button" class="set-search" id="setSearch">${icon("search")}<span>In Einstellungen suchen …</span></button>
       ${SETTING_GROUPS.map(([label, tabs]) => `<div class="nav-label">${label}</div>
         ${tabs.map(([id, t, ic]) => `<a href="#/settings?tab=${id}" class="${id === tab ? "active" : ""}">${icon(ic)}<span>${t}</span></a>`).join("")}`).join("")}
       <div class="set-side-foot">Schlüssel werden nur lokal gespeichert – in deiner Konfigurationsdatei, lesbar nur für dich.</div>
