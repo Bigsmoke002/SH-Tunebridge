@@ -3,7 +3,15 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.9.1)
+## Unveröffentlicht (0.9.2)
+- **Schwebe-Icon und Tray-Symbol unter Linux (AppImage) repariert:** Sie stürzten beim Start ab, weil das AppImage
+  eine nicht passende Tastatur-Bibliothek (libxkbcommon) mit der des Systems mischte. Jetzt liegen beide passend bei.
+- **Schwebe-Icon und Tray-Symbol jetzt auch unter Windows** (bisher nur Hinweis „kommt mit einem späteren Update“).
+  Vor einem Update wird der Begleiter beendet, damit Windows den Programmordner austauschen kann.
+- **Windows: Einfügen öffnet kein Konsolenfenster mehr.** Die Zwischenablage wird direkt über Windows gelesen statt
+  über PowerShell; auch andere Hilfsprogramme starten ohne sichtbares Fenster.
+
+## 0.9.1 – 2026-11-06
 - **Gemeinschafts-Genre-Datenbank laden ist jetzt vorausgewählt** – im Einrichtungsdialog als eigener Punkt
   „Vom Entwickler laden“ (abwählbar). Es wird nichts gesendet; geladen wird erst nach dem Speichern des Dialogs und
   unabhängig von der Freigabe zum Senden. Bestehende Einstellungen bleiben unverändert.
