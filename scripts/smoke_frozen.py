@@ -28,7 +28,8 @@ try:
     for path in ("/static/app.js", "/static/icon.svg"):
         assert urllib.request.urlopen(f"http://127.0.0.1:{port}{path}", timeout=5).status == 200, path
     cons = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/consent", timeout=5))
-    assert cons["needs_onboarding"] and not any(cons["server"].values()), cons   # nichts vorab angehakt
+    vorab = {k for k, v in cons["server"].items() if v}
+    assert cons["needs_onboarding"] and vorab <= {"genredb"}, cons   # nur „Genre-DB laden“ vorausgewählt, nie Senden
     upd = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/update", timeout=30))
     assert upd["kind"] in ("frozen", "download"), upd      # frozen = tauscht sich selbst aus, download = nur Datei laden
     src = json.load(urllib.request.urlopen(f"http://127.0.0.1:{port}/api/sources", timeout=15))
