@@ -4,6 +4,12 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.9.0)
+- Fehler behoben: **Remixe, Flips, Bootlegs, VIPs, Cover und Live-Fassungen** wurden beim Nachschlagen dem Original
+  zugeordnet (Abzug nur 15 von 100 Punkten, „Song (X Remix)“ landete bei 85) und bekamen dessen ISRC – danach galten
+  sie als derselbe Song. Jetzt sind „harte“ Fassungen eigene Songs (auch „A Remix“ ≠ „B Remix“), Radio Edit /
+  Extended Mix / Remaster bleiben derselbe Song. Slowed-/Sped-up-Fassungen übernehmen nicht mehr die ISRC des Originals.
+- **Doppelte Songs:** Andere Fassungen desselben Titels zählen nicht mehr wie Duplikate – eigener, zugeklappter
+  Bereich „kein Duplikat“. Auch alte Einträge mit falscher Original-ISRC werden nicht mehr als doppelt gemeldet.
 - **Alles einlesen** (Dienste): liest Lieblingssongs und eigene (auf Wunsch auch gefolgte) Playlists aus allen
   verbundenen Diensten auf einmal ein, führt doppelte Songs zusammen und zeigt die gewohnte Sortier-Vorschau.
   Grenzen: 300 Playlists pro Dienst, 10.000 verschiedene Songs; Pausen der Dienste werden abgewartet, zwischen zwei

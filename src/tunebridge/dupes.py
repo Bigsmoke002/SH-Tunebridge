@@ -15,7 +15,7 @@ import re
 from collections import defaultdict
 
 from . import store
-from .matching import normalize
+from .matching import hard_version, normalize
 from .versions import main_artist, split_version
 
 # Klammern/Anhänge mit Versionsangabe: „(Hardtekk Remix)“, „- VIP“, „[Extended Mix]“
@@ -35,7 +35,10 @@ def song_keys(t: dict) -> list[str]:
     title = normalize(t.get("title") or "")
     out = [f"{a}|{title}" for a in sorted(_artists(t))]
     if t.get("isrc"):
-        out.append("isrc:" + t["isrc"].upper())
+        # ISRC nur zusammen mit der Fassung: ältere Einträge können die ISRC des Originals tragen (falscher Treffer
+        # beim Nachschlagen) – ein Remix/Flip/Cover darf darüber nie zum „doppelten“ Original werden
+        kind, rest = hard_version(t.get("title") or "")
+        out.append("isrc:" + t["isrc"].upper() + "|" + ",".join(sorted(kind)) + "|" + rest)
     return out
 
 

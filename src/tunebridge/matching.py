@@ -41,6 +41,27 @@ def version_tags(title: str) -> set[str]:
     return {m.group(0).lower() for m in _VERSION.finditer(title)}
 
 
+# „Harte“ Versionen = eigener Song (Remix, VIP, Bootleg, Flip, Cover, Live …). Nur in Klammern oder nach „ - “,
+# damit Titel wie „Live Forever“ oder „Dub Me Crazy“ nicht zählen. Radio/Extended/Original Edit/Mix = derselbe Song.
+_VPARTS = re.compile(r"[\(\[]([^\)\]]*)[\)\]]|\s[-–]\s(.+)$")
+_HARD = re.compile(r"\b(remix|rmx|vip|bootleg|flip|rework|refix|dub|live|acoustic|cover|mashup|remake|edit|mix|version)\b", re.I)
+_SAME = re.compile(r"\b(radio|single|clean|explicit|original|extended|album|club|short|main|instrumental)\s+(edit|mix|version)\b"
+                   r"|\b(remaster(ed)?|mono|stereo)\b", re.I)
+
+
+def hard_version(title: str) -> tuple[frozenset[str], str]:
+    """-> (Art der Version, Rest des Versions-Teils = z. B. der Remixer). Original -> (leer, "")."""
+    kinds, rest = set(), []
+    for m in _VPARTS.finditer(title or ""):
+        part = _SAME.sub(" ", m.group(1) or m.group(2) or "")
+        found = {("remix" if k.lower() == "rmx" else k.lower()) for k in _HARD.findall(part)}
+        found -= {"mix", "version"} if found - {"mix", "version"} else set()
+        if found and not ({"mix", "version"} >= found and not re.search(r"\w+\s+(mix|version)", part, re.I)):
+            kinds |= found
+            rest.append(normalize(_HARD.sub(" ", _FEAT.sub(" ", part))))
+    return frozenset(kinds), " ".join(x for x in rest if x)
+
+
 @dataclass
 class Match:
     candidate: Track
@@ -60,8 +81,13 @@ def score(src: Track, cand: Track) -> Match:
     )
     s = max(0.55 * t + 0.45 * a, combined * 0.95)
 
-    # Remix vs. Original nicht verwechseln
-    if version_tags(src.title) != version_tags(cand.title):
+    # Remix vs. Original nicht verwechseln: harte Versionen (Remix, Flip, Bootleg, Cover, Live …) sind eigene Songs
+    (hs, rs), (hc, rc) = hard_version(src.title), hard_version(cand.title)
+    if hs != hc:
+        s -= 40
+    elif hs and rs != rc and fuzz.token_set_ratio(rs, rc) < 75:   # anderer Remixer: „(A Remix)“ ≠ „(B Remix)“
+        s -= 35
+    elif version_tags(src.title) != version_tags(cand.title):
         s -= 15
 
     if src.duration_ms and cand.duration_ms:

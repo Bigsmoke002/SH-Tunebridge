@@ -289,7 +289,9 @@ def _enrich_online(rec: Recognition) -> tuple[Track, dict]:
         version = speed_label(rec.speed)
     dz = deezer(rec)
     track = Track(title=rec.title, artists=rec.artists, album=rec.album,
-                  isrc=rec.isrc or dz.get("isrc"),
+                  # Slowed/Sped-up: Deezer liefert das ORIGINAL (für Genre/Hörprobe) – dessen ISRC gehört nicht zur Version,
+                  # sonst gilt die Version überall als derselbe Song wie das Original (Doppelte, Playlists)
+                  isrc=rec.isrc or (None if version else dz.get("isrc")),
                   duration_ms=rec.duration_ms or (dz.get("duration") or 0) * 1000 or None)
     if dz.get("id"):
         track.ids["deezer"] = str(dz["id"])

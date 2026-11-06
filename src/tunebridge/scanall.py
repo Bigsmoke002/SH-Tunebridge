@@ -33,10 +33,12 @@ def parse(spec: str) -> tuple[list[str], set[str]]:
 
 
 def _key(t: Track) -> str:
-    if t.isrc:
-        return t.isrc.upper()
+    from .matching import hard_version, normalize
     from .versions import main_artist
-    return f"{main_artist(t.artists[0]).lower() if t.artists else ''}|{t.title.lower().strip()}"
+    if t.isrc:      # ISRC + Fassung: ein Remix mit falscher Original-ISRC bleibt ein eigener Song
+        kind, rest = hard_version(t.title)
+        return f"{t.isrc.upper()}|{','.join(sorted(kind))}|{rest}"
+    return f"{normalize(main_artist(t.artists[0])) if t.artists else ''}|{normalize(t.title)}"
 
 
 def collect(spec: str, job: dict) -> tuple[str, list[Track]]:

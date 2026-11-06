@@ -1748,7 +1748,7 @@ Views.dupes = async (main) => {
       <div class="sl"><span>${esc((o.artists || []).join(", "))} – ${esc(o.title)}</span><em>${esc(o.playlist)}${o.genre ? " · " + esc(o.subgenre || o.genre) : ""} · ${relTime(o.ts)}</em></div>${act}</div>`; };
   const rm = (o, label = "Entfernen") => `<button class="btn btn--xs btn--ghost" data-rm='${esc(JSON.stringify({ playlist: o.playlist, key: o.key }))}'>${icon("x")}${label}</button>`;
   $("#dpOut").innerHTML = !z.songs ? `<div class="empty">${icon("stack")}<h3>Noch keine Playlists</h3><p>Sobald du Songs in lokale Playlists einsortierst, kann hier aufgeräumt werden.</p></div>` : `
-    <div class="pls-stats dp-stats"><div><b class="num">${z.doppelt}</b><span>doppelt in einer Playlist</span></div><div><b class="num">${z.mehrfach}</b><span>in mehreren Playlists</span></div><div><b class="num">${z.versionen}</b><span>mit Remix/Original</span></div></div>
+    <div class="pls-stats dp-stats"><div><b class="num">${z.doppelt}</b><span>doppelt in einer Playlist</span></div><div><b class="num">${z.mehrfach}</b><span>in mehreren Playlists</span></div><div><b class="num">${z.versionen}</b><span>andere Fassungen (kein Duplikat)</span></div></div>
     <div class="section-title">Doppelt in derselben Playlist</div>
     ${d.doppelt.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Der älteste Eintrag bleibt, die Kopien sind überflüssig.</p>
       <button class="btn btn--sm" id="dpAll">${icon("trash")}${z.doppelt === 1 ? "Die Kopie entfernen" : `Alle ${z.doppelt} Kopien entfernen`}</button>
@@ -1758,9 +1758,9 @@ Views.dupes = async (main) => {
     ${d.mehrfach.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Kann gewollt sein. Entferne den Song nur dort, wo er nicht hingehört.</p>
       ${d.mehrfach.map(g => `<div class="dp-group">${g.in.map(o => row(o, rm(o, "Hier entfernen"))).join("")}</div>`).join("")}</div>`
       : `<div class="card dp-card cell-sub">${icon("check")} Keine.</div>`}
-    <div class="section-title">Original und Versionen</div>
-    ${d.versionen.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Remix, VIP, Edit oder Slowed sind eigene Songs – nur zur Info, falls du nur eine Fassung willst.</p>
-      ${d.versionen.map(g => `<div class="dp-group">${g.songs.map(o => row(o, rm(o))).join("")}</div>`).join("")}</div>`
+    <div class="section-title">Andere Fassungen desselben Titels</div>
+    ${d.versionen.length ? `<details class="card dp-card"><summary class="cell-sub">${icon("info")} ${z.versionen} ${z.versionen === 1 ? "Titel" : "Titel"} in mehreren Fassungen (Remix, Flip, Bootleg, VIP, Cover, Live, Slowed …) – das sind <b>eigene Songs, keine Duplikate</b>. Aufklappen, falls du nur eine Fassung behalten willst.</summary>
+      ${d.versionen.map(g => `<div class="dp-group">${g.songs.map(o => row(o, rm(o))).join("")}</div>`).join("")}</details>`
       : `<div class="card dp-card cell-sub">${icon("check")} Keine.</div>`}`;
   hydrateIcons(main);
   const remove = async items => {
