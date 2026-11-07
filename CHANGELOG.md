@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.10.0)
+## 0.10.0 – 2026-11-07
 - **Neu: Mix erstellen** (Werkzeuge › Mix erstellen, auch über Strg+K). Bis zu 5 Künstler suchen und auswählen –
   die App baut daraus eine neue Playlist aus ihren Top-Songs, ihrem Künstler-Radio und Songs ähnlicher Künstler (Deezer,
   ohne Login). **„Wie passend?“** in vier Stufen: *Locker* (nur Ähnlichkeit, ohne Messen), *Passend* (±15 % Tempo,
