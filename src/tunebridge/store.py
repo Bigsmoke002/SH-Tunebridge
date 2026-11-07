@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import socket
 import sqlite3
+import os
 import threading
 import time
 import uuid
@@ -114,6 +115,12 @@ def _conn(path: Path | None = None):
         with c:  # Transaktion: commit bei Erfolg, rollback bei Fehler
             yield c
     finally:
+        try:
+            if c.total_changes:          # in diesem Prozess geschrieben → gemerkte Auswertungen ungültig
+                global _GEN
+                _GEN += 1
+        except sqlite3.Error:
+            pass
         c.close()
 
 
@@ -151,6 +158,7 @@ def ram_clear() -> None:
     """Nach Löschen/Wiederherstellen: RAM-Kopien verwerfen."""
     with _ram_lock:
         _RAM.clear()
+    memo_clear()
 
 
 def cache_get(ns: str, key: str, max_age: float | None = None):
@@ -188,6 +196,58 @@ def meta_set(key: str, value: str) -> None:
     with _conn() as c:
         c.execute("INSERT OR REPLACE INTO meta(key,value) VALUES(?,?)", (key, value))
     _ram_put(("m", str(DB), key), value)
+
+
+# ------------------------------------------------------------------ Ergebnisse merken, bis sich die DB ändert
+# Teure Auswertungen (Statistik, Playlist-Übersicht …) lesen zehntausende Songs. Jede Schreibung ändert die
+# Datenbank- bzw. WAL-Datei (Größe/Zeit) – solange beide gleich sind, ist auch das Ergebnis gleich.
+_GEN = 0      # Schreibzähler dieses Prozesses (Dateizeiten allein sind nur auf Millisekunden genau)
+
+
+def db_stamp(*extra: Path) -> tuple:
+    out = [_GEN]
+    for f in (DB, Path(f"{DB}-wal"), *extra):
+        try:
+            st = os.stat(f)
+            out.append((str(f), st.st_mtime_ns, st.st_size))
+        except OSError:
+            out.append((str(f), 0, 0))
+    return tuple(out)
+
+
+_MEMO: dict = {}
+_memo_lock = threading.Lock()
+
+
+def memo_db(*extra):
+    """Dekorator: Ergebnis je Aufruf-Argumente merken, solange sich die Datenbank (und *extra – Pfade oder
+    Funktionen, die Pfade liefern) nicht ändert. Jeder Aufrufer bekommt eine eigene Kopie."""
+    import copy
+    import functools
+
+    def deco(fn):
+        @functools.wraps(fn)
+        def wrap(*a, **kw):
+            paths = [Path(e() if callable(e) else e) for e in extra]
+            stamp = db_stamp(*paths)
+            k = (fn.__module__, fn.__qualname__, a, tuple(sorted(kw.items())))
+            with _memo_lock:
+                hit = _MEMO.get(k)
+            if hit and hit[0] == stamp:
+                return copy.deepcopy(hit[1])
+            val = fn(*a, **kw)
+            if db_stamp(*paths) == stamp:          # während der Berechnung nichts geschrieben → merken
+                with _memo_lock:
+                    _MEMO[k] = (stamp, val)
+            return copy.deepcopy(val)
+        wrap.uncached = fn
+        return wrap
+    return deco
+
+
+def memo_clear() -> None:
+    with _memo_lock:
+        _MEMO.clear()
 
 
 def track_key(t: Track) -> str:
@@ -283,18 +343,18 @@ def search_songs(q: str, limit: int = 30) -> list[dict]:
     out: dict[str, dict] = {}
     with _conn() as c:
         where, args = _prefilter(words)
-        rows = c.execute(f"SELECT playlist, track, key FROM entries {where} ORDER BY ts DESC LIMIT 20000", args).fetchall()
-    for r in rows:
-        d = json.loads(r["track"])
-        if not _hit(d, words):
-            continue
-        hit = out.setdefault(r["key"], {"key": r["key"], "title": d.get("title"), "artists": d.get("artists") or [],
-                                         "cover": d.get("cover"), "preview_url": d.get("preview_url"), "isrc": d.get("isrc"),
-                                         "ids": d.get("ids") or {}, "genre": d.get("genre"), "playlists": []})
-        if r["playlist"] not in hit["playlists"]:
-            hit["playlists"].append(r["playlist"])
-        if len(out) >= limit:
-            break
+        # zeilenweise lesen statt alles auf einmal: bei vielen Treffern ist nach `limit` Songs Schluss
+        for r in c.execute(f"SELECT playlist, track, key FROM entries {where} ORDER BY ts DESC LIMIT 20000", args):
+            d = json.loads(r["track"])
+            if not _hit(d, words):
+                continue
+            hit = out.setdefault(r["key"], {"key": r["key"], "title": d.get("title"), "artists": d.get("artists") or [],
+                                             "cover": d.get("cover"), "preview_url": d.get("preview_url"), "isrc": d.get("isrc"),
+                                             "ids": d.get("ids") or {}, "genre": d.get("genre"), "playlists": []})
+            if r["playlist"] not in hit["playlists"]:
+                hit["playlists"].append(r["playlist"])
+            if len(out) >= limit:
+                break
     return list(out.values())
 
 
@@ -333,6 +393,29 @@ def local_playlists() -> list[Playlist]:
         for p in pls:
             ts = c.execute("SELECT track FROM entries WHERE playlist=? ORDER BY ts", (p["name"],)).fetchall()
             out.append(Playlist(name=p["name"], description=p["description"], tracks=[_t(r["track"]) for r in ts]))
+    return out
+
+
+@memo_db()
+def playlist_overview(top: int = 3, covers: int = 4) -> list[dict]:
+    """Übersicht aller lokalen Playlists, ohne jeden Song in ein Track-Objekt zu entpacken (SQLite liest nur die
+    drei Felder): name, count, covers (die letzten mit Bild, alt → neu), top = [(genre, subgenre, anzahl)]."""
+    from collections import Counter
+    with _conn() as c:
+        names = [r[0] for r in c.execute("SELECT name FROM playlists ORDER BY name")]
+        rows = c.execute("SELECT playlist, json_extract(track,'$.genre'), json_extract(track,'$.subgenre'),"
+                         " json_extract(track,'$.cover') FROM entries ORDER BY playlist, ts").fetchall()
+    dist: dict[str, Counter] = {}
+    cov: dict[str, list] = {}
+    for pl, g, sub, url in rows:
+        dist.setdefault(pl, Counter())[(g, sub)] += 1          # Reihenfolge bei Gleichstand: zuerst gesehen
+        if url:
+            cov.setdefault(pl, []).append(url)
+    out = []
+    for n in names:
+        d = dist.get(n, Counter())
+        out.append({"name": n, "count": sum(d.values()), "covers": cov.get(n, [])[-covers:],
+                    "top": [(g, sub, k) for (g, sub), k in d.most_common(top)]})
     return out
 
 

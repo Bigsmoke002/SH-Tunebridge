@@ -13,6 +13,11 @@ Der Updater installiert nur signierte Versionen.
   Software (nochmals rund ein Drittel weniger Rechenzeit). Andere Systeme bleiben beim erprobten Software-Zeichnen.
   Startet das Fenster zweimal hintereinander nicht sauber, bleibt die App dauerhaft bei Software.
   `TUNEBRIDGE_GPU=0` erzwingt Software, `=1` die GPU, `=vulkan` den Vulkan-Weg.
+- **Schneller bei großen Bibliotheken:** Statistik, Gemeinschafts-Status, Playlist-Übersicht und „Doppelte Songs“
+  werden nur noch neu berechnet, wenn sich die Datenbank geändert hat (gemessen mit 50.000 Songs: Statistik 700 → 1 ms,
+  Gemeinschaft 610 → 2 ms, Playlists 420 → 22 ms, Doppelte Songs 3,4 s → 13 ms beim erneuten Öffnen). Die
+  Playlist-Übersicht liest nur noch Genre und Cover statt jeden Song komplett. „Doppelte Songs“ zeigt lange Listen
+  in Portionen („Weitere anzeigen“) statt alles auf einmal. Titel- und Künstlervergleich merkt sich Ergebnisse.
 
 ## 0.10.0 – 2026-11-07
 - **Neu: Mix erstellen** (Werkzeuge › Mix erstellen, auch über Strg+K). Bis zu 5 Künstler suchen und auswählen –

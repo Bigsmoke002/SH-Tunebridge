@@ -4,6 +4,7 @@ oder `tunebridge ui` (Browser) gestartet."""
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 import threading
@@ -14,7 +15,7 @@ from importlib.resources import files
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -594,7 +595,8 @@ def mix_save(jid: str, req: MixPickReq):
 @app.get("/api/dupes")
 def dupes_find():
     from .. import dupes
-    return dupes.find()
+    # direkt als JSON: bei großen Bibliotheken (Megabytes) kostet FastAPIs Umwandlung sonst Sekunden
+    return Response(dupes.find_json(), media_type="application/json")
 
 
 class DupesRemoveReq(BaseModel):
@@ -611,11 +613,10 @@ def dupes_remove(req: DupesRemoveReq):
 @app.get("/api/playlists")
 def playlists():
     out, times = [], store.playlist_times()
-    for p in store.local_playlists():
-        created, updated = times.get(p.name, (0, 0))
-        out.append({"name": p.name, "count": len(p.tracks), "origin": "lokal", "created": created, "updated": updated,
-                    "covers": [t.cover for t in p.tracks if t.cover][-4:],
-                    "top": [[d["label"], d["count"], d["genre"], d["subgenre"]] for d in _dist(p.tracks)[:3]]})
+    for p in store.playlist_overview():
+        created, updated = times.get(p["name"], (0, 0))
+        out.append({"name": p["name"], "count": p["count"], "origin": "lokal", "created": created, "updated": updated,
+                    "covers": p["covers"], "top": [[sub or g or "Unsortiert", n, g, sub] for g, sub, n in p["top"]]})
     for p in store.exported_playlists():
         out.append({"name": p.name, "count": len(p.tracks), "origin": p.ids.get("source"), "covers": [], "top": []})
     return out

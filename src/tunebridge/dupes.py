@@ -11,6 +11,8 @@ Alles läuft lokal auf der eigenen Datenbank.
 
 from __future__ import annotations
 
+import json
+
 import re
 from collections import defaultdict
 
@@ -65,11 +67,12 @@ class _UF:
 
 
 def _rows() -> list[dict]:
-    rows = []
-    for p in store.local_playlists():
-        for e in store.playlist_entries(p.name):
-            rows.append({"playlist": p.name, "key": e["key"], "ts": e["ts"], "track": e["track"]})
-    return rows
+    # eine Abfrage statt Playlist für Playlist (und jeden Song nur einmal entpacken); Reihenfolge wie bisher:
+    # Playlists nach Name, darin neueste zuerst
+    with store._conn() as c:
+        rows = c.execute("SELECT e.playlist, e.key, e.ts, e.track FROM entries e JOIN playlists p ON p.name = e.playlist"
+                         " ORDER BY e.playlist, e.ts DESC").fetchall()
+    return [{"playlist": r[0], "key": r[1], "ts": r[2], "track": json.loads(r[3])} for r in rows]
 
 
 def _occ(r: dict) -> dict:
@@ -123,6 +126,13 @@ def find(rows: list[dict] | None = None) -> dict:
     return {"doppelt": doppelt, "mehrfach": mehrfach, "versionen": versionen,
             "zahlen": {"doppelt": sum(len(g["remove"]) for g in doppelt), "mehrfach": len(mehrfach),
                        "versionen": len(versionen), "songs": len(rows)}}
+
+
+@store.memo_db()
+def find_json() -> str:
+    """find() über alle lokalen Playlists als fertiger JSON-Text – gemerkt, bis sich die Datenbank ändert
+    (Text statt Objekt: muss beim Ausliefern weder kopiert noch neu umgewandelt werden)."""
+    return json.dumps(find(), ensure_ascii=False, separators=(",", ":"))
 
 
 def remove(items: list[dict]) -> int:

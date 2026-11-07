@@ -152,6 +152,12 @@ def sync() -> dict:
     return done
 
 
+@store.memo_db()
+def _lib_pending() -> int:
+    """Wie viele Songs noch beigetragen werden könnten – teuer (liest alle Songs), daher gemerkt bis zur nächsten Änderung."""
+    return len(lib_entries(LIB_MAX))
+
+
 def status() -> dict:
     from . import genredb
     try:
@@ -163,6 +169,6 @@ def status() -> dict:
             "consent": {k: consent.server(k) for k in ("genres", "bibliothek", "genredb")},
             "privacy": bool(consent.get()["privacy_at"]), "domain": consent.get()["server"]["domain"],
             "votes_pending": len(genredb.upload_entries(1000)), "votes": genredb.counts(),
-            "lib_pending": len(lib_entries(LIB_MAX)), "lib_sent": sent, "lib_max": LIB_MAX,
+            "lib_pending": _lib_pending(), "lib_sent": sent, "lib_max": LIB_MAX,
             "lib_per_sync": LIB_PER_SYNC, "community": genredb.community_info(),
             "checked": float(store.meta_get("genredb:checked") or 0) or None}

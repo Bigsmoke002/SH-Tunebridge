@@ -9,6 +9,7 @@ Wichtig: Remix/VIP/Edit-Angaben bleiben erhalten – ein "VIP" ist ein anderer S
 
 from __future__ import annotations
 
+import functools
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -28,13 +29,19 @@ _FEAT = re.compile(r"[\(\[]?\s*\b(feat\.?|ft\.?|featuring)\s+[^\)\]\-]+[\)\]]?",
 _VERSION = re.compile(r"\b(remix|vip|edit|bootleg|flip|rework|dub|refix|remaster(ed)?|live|acoustic|extended|radio)\b", re.I)
 
 
+_PUNCT = re.compile(r"[^\w\s]")
+_SPACE = re.compile(r"\s+")
+
+
+@functools.lru_cache(maxsize=65536)
 def normalize(text: str) -> str:
+    # Wird sehr oft mit denselben Titeln/Künstlern aufgerufen (Statistik, Doppelte, Gemeinschaft) → Ergebnis merken
     text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode()
     text = _NOISE.sub(" ", text)
     text = _FEAT.sub(" ", text)
     text = text.replace("&", " and ")
-    text = re.sub(r"[^\w\s]", " ", text.lower())
-    return re.sub(r"\s+", " ", text).strip()
+    text = _PUNCT.sub(" ", text.lower())
+    return _SPACE.sub(" ", text).strip()
 
 
 def version_tags(title: str) -> set[str]:

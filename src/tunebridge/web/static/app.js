@@ -2221,27 +2221,43 @@ Views.dupes = async (main) => {
       ${o.cover ? `<img src="${esc(o.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
       <div class="sl"><span>${esc((o.artists || []).join(", "))} – ${esc(o.title)}</span><em>${esc(o.playlist)}${o.genre ? " · " + esc(o.subgenre || o.genre) : ""} · ${relTime(o.ts)}</em></div>${act}</div>`; };
   const rm = (o, label = "Entfernen") => `<button class="btn btn--xs btn--ghost" data-rm='${esc(JSON.stringify({ playlist: o.playlist, key: o.key }))}'>${icon("x")}${label}</button>`;
+  // Große Bibliotheken: Gruppen portionsweise zeigen (sonst hunderttausende Elemente auf einmal)
+  const STEP = 150;
+  const html = {
+    doppelt: g => `<div class="dp-group">${row(g.keep, `<span class="chip">bleibt</span>`)}${g.remove.map(o => row(o, rm(o))).join("")}</div>`,
+    mehrfach: g => `<div class="dp-group">${g.in.map(o => row(o, rm(o, "Hier entfernen"))).join("")}</div>`,
+    versionen: g => `<div class="dp-group">${g.songs.map(o => row(o, rm(o))).join("")}</div>`,
+  };
+  const shown = { doppelt: 0, mehrfach: 0, versionen: 0 };
+  const bindRows = host => $$("[data-rm]", host).forEach(b => { if (!b.onclick) b.onclick = () => remove([JSON.parse(b.dataset.rm)]); });
+  const fill = id => {   // nächste Portion anhängen
+    const host = $(`#dp-${id}`); if (!host) return;
+    const list = d[id], from = shown[id], to = Math.min(list.length, from + STEP);
+    host.querySelector(".dp-more")?.remove();
+    host.insertAdjacentHTML("beforeend", list.slice(from, to).map(html[id]).join("") +
+      (to < list.length ? `<button class="btn btn--sm btn--ghost dp-more" data-more="${id}">Weitere anzeigen (${list.length - to} übrig)</button>` : ""));
+    shown[id] = to; hydrateIcons(host); bindRows(host);
+    host.querySelector(".dp-more")?.addEventListener("click", () => fill(id));
+  };
   $("#dpOut").innerHTML = !z.songs ? `<div class="empty">${icon("stack")}<h3>Noch keine Playlists</h3><p>Sobald du Songs in lokale Playlists einsortierst, kann hier aufgeräumt werden.</p></div>` : `
     <div class="pls-stats dp-stats"><div><b class="num">${z.doppelt}</b><span>doppelt in einer Playlist</span></div><div><b class="num">${z.mehrfach}</b><span>in mehreren Playlists</span></div><div><b class="num">${z.versionen}</b><span>andere Fassungen (kein Duplikat)</span></div></div>
     <div class="section-title">Doppelt in derselben Playlist</div>
-    ${d.doppelt.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Der älteste Eintrag bleibt, die Kopien sind überflüssig.</p>
-      <button class="btn btn--sm" id="dpAll">${icon("trash")}${z.doppelt === 1 ? "Die Kopie entfernen" : `Alle ${z.doppelt} Kopien entfernen`}</button>
-      ${d.doppelt.map(g => `<div class="dp-group">${row(g.keep, `<span class="chip">bleibt</span>`)}${g.remove.map(o => row(o, rm(o))).join("")}</div>`).join("")}</div>`
+    ${d.doppelt.length ? `<div class="card dp-card" id="dp-doppelt"><p class="cell-sub" style="margin:0 0 10px">Der älteste Eintrag bleibt, die Kopien sind überflüssig.</p>
+      <button class="btn btn--sm" id="dpAll">${icon("trash")}${z.doppelt === 1 ? "Die Kopie entfernen" : `Alle ${z.doppelt} Kopien entfernen`}</button></div>`
       : `<div class="card dp-card cell-sub">${icon("check")} Keine – jede Playlist enthält jeden Song nur einmal.</div>`}
     <div class="section-title">In mehreren Playlists</div>
-    ${d.mehrfach.length ? `<div class="card dp-card"><p class="cell-sub" style="margin:0 0 10px">Kann gewollt sein. Entferne den Song nur dort, wo er nicht hingehört.</p>
-      ${d.mehrfach.map(g => `<div class="dp-group">${g.in.map(o => row(o, rm(o, "Hier entfernen"))).join("")}</div>`).join("")}</div>`
+    ${d.mehrfach.length ? `<div class="card dp-card" id="dp-mehrfach"><p class="cell-sub" style="margin:0 0 10px">Kann gewollt sein. Entferne den Song nur dort, wo er nicht hingehört.</p></div>`
       : `<div class="card dp-card cell-sub">${icon("check")} Keine.</div>`}
     <div class="section-title">Andere Fassungen desselben Titels</div>
-    ${d.versionen.length ? `<details class="card dp-card"><summary class="cell-sub">${icon("info")} ${z.versionen} ${z.versionen === 1 ? "Titel" : "Titel"} in mehreren Fassungen (Remix, Flip, Bootleg, VIP, Cover, Live, Slowed …) – das sind <b>eigene Songs, keine Duplikate</b>. Aufklappen, falls du nur eine Fassung behalten willst.</summary>
-      ${d.versionen.map(g => `<div class="dp-group">${g.songs.map(o => row(o, rm(o))).join("")}</div>`).join("")}</details>`
+    ${d.versionen.length ? `<details class="card dp-card" id="dp-versionen"><summary class="cell-sub">${icon("info")} ${z.versionen} ${z.versionen === 1 ? "Titel" : "Titel"} in mehreren Fassungen (Remix, Flip, Bootleg, VIP, Cover, Live, Slowed …) – das sind <b>eigene Songs, keine Duplikate</b>. Aufklappen, falls du nur eine Fassung behalten willst.</summary></details>`
       : `<div class="card dp-card cell-sub">${icon("check")} Keine.</div>`}`;
   hydrateIcons(main);
   const remove = async items => {
     const r = await api("/api/dupes/remove", { method: "POST", body: { items } });
     toast(`${r.removed} ${r.removed === 1 ? "Eintrag" : "Einträge"} entfernt`); refreshMeta(); Views.dupes(main);
   };
-  $$("[data-rm]", main).forEach(b => b.onclick = () => remove([JSON.parse(b.dataset.rm)]));
+  fill("doppelt"); fill("mehrfach");
+  $("#dp-versionen")?.addEventListener("toggle", e => { if (e.target.open && !shown.versionen) fill("versionen"); });
   $("#dpAll")?.addEventListener("click", () => modal({
     title: `${z.doppelt} doppelte Einträge entfernen?`, text: "Von jedem Song bleibt der älteste Eintrag in der Playlist.", confirm: "Entfernen",
     onConfirm: () => remove(d.doppelt.flatMap(g => g.remove.map(o => ({ playlist: o.playlist, key: o.key })))),

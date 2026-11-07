@@ -62,6 +62,7 @@ def years(source: str = "alle") -> list[int]:
     return sorted({datetime.fromtimestamp(e["ts"]).year for e in _events(source)}, reverse=True)
 
 
+@store.memo_db()
 def overview(year: int | None = None, source: str = "alle") -> dict:
     source = source if source in SOURCES else "alle"
     allev = _events(source)
