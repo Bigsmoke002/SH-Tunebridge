@@ -1875,77 +1875,118 @@ function spRender() {
       toast(`„${r.name}“ mit ${r.count} Songs angelegt`); refreshMeta(); } });
 }
 
-/* ---------- Mix erstellen: aus Künstlern eine neue Playlist – „Wie passend?“ von locker bis DJ-genau */
+/* ---------- Mix erstellen: aus Künstlern oder einem Genre eine neue Playlist – „Wie passend?“ von locker bis DJ-genau */
 const MIX_DEFAULTS = { level: "passend", count: 30, per_artist: 2, popularity: "mix", versions: true, include_seeds: true,
   skip_library: false, bpm_min: "", bpm_max: "", camelot: "", energy_min: "", energy_max: "", curve: "gleich" };
 const Mix = { seeds: store.get("mixSeeds", []), opts: { ...MIX_DEFAULTS, ...store.get("mixOpts", {}) }, job: null, data: null, order: [], reserve: [],
-  mode: store.get("mixMode", "artists"), genre: store.get("mixGenre", "") };
-const genreLabel = (g, sub) => sub ? `${g} › ${sub}` : g;
-const mixGenres = () => Object.entries(TAXONOMY || {}).flatMap(([g, subs]) => [genreLabel(g), ...subs.map(x => genreLabel(g, x))]);
-function mixParseGenre(v) {
-  const [g, sub] = (v || "").split(" › ").map(x => x.trim());
-  if (!g || !(g in (TAXONOMY || {}))) return null;
-  if (sub && !TAXONOMY[g].includes(sub)) return null;
-  return { genre: g, sub: sub || null };
-}
+  mode: store.get("mixMode", "artists"), genre: store.get("mixGenreSel", null), gOpen: null };
 const CAMELOT_ALL = Array.from({ length: 12 }, (_, i) => [`${i + 1}A`, `${i + 1}B`]).flat();
+// Stufen: Anzeige (Stärke 1–4, Kurzinfo, Dauer) – die Regeln selbst stehen in mixgen.LEVELS
+const MIX_LEVEL_UI = {
+  locker: { n: 1, what: "Nur Ähnlichkeit", time: "in Sekunden" },
+  passend: { n: 2, what: "±15 % Tempo · ähnliche Energie", time: "~30 Sekunden" },
+  mixbar: { n: 3, what: "±6 % Tempo · harmonisch gereiht", time: "~1 Minute" },
+  genau: { n: 4, what: "±3 % Tempo · Energie-Verlauf", time: "~1 Minute" },
+};
+const genreLabel = (g, sub) => sub ? `${g} › ${sub}` : g;
+const mixGenreOk = g => g && TAXONOMY?.[g.genre] && (!g.sub || TAXONOMY[g.genre].includes(g.sub));
+
 Views.mix = async (main) => {
   const meta = await api("/api/mix/levels");
+  if (!mixGenreOk(Mix.genre)) Mix.genre = null;
+  Mix.gOpen = Mix.genre?.genre || Mix.gOpen;
   const o = Mix.opts;
-  const seg = (id, items, cur) => `<div class="segmented" id="${id}">${items.map(([v, l, h]) => `<button data-v="${v}" ${h ? `title="${esc(h)}"` : ""} class="${v === cur ? "on" : ""}">${esc(l)}</button>`).join("")}</div>`;
-  main.innerHTML = `<div class="page view-enter">
-    <div class="page-head"><div><h1>Mix erstellen</h1><p>Wähle Künstler oder ein Genre – SH-Tunebridge baut daraus eine neue Playlist mit passenden Songs. Du bestimmst, wie genau Tempo, Tonart und Energie passen sollen, und kannst alles sofort anhören.</p></div></div>
-    <div class="card mix-form">
-      <div class="field"><label>Ausgangspunkt</label>${seg("mxMode", [["artists", "Nach Künstlern"], ["genre", "Nach Genre"]], Mix.mode)}</div>
-      <div class="field ${Mix.mode === "genre" ? "" : "hidden"}" id="mxGenreF"><label>Genre oder Subgenre</label>
-        <div class="mix-search"><div class="input-icon">${icon("tag")}<input class="input" id="mxGenre" list="mxGenreList" placeholder="z. B. Drum & Bass › Liquid" value="${esc(Mix.genre)}" autocomplete="off"></div></div>
-        <datalist id="mxGenreList">${mixGenres().map(l => `<option value="${esc(l)}">`).join("")}</datalist>
-        <div class="cell-sub" style="white-space:normal">Künstler kommen aus deiner Bibliothek, deinen Einordnungen, der Gemeinschafts-Genre-Datenbank (falls geladen), MusicBrainz und – mit eigenem Key – Last.fm. Gesendet wird nur der Genre-Name.</div></div>
-      <div class="field ${Mix.mode === "genre" ? "hidden" : ""}" id="mxArtistF"><label>Künstler (bis zu ${meta.max_seeds})</label>
-        <div class="mix-search"><div class="input-icon">${icon("search")}<input class="input" id="mxQ" placeholder="z. B. Netsky, Calibre, Hybrid Minds" autocomplete="off"></div>
-          <div class="mix-sugg hidden" id="mxSugg" role="listbox"></div></div>
-        <div class="mix-seeds" id="mxSeeds"></div></div>
-      <div class="field"><label>Wie passend?</label>${seg("mxLevel", meta.levels.map(l => [l.id, l.name, l.hint]), o.level)}
-        <div class="cell-sub" id="mxHint"></div></div>
-      <div class="mix-row">
-        <div class="field"><label>Anzahl Songs</label><input class="input num" type="number" id="mxCount" min="5" max="${meta.count_max}" value="${esc(o.count)}" style="width:90px"></div>
-        <div class="field"><label>Pro Künstler höchstens</label><select class="select" id="mxPer">${[1, 2, 3, 5, 10].map(n => `<option ${+o.per_artist === n ? "selected" : ""}>${n}</option>`).join("")}</select></div>
-        <div class="field"><label>Bekanntheit</label>${seg("mxPop", [["mix", "Gemischt"], ["hits", "Eher Hits"], ["unbekannt", "Eher unbekannt"]], o.popularity)}</div>
-      </div>
-      <details class="mix-more" ${o.bpm_min || o.bpm_max || o.camelot || o.energy_min || o.energy_max ? "open" : ""}><summary>${icon("sliders")}Feineinstellungen</summary>
-        <div class="mix-row">
-          <div class="field"><label>Tempo (BPM)</label><div class="mix-range"><input class="input num" type="number" id="mxBpmMin" placeholder="von" min="40" max="250" value="${esc(o.bpm_min)}"><span>–</span><input class="input num" type="number" id="mxBpmMax" placeholder="bis" min="40" max="250" value="${esc(o.bpm_max)}"></div></div>
-          <div class="field"><label>Tonart (Camelot)</label><select class="select" id="mxCam"><option value="">egal</option>${CAMELOT_ALL.map(c => `<option ${o.camelot === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
-          <div class="field"><label>Energie (%)</label><div class="mix-range"><input class="input num" type="number" id="mxEMin" placeholder="von" min="0" max="100" value="${o.energy_min === "" ? "" : Math.round(o.energy_min * 100)}"><span>–</span><input class="input num" type="number" id="mxEMax" placeholder="bis" min="0" max="100" value="${o.energy_max === "" ? "" : Math.round(o.energy_max * 100)}"></div></div>
-          <div class="field" id="mxCurveF"><label>Energie-Verlauf</label><select class="select" id="mxCurve">${[["gleich", "Gleichmäßig"], ["aufbau", "Aufbauen"], ["peak", "Peak in der Mitte"], ["runter", "Runterfahren"]].map(([v, l]) => `<option value="${v}" ${o.curve === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+  const seg = (id, items, cur) => `<div class="segmented" id="${id}">${items.map(([v, l]) => `<button type="button" data-v="${v}" class="${String(v) === String(cur) ? "on" : ""}">${esc(l)}</button>`).join("")}</div>`;
+  const step = (n, title, extra = "") => `<div class="mx-step"><span class="mx-num">${n}</span><h2>${title}</h2>${extra}</div>`;
+  main.innerHTML = `<div class="page view-enter mx-page">
+    <div class="page-head"><div><h1>Mix erstellen</h1><p>Neue Playlist aus Künstlern oder einem Genre – du bestimmst, wie genau Tempo, Tonart und Energie zusammenpassen, und hörst sofort rein.</p></div></div>
+    <div class="card mx-form">
+      <section class="mx-sec">${step(1, "Womit starten?")}
+        <div class="mx-modes" role="radiogroup">
+          <button type="button" class="mx-mode" data-mode="artists" role="radio">${icon("mic")}<b>Künstler</b><span>Ähnliche Songs zu bis zu ${meta.max_seeds} Künstlern</span></button>
+          <button type="button" class="mx-mode" data-mode="genre" role="radio">${icon("tag")}<b>Genre</b><span>Ein Genre oder Subgenre – z. B. Liquid, Riddim, Deep House</span></button>
         </div>
-        <div class="mix-switches">
-          <label class="switch"><input type="checkbox" id="mxVer" ${o.versions ? "checked" : ""}><span class="track"></span>Remixe, VIPs und andere Fassungen</label>
-          <label class="switch"><input type="checkbox" id="mxSeedsIn" ${o.include_seeds ? "checked" : ""}><span class="track"></span>Songs der gewählten Künstler selbst</label>
-          <label class="switch"><input type="checkbox" id="mxSkip" ${o.skip_library ? "checked" : ""}><span class="track"></span>Songs aus meinen Playlists weglassen</label>
+        <div class="mx-pick" id="mxArtistF">
+          <div class="mix-search"><div class="input-icon">${icon("search")}<input class="input" id="mxQ" placeholder="Künstler suchen – z. B. Netsky, Calibre, Hybrid Minds" autocomplete="off"></div>
+            <div class="mix-sugg hidden" id="mxSugg" role="listbox"></div></div>
+          <div class="mix-seeds" id="mxSeeds"></div>
         </div>
-        <div class="cell-sub" style="white-space:normal">Eigene Angaben gelten immer streng. Tempo zählt auch halb/doppelt (87 ↔ 174 BPM). Gemessen wird aus der offiziellen 30-s-Hörprobe – nur so viele Songs wie nötig, Bekanntes kommt aus dem Speicher.</div>
-      </details>
-      <div class="btn-row"><button class="btn btn--primary" id="mxGo">${icon("shuffle")}Mix erstellen</button>
-        <span class="cell-sub" id="mxSrc"></span></div>
+        <div class="mx-pick" id="mxGenreF">
+          <div class="mix-search"><div class="input-icon">${icon("search")}<input class="input" id="mxGQ" placeholder="Genre suchen – z. B. liquid, riddim, deep" autocomplete="off"></div></div>
+          <div id="mxGenres"></div>
+          <div class="cell-sub mx-fine">Künstler kommen aus deiner Bibliothek, deinen Einordnungen, der Gemeinschafts-Genre-Datenbank (falls geladen), MusicBrainz und – mit eigenem Key – Last.fm. Gesendet wird nur der Genre-Name.</div>
+        </div>
+      </section>
+      <section class="mx-sec">${step(2, "Wie passend?")}
+        <div class="mx-levels" role="radiogroup">${meta.levels.map(l => { const u = MIX_LEVEL_UI[l.id] || { n: 1, what: "", time: "" };
+          return `<button type="button" class="mx-level" data-v="${l.id}" role="radio" title="${esc(l.hint)}">
+            <span class="mx-meter" aria-hidden="true">${[1, 2, 3, 4].map(k => `<i class="${k <= u.n ? "on" : ""}"></i>`).join("")}</span>
+            <b>${esc(l.name)}</b><span>${esc(u.what)}</span><em>${esc(u.time)}</em></button>`; }).join("")}</div>
+        <div class="cell-sub mx-fine" id="mxHint"></div>
+      </section>
+      <section class="mx-sec">${step(3, "Umfang", `<span class="mx-count"><b class="num" id="mxCountV">${esc(o.count)}</b> Songs</span>`)}
+        <input type="range" class="mx-range" id="mxCount" min="5" max="${meta.count_max}" step="5" value="${esc(o.count)}" aria-label="Anzahl Songs">
+        <div class="mx-row3">
+          <div class="field"><label>Pro Künstler höchstens</label>${seg("mxPer", [[1, "1"], [2, "2"], [3, "3"], [5, "5"], [10, "10"]], o.per_artist)}</div>
+          <div class="field"><label>Bekanntheit</label>${seg("mxPop", [["hits", "Eher Hits"], ["mix", "Gemischt"], ["unbekannt", "Eher unbekannt"]], o.popularity)}</div>
+        </div>
+        <details class="mx-more" ${o.bpm_min || o.bpm_max || o.camelot || o.energy_min !== "" || o.energy_max !== "" ? "open" : ""}><summary>${icon("sliders")}Feineinstellungen<span class="cell-sub" id="mxMoreSum"></span>${icon("chevron")}</summary>
+          <div class="mx-grid">
+            <div class="field"><label>Tempo (BPM)</label><div class="mix-range"><input class="input num" type="number" id="mxBpmMin" placeholder="von" min="40" max="250" value="${esc(o.bpm_min)}"><span>–</span><input class="input num" type="number" id="mxBpmMax" placeholder="bis" min="40" max="250" value="${esc(o.bpm_max)}"></div></div>
+            <div class="field"><label>Tonart (Camelot)</label><select class="select" id="mxCam"><option value="">egal</option>${CAMELOT_ALL.map(c => `<option ${o.camelot === c ? "selected" : ""}>${c}</option>`).join("")}</select></div>
+            <div class="field"><label>Energie (%)</label><div class="mix-range"><input class="input num" type="number" id="mxEMin" placeholder="von" min="0" max="100" value="${o.energy_min === "" ? "" : Math.round(o.energy_min * 100)}"><span>–</span><input class="input num" type="number" id="mxEMax" placeholder="bis" min="0" max="100" value="${o.energy_max === "" ? "" : Math.round(o.energy_max * 100)}"></div></div>
+            <div class="field" id="mxCurveF"><label>Energie-Verlauf</label><select class="select" id="mxCurve">${[["gleich", "Gleichmäßig"], ["aufbau", "Aufbauen"], ["peak", "Peak in der Mitte"], ["runter", "Runterfahren"]].map(([v, l]) => `<option value="${v}" ${o.curve === v ? "selected" : ""}>${l}</option>`).join("")}</select></div>
+          </div>
+          <div class="mix-switches">
+            <label class="switch"><input type="checkbox" id="mxVer" ${o.versions ? "checked" : ""}><span class="track"></span>Remixe, VIPs und andere Fassungen</label>
+            <label class="switch" id="mxSeedsInF"><input type="checkbox" id="mxSeedsIn" ${o.include_seeds ? "checked" : ""}><span class="track"></span>Songs der gewählten Künstler selbst</label>
+            <label class="switch"><input type="checkbox" id="mxSkip" ${o.skip_library ? "checked" : ""}><span class="track"></span>Songs aus meinen Playlists weglassen</label>
+          </div>
+          <div class="cell-sub mx-fine">Eigene Angaben gelten immer streng. Tempo zählt auch halb/doppelt (87 ↔ 174 BPM). Gemessen wird aus der offiziellen 30-s-Hörprobe – nur so viele Songs wie nötig, Bekanntes kommt aus dem Speicher.</div>
+        </details>
+      </section>
+      <div class="mx-foot"><div class="mx-sum"><b id="mxSum"></b><span class="cell-sub" id="mxSrc"></span></div>
+        <button class="btn btn--primary mx-go" id="mxGo">${icon("shuffle")}Mix erstellen</button></div>
     </div>
     <div id="mxJob"></div><div id="mxOut"></div></div>`;
   hydrateIcons(main);
-  const hint = () => { const l = meta.levels.find(x => x.id === Mix.opts.level); $("#mxHint").textContent = l?.hint || "";
-    $("#mxCurveF").classList.toggle("hidden", !["mixbar", "genau"].includes(Mix.opts.level)); };
-  const src = () => { $("#mxSrc").textContent = (Mix.mode === "genre" ? "Quellen: MusicBrainz, Last.fm (mit Key), Deezer – ohne Login." : "Quelle: Deezer (öffentlich, ohne Login).")
-    + " Nichts wird gespeichert, bis du die Playlist speicherst."; };
-  hint(); src(); mixSeedsDraw();
-  const bindSeg = (id, key, after) => $$(`#${id} button`).forEach(b => b.onclick = () => {
-    Mix.opts[key] = b.dataset.v; $$(`#${id} button`).forEach(x => x.classList.toggle("on", x === b)); mixSaveOpts(); after?.(); });
-  bindSeg("mxLevel", "level", hint); bindSeg("mxPop", "popularity");
-  $$("#mxMode button").forEach(b => b.onclick = () => {
-    Mix.mode = b.dataset.v; store.set("mixMode", Mix.mode); $$("#mxMode button").forEach(x => x.classList.toggle("on", x === b));
-    $("#mxGenreF").classList.toggle("hidden", Mix.mode !== "genre"); $("#mxArtistF").classList.toggle("hidden", Mix.mode === "genre");
-    src(); (Mix.mode === "genre" ? $("#mxGenre") : $("#mxQ")).focus();
-  });
-  $("#mxGenre").onchange = () => { Mix.genre = $("#mxGenre").value.trim(); store.set("mixGenre", Mix.genre); };
-  $("#mxGenre").onkeydown = e => { if (e.key === "Enter") $("#mxGo").click(); };
+
+  const readOpts = () => {
+    const num = (id, scale = 1) => { const v = $(id).value.trim(); return v === "" ? "" : +v / scale; };
+    Object.assign(Mix.opts, { count: +$("#mxCount").value, bpm_min: num("#mxBpmMin"), bpm_max: num("#mxBpmMax"), camelot: $("#mxCam").value,
+      energy_min: num("#mxEMin", 100), energy_max: num("#mxEMax", 100), curve: $("#mxCurve").value,
+      versions: $("#mxVer").checked, include_seeds: $("#mxSeedsIn").checked, skip_library: $("#mxSkip").checked });
+    store.set("mixOpts", Mix.opts);
+  };
+  const refresh = () => {
+    const lv = meta.levels.find(x => x.id === Mix.opts.level), genre = Mix.mode === "genre";
+    $$(".mx-mode").forEach(b => { const on = b.dataset.mode === Mix.mode; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+    $$(".mx-level").forEach(b => { const on = b.dataset.v === Mix.opts.level; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); });
+    $("#mxArtistF").classList.toggle("hidden", genre); $("#mxGenreF").classList.toggle("hidden", !genre);
+    $("#mxSeedsInF").classList.toggle("hidden", genre);
+    $("#mxHint").textContent = lv?.hint || "";
+    $("#mxCurveF").classList.toggle("hidden", !["mixbar", "genau"].includes(Mix.opts.level));
+    $("#mxCountV").textContent = Mix.opts.count;
+    const r = $("#mxCount"); r.style.setProperty("--p", `${(Mix.opts.count - r.min) / (r.max - r.min) * 100}%`);
+    const o2 = Mix.opts, fine = [o2.bpm_min || o2.bpm_max ? `${o2.bpm_min || "…"}–${o2.bpm_max || "…"} BPM` : "", o2.camelot ? `Tonart ${o2.camelot}` : "",
+      o2.energy_min !== "" || o2.energy_max !== "" ? "Energie" : "", !o2.versions ? "ohne Remixe" : "", o2.skip_library ? "ohne Bibliothek" : ""].filter(Boolean);
+    $("#mxMoreSum").textContent = fine.length ? fine.join(" · ") : "";
+    const start = genre ? (Mix.genre ? genreLabel(Mix.genre.genre, Mix.genre.sub) : "Genre wählen")
+      : (Mix.seeds.length ? Mix.seeds.map(s => s.name).join(", ") : "Künstler wählen");
+    $("#mxSum").textContent = `${start} · ${lv?.name || ""} · ${Mix.opts.count} Songs`;
+    $("#mxSrc").textContent = (genre ? "Quellen: MusicBrainz, Last.fm (mit Key), Deezer – ohne Login." : "Quelle: Deezer – öffentlich, ohne Login.")
+      + " Gespeichert wird erst, wenn du die Playlist speicherst.";
+    $("#mxGo").disabled = genre ? !Mix.genre : !Mix.seeds.length;
+  };
+  Mix.refresh = refresh;
+  $$(".mx-mode").forEach(b => b.onclick = () => { Mix.mode = b.dataset.mode; store.set("mixMode", Mix.mode); refresh(); (Mix.mode === "genre" ? $("#mxGQ") : $("#mxQ")).focus(); });
+  $$(".mx-level").forEach(b => b.onclick = () => { Mix.opts.level = b.dataset.v; store.set("mixOpts", Mix.opts); refresh(); });
+  const bindSeg = (id, key, cast = String) => $$(`#${id} button`).forEach(b => b.onclick = () => {
+    Mix.opts[key] = cast(b.dataset.v); $$(`#${id} button`).forEach(x => x.classList.toggle("on", x === b)); store.set("mixOpts", Mix.opts); });
+  bindSeg("mxPer", "per_artist", Number); bindSeg("mxPop", "popularity");
+  $("#mxCount").oninput = () => { Mix.opts.count = +$("#mxCount").value; refresh(); };
+  $$(".mx-form .mx-more input, .mx-form .mx-more select, #mxCount").forEach(el => el.addEventListener("change", () => { readOpts(); refresh(); }));
+
   // Künstlersuche (Deezer) – kurz warten, bis fertig getippt ist
   let tmr = 0, seq = 0;
   const q = $("#mxQ"), sugg = $("#mxSugg");
@@ -1960,40 +2001,55 @@ Views.mix = async (main) => {
     }, 300); };
   q.onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); $(".mix-sg", sugg)?.click(); } if (e.key === "Escape") sugg.classList.add("hidden"); };
   q.onblur = () => setTimeout(() => sugg.classList.add("hidden"), 200);
-  const num = (id, scale = 1) => { const v = $(id).value.trim(); return v === "" ? "" : +v / scale; };
-  const readOpts = () => Object.assign(Mix.opts, { count: Math.max(5, Math.min(meta.count_max, +$("#mxCount").value || meta.count)), per_artist: +$("#mxPer").value,
-    bpm_min: num("#mxBpmMin"), bpm_max: num("#mxBpmMax"), camelot: $("#mxCam").value, energy_min: num("#mxEMin", 100), energy_max: num("#mxEMax", 100),
-    curve: $("#mxCurve").value, versions: $("#mxVer").checked, include_seeds: $("#mxSeedsIn").checked, skip_library: $("#mxSkip").checked });
-  $$(".mix-form input, .mix-form select").forEach(el => { if (el !== q) el.addEventListener("change", () => { readOpts(); mixSaveOpts(); }); });
+  $("#mxGQ").oninput = () => mixGenresDraw();
+  $("#mxGQ").onkeydown = e => { if (e.key === "Enter") { e.preventDefault(); $("#mxGenres .mx-g")?.click(); } if (e.key === "Escape") { e.target.value = ""; mixGenresDraw(); } };
+
   $("#mxGo").onclick = async () => {
-    readOpts(); mixSaveOpts();
+    readOpts();
     const opts = Object.fromEntries(Object.entries(Mix.opts).map(([k, v]) => [k, v === "" ? null : v]));
-    let body;
-    if (Mix.mode === "genre") {
-      Mix.genre = $("#mxGenre").value.trim(); store.set("mixGenre", Mix.genre);
-      const g = mixParseGenre(Mix.genre);
-      if (!g) { toast("Bitte ein Genre aus der Liste wählen (z. B. „Drum & Bass › Liquid“)", "err"); return $("#mxGenre").focus(); }
-      body = { genre: g, opts };
-    } else {
-      if (!Mix.seeds.length) { toast("Bitte zuerst einen Künstler suchen und auswählen", "err"); return q.focus(); }
-      body = { seeds: Mix.seeds.map(s => ({ id: s.id, name: s.name })), opts };
-    }
-    try { Mix.job = (await api("/api/mix/start", { method: "POST", body })).job; Mix.data = null; mixPoll(); } catch (e) { toast(e.message, "err"); }
+    const body = Mix.mode === "genre" ? { genre: Mix.genre, opts } : { seeds: Mix.seeds.map(s => ({ id: s.id, name: s.name })), opts };
+    if (Mix.mode === "genre" ? !Mix.genre : !Mix.seeds.length) return toast(Mix.mode === "genre" ? "Bitte ein Genre wählen" : "Bitte zuerst einen Künstler auswählen", "err");
+    try { Mix.job = (await api("/api/mix/start", { method: "POST", body })).job; Mix.data = null; mixPoll(); $("#mxJob").scrollIntoView({ behavior: "smooth", block: "nearest" }); }
+    catch (e) { toast(e.message, "err"); }
   };
+  mixSeedsDraw(); mixGenresDraw(); refresh();
   if (Mix.data) mixRender();
 };
-function mixSaveOpts() { store.set("mixOpts", Mix.opts); }
+
+/* Genre-Auswahl: Hauptgenres als Kacheln, darunter die Subgenres des gewählten; Suche filtert über alles (max. 12) */
+function mixGenresDraw() {
+  const box = $("#mxGenres"); if (!box) return;
+  const tax = TAXONOMY || {}, term = ($("#mxGQ")?.value || "").trim().toLowerCase(), sel = Mix.genre;
+  const chip = (g, sub, label = genreLabel(g, sub), extra = "") => { const on = sel && sel.genre === g && (sel.sub || null) === (sub || null);
+    return `<button type="button" class="mx-g ${on ? "on" : ""} ${extra}" data-g="${esc(g)}" data-s="${esc(sub || "")}" style="--g:${genreColor(g, sub)}"><i class="dot"></i>${esc(label)}</button>`; };
+  if (term) {
+    const hits = Object.entries(tax).flatMap(([g, subs]) => [[g, null], ...subs.map(s => [g, s])])
+      .filter(([g, s]) => genreLabel(g, s).toLowerCase().includes(term)).slice(0, 12);
+    box.innerHTML = hits.length ? `<div class="mx-gchips">${hits.map(([g, s]) => chip(g, s)).join("")}</div>` : `<div class="cell-sub mx-fine">Kein Genre gefunden – im Genre-Baum gibt es „${esc(term)}“ nicht.</div>`;
+  } else {
+    const open = Mix.gOpen && tax[Mix.gOpen] ? Mix.gOpen : null;
+    box.innerHTML = `<div class="mx-gchips mx-gmain">${Object.keys(tax).map(g => `<button type="button" class="mx-g mx-gm ${open === g ? "open" : ""} ${sel?.genre === g ? "on" : ""}" data-open="${esc(g)}" style="--g:${genreColor(g)}"><i class="dot"></i>${esc(g)}</button>`).join("")}</div>
+      ${open ? `<div class="mx-subs"><div class="mx-subs-head">Subgenre von <b>${esc(open)}</b> – oder das ganze Genre</div>
+        <div class="mx-gchips">${chip(open, null, `Alle: ${open}`, "mx-gall")}${tax[open].map(s => chip(open, s, s)).join("")}</div></div>` : `<div class="cell-sub mx-fine">Wähle ein Hauptgenre – danach kannst du ein Subgenre aussuchen.</div>`}`;
+  }
+  $$("[data-open]", box).forEach(b => b.onclick = () => { Mix.gOpen = Mix.gOpen === b.dataset.open && !Mix.genre ? null : b.dataset.open; mixGenresDraw(); });
+  $$(".mx-g[data-g]", box).forEach(b => b.onclick = () => {
+    Mix.genre = { genre: b.dataset.g, sub: b.dataset.s || null }; Mix.gOpen = b.dataset.g; store.set("mixGenreSel", Mix.genre);
+    const gq = $("#mxGQ"); if (gq) gq.value = "";
+    mixGenresDraw(); Mix.refresh?.();
+  });
+}
 function mixAddSeed(a) {
   if (!a || Mix.seeds.some(s => s.id === a.id)) return;
   if (Mix.seeds.length >= 5) return toast("Höchstens 5 Künstler – entferne erst einen", "err");
-  Mix.seeds.push({ id: a.id, name: a.name, picture: a.picture }); store.set("mixSeeds", Mix.seeds); mixSeedsDraw();
+  Mix.seeds.push({ id: a.id, name: a.name, picture: a.picture }); store.set("mixSeeds", Mix.seeds); mixSeedsDraw(); Mix.refresh?.();
 }
 function mixSeedsDraw() {
   const box = $("#mxSeeds"); if (!box) return;
-  box.innerHTML = Mix.seeds.length ? Mix.seeds.map((s, i) => `<span class="mix-seed">${s.picture ? `<img src="${esc(s.picture)}" alt="">` : ""}${esc(s.name)}
-    <button type="button" class="icon-btn" data-rm="${i}" aria-label="${esc(s.name)} entfernen">${icon("x")}</button></span>`).join("") : `<span class="cell-sub">Noch kein Künstler gewählt.</span>`;
+  box.innerHTML = Mix.seeds.length ? Mix.seeds.map((s, i) => `<span class="mix-seed">${s.picture ? `<img src="${esc(s.picture)}" alt="">` : `<span class="ph"></span>`}${esc(s.name)}
+    <button type="button" class="icon-btn" data-rm="${i}" aria-label="${esc(s.name)} entfernen">${icon("x")}</button></span>`).join("") : `<span class="cell-sub mx-fine">Noch kein Künstler gewählt – oben suchen und aus der Liste wählen.</span>`;
   hydrateIcons(box);
-  $$("[data-rm]", box).forEach(b => b.onclick = () => { Mix.seeds.splice(+b.dataset.rm, 1); store.set("mixSeeds", Mix.seeds); mixSeedsDraw(); });
+  $$("[data-rm]", box).forEach(b => b.onclick = () => { Mix.seeds.splice(+b.dataset.rm, 1); store.set("mixSeeds", Mix.seeds); mixSeedsDraw(); Mix.refresh?.(); });
 }
 async function mixPoll() {
   const jid = Mix.job, box = $("#mxJob"); $("#mxOut").innerHTML = "";
@@ -2001,11 +2057,11 @@ async function mixPoll() {
     let j; try { j = await api(`/api/mix/${jid}`); } catch (e) { box.innerHTML = ""; return toast(e.message, "err"); }
     if (j.state === "done") { box.innerHTML = ""; Mix.data = j; Mix.order = [...j.order]; Mix.reserve = [...j.reserve]; return mixRender(); }
     if (j.state !== "running") { box.innerHTML = `<div class="notice">${icon("info")}<div>${j.state === "error" ? esc(j.error) : "Abgebrochen."}</div></div>`; return hydrateIcons(box); }
-    const what = j.phase === "measuring" ? "Messe Tempo, Tonart und Energie …" : j.genre ? `Suche Künstler für ${esc(genreLabel(j.genre.genre, j.genre.sub))} …` : "Suche ähnliche Künstler und Songs …";
-    box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>${what}</b><span class="cell-sub">${j.done}/${j.total}</span>
+    const measuring = j.phase === "measuring";
+    const what = measuring ? "Messe Tempo, Tonart und Energie …" : j.genre ? `Suche Künstler für ${esc(genreLabel(j.genre.genre, j.genre.sub))} …` : "Suche ähnliche Künstler und Songs …";
+    box.innerHTML = `<div class="card mx-job"><div class="mx-job-head"><span class="mx-spin" aria-hidden="true"></span><b>${what}</b><span class="cell-sub num">${j.done}/${j.total}</span>
       <button class="btn btn--xs btn--ghost" id="mxCancel">Abbrechen</button></div><div class="llm-bar"><div style="width:${Math.round(j.done / (j.total || 1) * 100)}%"></div></div>
-      <div class="cell-sub" style="margin-top:6px">${j.phase === "measuring" ? "Aus der offiziellen 30-s-Hörprobe – nur so viele wie nötig, Bekanntes kommt sofort aus dem Speicher." : (j.genre ? "Bibliothek, Gemeinschafts-DB, MusicBrainz (und Last.fm) – danach Top-Songs bei Deezer." : "Deezer: Top-Songs, Künstler-Radio und ähnliche Künstler.")}</div></div>`;
-    hydrateIcons(box);
+      <div class="cell-sub">${measuring ? "Aus der offiziellen 30-s-Hörprobe – nur so viele wie nötig, Bekanntes kommt sofort aus dem Speicher." : j.genre ? "Bibliothek, Gemeinschafts-DB, MusicBrainz (und Last.fm) – danach Top-Songs bei Deezer." : "Deezer: Top-Songs, Künstler-Radio und ähnliche Künstler."}</div></div>`;
     $("#mxCancel").onclick = () => api(`/api/mix/${jid}/cancel`, { method: "POST" });
     await new Promise(r => setTimeout(r, 900));
   }
@@ -2013,33 +2069,37 @@ async function mixPoll() {
 async function mixRender() {
   const d = Mix.data, out = $("#mxOut"); if (!out || !d) return;
   const it = d.items, ref = d.ref || {};
-  if (!Mix.order.length) { out.innerHTML = `<div class="empty">${icon("info")}<h3>Kein passender Song</h3><p>${esc(d.note || "Mit diesen Einstellungen passt nichts – probiere „Locker“ oder „Passend“.")}</p></div>`; return hydrateIcons(out); }
+  const title = d.genre ? genreLabel(d.genre.genre, d.genre.sub) : d.seeds.map(s => s.name).slice(0, 3).join(", ");
+  if (!Mix.order.length) { out.innerHTML = `<div class="card mx-res"><div class="empty">${icon("info")}<h3>Kein passender Song</h3><p>${esc(d.note || "Mit diesen Einstellungen passt nichts – probiere „Locker“ oder „Passend“.")}</p></div></div>`; return hydrateIcons(out); }
   let st = null; try { st = await api(`/api/mix/${Mix.job}/describe`, { method: "POST", body: { order: Mix.order } }); } catch { /* ohne Statistik */ }
-  const refTxt = [ref.bpm ? `Ziel ~${Math.round(ref.bpm)} BPM` : "", ref.camelot ? `Tonart ${esc(ref.camelot)}` : "", ref.energy != null ? `Energie ~${Math.round(ref.energy * 100)} %` : ""].filter(Boolean).join(" · ");
+  const lv = { locker: "Locker", passend: "Passend", mixbar: "Mixbar", genau: "DJ-genau" }[d.opts.level] || "";
   const ordered = ["mixbar", "genau"].includes(d.opts.level);
-  out.innerHTML = `${d.note ? `<div class="notice">${icon("info")}<div>${esc(d.note)}</div></div>` : ""}
-    <div class="sp-stats cell-sub">${Mix.order.length} Songs${st?.minuten ? ` · ~${st.minuten} Min.` : ""}${st?.bekannt ? ` · ${st.harmonisch} von ${st.bekannt} Übergängen harmonisch` : ""}${refTxt ? ` · ${refTxt}` : ""} · aus ${d.found} Kandidaten${ordered ? " · in DJ-Reihenfolge" : ""}</div>
-    <div class="sp-actions">
-      <button class="btn btn--sm btn--primary" id="mxPlay">${icon("play")}Alles anhören</button>
-      <button class="btn btn--sm" id="mxSave">${icon("plus")}Als Playlist speichern</button>
-      <button class="btn btn--sm btn--ghost" id="mxAgain">${icon("shuffle")}Neu erstellen</button>
-      ${Mix.reserve.length ? `<span class="cell-sub">${Mix.reserve.length} weitere in Reserve – ↻ tauscht einen Song aus</span>` : ""}</div>
-    <div class="card sp-list">${Mix.order.map((i, k) => { const t = it[i], pv = withPreview({ ...t });
-      return `<div class="sp-row" data-k="${k}"><span class="sp-n num">${k + 1}</span>
-        <button class="icon-btn" ${playAttr(pv)} title="Reinhören">${icon("play")}</button>
-        ${t.cover ? `<img src="${esc(t.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
-        <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em>${esc((t.reasons || [])[0] || "")}</em></div>
-        <span class="sp-v num">${t.bpm ? Math.round(t.bpm) + " BPM" : "– BPM"}</span><span class="sp-v sp-cam">${esc(t.camelot || "–")}</span>
-        <span class="sp-v num" title="Energie">${t.energy != null ? Math.round(t.energy * 100) + " %" : "–"}</span>
-        <span class="sp-mv"><button class="icon-btn" data-sw="${k}" title="Durch einen anderen passenden Song ersetzen" ${Mix.reserve.length ? "" : "disabled"}>↻</button>
-          <button class="icon-btn" data-del="${k}" title="Entfernen">${icon("x")}</button></span></div>`; }).join("")}</div>`;
+  const tile = (v, l) => `<div class="mx-stat"><b class="num">${v}</b><span>${l}</span></div>`;
+  const pct = n => Math.max(0, Math.min(100, Math.round(n * 100)));
+  out.innerHTML = `<div class="card mx-res">
+    <div class="mx-res-head"><div><div class="mx-kicker">${icon("shuffle")}Dein Mix · ${esc(lv)}${ordered ? " · DJ-Reihenfolge" : ""}</div><h2>${esc(title)}</h2></div>
+      <div class="mx-res-act"><button class="btn btn--primary" id="mxPlay">${icon("play")}Alles anhören</button>
+        <button class="btn" id="mxSave">${icon("plus")}Als Playlist speichern</button>
+        <button class="btn btn--ghost" id="mxAgain" title="Mit denselben Einstellungen neu erstellen">${icon("repeat")}Neu</button></div></div>
+    <div class="mx-stats">${tile(Mix.order.length, "Songs")}${st?.minuten ? tile(`~${st.minuten}`, "Minuten") : ""}
+      ${st?.bekannt ? tile(`${st.harmonisch}/${st.bekannt}`, "harmonische Übergänge") : ""}${ref.bpm ? tile(Math.round(ref.bpm), "Ziel-BPM") : ""}
+      ${ref.camelot ? tile(esc(ref.camelot), "Tonart") : ""}${tile(d.found, "Kandidaten geprüft")}</div>
+    ${d.note ? `<div class="notice mx-note">${icon("info")}<div>${esc(d.note)}</div></div>` : ""}
+    <div class="mx-list">${Mix.order.map((i, k) => { const t = it[i], pv = withPreview({ ...t }), r = (t.reasons || [])[0] || "";
+      return `<div class="mx-item" data-k="${k}"><span class="mx-n num">${k + 1}</span>
+        <button class="mx-cover" ${playAttr(pv)} aria-label="Reinhören: ${esc(t.title)}">${t.cover ? `<img src="${esc(t.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}<span class="mx-play">${icon("play")}</span></button>
+        <div class="mx-main"><b>${esc(t.title)}</b><span>${esc(t.artist)}</span><em title="${esc((t.reasons || []).join(" · "))}">${esc(r)}</em></div>
+        <div class="mx-feat"><span class="mx-chip num">${t.bpm ? Math.round(t.bpm) : "–"}<small>BPM</small></span><span class="mx-chip">${esc(t.camelot || "–")}</span>
+          <span class="mx-energy" title="Energie ${t.energy != null ? pct(t.energy) + " %" : "unbekannt"}"><i style="width:${t.energy != null ? pct(t.energy) : 0}%"></i></span></div>
+        <div class="mx-act"><button class="icon-btn" data-sw="${k}" title="Durch einen anderen passenden Song ersetzen" ${Mix.reserve.length ? "" : "disabled"}>${icon("repeat")}</button>
+          <button class="icon-btn" data-del="${k}" title="Aus dem Mix entfernen">${icon("x")}</button></div></div>`; }).join("")}</div>
+    <div class="mx-res-foot cell-sub">${Mix.reserve.length ? `${Mix.reserve.length} weitere passende Songs in Reserve – ${icon("repeat")} tauscht einen aus.` : "Keine weiteren Songs in Reserve."} Energie = Lautheit und Dichte der Hörprobe.</div></div>`;
   hydrateIcons(out); Player.sync();
   $$("[data-del]", out).forEach(b => b.onclick = () => { Mix.order.splice(+b.dataset.del, 1); mixRender(); });
   $$("[data-sw]", out).forEach(b => b.onclick = () => { const k = +b.dataset.sw, nxt = Mix.reserve.shift(); if (nxt == null) return; Mix.order[k] = nxt; mixRender(); });
   $("#mxPlay").onclick = () => { Player.playList(Mix.order.map(i => withPreview({ ...it[i] }))); toast("Alle Hörproben nacheinander – unten im Player weiter/stoppen"); };
   $("#mxAgain").onclick = () => $("#mxGo")?.click();
-  const defName = `Mix – ${d.genre ? genreLabel(d.genre.genre, d.genre.sub) : d.seeds.map(s => s.name).slice(0, 3).join(", ")}`;
-  $("#mxSave").onclick = () => modal({ title: "Als Playlist speichern", body: `<input class="input" id="mxName" value="${esc(defName)}" style="width:100%">`, confirm: "Speichern",
+  $("#mxSave").onclick = () => modal({ title: "Als Playlist speichern", body: `<input class="input" id="mxName" value="${esc(`Mix – ${title}`)}" style="width:100%">`, confirm: "Speichern",
     onConfirm: async box => { const r = await api(`/api/mix/${Mix.job}/save`, { method: "POST", body: { order: Mix.order, name: $("#mxName", box).value } });
       toast(`„${r.name}“ mit ${r.count} Songs angelegt`); refreshMeta();
       setTimeout(() => modal({ title: "Gespeichert", text: `„${esc(r.name)}“ liegt jetzt in deinen Playlists. Im Set-Planer kannst du die Reihenfolge noch feinschleifen und als M3U8/CSV exportieren.`,
