@@ -1675,7 +1675,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 @media (max-width: 860px) { .side-sort { display: none; } }
 
 /* Mix erstellen */
-.mx-page { max-width: 1040px; margin: 0 auto; }
+.mx-page { width: 100%; }
 .mx-form { padding: 6px 22px 0; }
 .mx-sec { padding: 18px 0 20px; border-bottom: 1px solid var(--line-soft); display: flex; flex-direction: column; gap: 12px; }
 .mx-step { display: flex; align-items: center; gap: 10px; }

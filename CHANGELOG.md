@@ -26,7 +26,7 @@ Der Updater installiert nur signierte Versionen.
   Freundes-Playlists wählt „In meine Playlists“ eine bestehende oder neue Playlist. Doppelte Songs werden
   übersprungen, die Quelle bleibt unverändert. Unter „Übertragen“ schlägt das Namensfeld bestehende Playlists vor,
   und importierte Exporte lassen sich dort als Quelle nutzen. „Ansehen“ zeigte bei eigenen Playlists eine leere Liste.
-- Mix erstellen: Suchfeld und Regler nutzen die volle Breite und passen sich dem Fenster an.
+- Mix erstellen: Die ganze Seite samt Suchfeld und Regler nutzt die volle Breite und passt sich dem Fenster an.
 
 ## 0.9.2 – 2026-11-06
 - **Windows: Selbst-Update repariert.** Das Hilfsskript, das beim Neustart die alte gegen die neue Version tauscht,
