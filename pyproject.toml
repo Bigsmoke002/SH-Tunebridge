@@ -1,6 +1,6 @@
 [project]
 name = "tunebridge"
-version = "0.10.0"
+version = "0.10.1"
 description = "SH-Tunebridge – Songs erkennen, Playlists zwischen Diensten übertragen, nach (Sub-)Genre sortieren"
 readme = "README.md"
 license = "LicenseRef-SH-Tunebridge"

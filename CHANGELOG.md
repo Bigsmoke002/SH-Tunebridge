@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.10.1)
+## 0.10.1 – 2026-11-07
 - **Weniger Last im Leerlauf auf „Erkennen“:** Die Pegelanzeige zeichnet nur noch, wenn neue Daten kommen (höchstens
   30 Bilder/s statt bei jeder Bildwiederholung), pausiert bei Stille und hält Verbindung und Aufnahme an, sobald das
   Fenster ins Tray geht (Windows/X11 auch beim Minimieren). Der Pegelbalken bewegt sich ohne Neuberechnung der Seite.
