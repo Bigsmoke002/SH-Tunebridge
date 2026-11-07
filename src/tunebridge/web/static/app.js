@@ -2639,9 +2639,9 @@ function loginTrouble(sid, main) {
     ${IMPORT[sid] ? `<button class="btn btn--sm btn--ghost" data-imp="${sid}">${icon("upload")}Stattdessen Datei importieren</button>` : ""}</div></div>`;
 }
 
-async function platformLogin(p, main) {
+async function platformLogin(p, main, write = false) {
   let st;
-  const lapi = p.id === "lastfm" ? "/api/lastfm/login" : `/api/platforms/${p.id}/login`;
+  const lapi = p.id === "lastfm" ? "/api/lastfm/login" : `/api/platforms/${p.id}/login${write ? "?write=1" : ""}`;
   try { st = await api(lapi, { method: "POST" }); }
   catch (e) {
     if (/Client-ID|Shared secret/.test(e.message) && SETUP[p.id]) return setupWizard(p.id, main);
@@ -2689,13 +2689,13 @@ Views.transfer = async (main) => {
   const plats = await api("/api/platforms");
   const conn = plats.filter(p => p.connected);
   const svcs = [{ id: "local", name: "SH-Tunebridge" }, ...conn];
-  const dsts = svcs.filter(s => !["youtube", "soundcloud"].includes(s.id));   // nur lesend angebunden
+  const dsts = svcs;
   main.innerHTML = `<div class="page view-enter">
     <div class="page-head"><div><h1>Übertragen</h1><p>Playlists und Lieblingssongs zwischen SH-Tunebridge und deinen Diensten mitnehmen.</p></div></div>
     ${conn.length ? "" : `<div class="notice">${icon("info")}<div>Verbinde unten zuerst einen Dienst – dann kannst du z. B. deine einsortierten Songs als Playlist zu TIDAL schicken oder eine TIDAL-Playlist holen und nach Genres aufteilen.</div></div>`}
     <div class="card transfer-flow">
       <div class="field"><label>Von</label><select class="select" id="tSrc">${svcs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>
-      <div class="field grow"><label>Playlist</label><div class="t-target"><select class="select" id="tSrcPl"><option>Lade …</option></select>
+      <div class="field grow"><label>Playlist</label><div class="t-target"><label class="t-search">${icon("search")}<input class="input" id="tSrcQ" placeholder="Suchen …" autocomplete="off" spellcheck="false"></label><select class="select" id="tSrcPl"><option>Lade …</option></select>
         <button class="btn btn--sm btn--ghost" id="tView" title="Songs ansehen und vorhören">${icon("play")}Ansehen</button></div></div>
       <div style="padding-top:20px;color:var(--text-3)">${icon("arrow")}</div>
       <div class="field"><label>Nach</label><select class="select" id="tDst">${dsts.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>
@@ -2714,37 +2714,90 @@ Views.transfer = async (main) => {
   $$("[data-logout]").forEach(b => b.onclick = () => modal({ title: "Verbindung trennen?", text: "Das gespeicherte Login-Token wird gelöscht.", confirm: "Trennen", danger: true,
     onConfirm: async () => { await api(`/api/platforms/${b.dataset.logout}/logout`, { method: "POST" }); Views.transfer(main); } }));
 
-  let srcLists = [];
-  const srcSel = $("#tSrc"), plSel = $("#tSrcPl"), dstSel = $("#tDst");
+  let srcLists = [], dstLists = [];
+  const srcSel = $("#tSrc"), plSel = $("#tSrcPl"), dstSel = $("#tDst"), srcQ = $("#tSrcQ");
   if (dsts.length > 1) dstSel.value = dsts[1].id;
-  const target = () => {
+  const plOpts = (list, q = "") => {
+    const n = (q || "").toLowerCase().trim(), hit = list.filter(p => !n || p.name.toLowerCase().includes(n));
+    return hit.length ? hit.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.count != null ? ` (${p.count})` : ""}</option>`).join("")
+      : `<option value="">${list.length ? "– kein Treffer –" : "– keine Playlists –"}</option>`;
+  };
+  const drawSrc = () => {
+    const keep = plSel.value;
+    plSel.innerHTML = plOpts(srcLists, srcQ.value);
+    if ([...plSel.options].some(o => o.value === keep)) plSel.value = keep;
+    plSel.disabled = !plSel.value;
+  };
+  const loadDst = async () => {
+    const d = dstSel.value;
+    if (d === "local") dstLists = S.playlists.filter(p => p.origin === "lokal").map(p => ({ id: p.name, name: p.name, count: p.count }));
+    else {
+      try { dstLists = (await api(`/api/platforms/${d}/playlists`)).filter(p => p.id !== "__liked__" && p.own !== false); }
+      catch (e) { dstLists = []; toast(e.message, "err"); }
+    }
+  };
+  const target = async () => {
     const pl = srcLists.find(x => x.id === plSel.value);
-    const toSvc = dstSel.value !== "local";
-    $("#tTarget").innerHTML = `<label>Als</label><div class="t-target">
-      ${toSvc ? `<select class="select" id="tMode"><option value="pl">Neue Playlist</option><option value="like">Zu Lieblingssongs</option></select>` : ""}
-      <input class="input" id="tName" value="${esc(pl ? pl.name : "")}" placeholder="Name der Playlist" ${toSvc ? "" : `list="tLocalPls" title="Name einer bestehenden Playlist = Songs kommen dazu (Doppelte werden übersprungen)"`}></div>
-      ${toSvc ? "" : `<datalist id="tLocalPls">${S.playlists.filter(p => p.origin === "lokal").map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>`}`;
-    const mode = $("#tMode");
-    if (mode) mode.onchange = () => $("#tName").classList.toggle("hidden", mode.value === "like");
+    const d = dstSel.value, toSvc = d !== "local", p = plats.find(x => x.id === d);
+    const mode = $("#tMode")?.value || "pl";
+    const box = $("#tTarget");
+    if (toSvc && p && !p.can_write) {
+      box.innerHTML = `<label>Als</label><div class="t-perm">${icon("key")}<span>${esc(p.name)} ist nur zum Lesen verbunden.
+        Zum Übertragen fragt Google einmal nach dem Recht, Playlists anzulegen.</span>
+        <button class="btn btn--sm btn--primary" id="tPerm">Schreibrecht erteilen</button></div>`;
+      hydrateIcons(box);
+      $("#tPerm").onclick = () => platformLogin(p, main, true);
+      $("#tGo").disabled = true;
+      return;
+    }
+    $("#tGo").disabled = false;
+    box.innerHTML = `<label>Als</label><div class="t-target">
+      <select class="select" id="tMode"><option value="pl">Neue Playlist</option><option value="exist">In bestehende Playlist</option>${toSvc ? `<option value="like">Zu Lieblingssongs</option>` : ""}</select>
+      <input class="input" id="tName" value="${esc(pl ? pl.name : "")}" placeholder="Name der Playlist">
+      <select class="select hidden" id="tDstPl"><option>Lade …</option></select></div>
+      ${d === "youtube" ? `<div class="t-hint">YouTube erlaubt eigenen Apps etwa 60–70 Songs pro Tag. Ist das Kontingent aufgebraucht, morgen „In bestehende Playlist“ wählen – Vorhandenes wird übersprungen.</div>` : ""}
+      ${d === "soundcloud" ? `<div class="t-hint">SoundCloud legt die Playlist privat an (höchstens 500 Songs).</div>` : ""}`;
+    const m = $("#tMode"), dp = $("#tDstPl");
+    m.value = [...m.options].some(o => o.value === mode) ? mode : "pl";
+    const sync = async () => {
+      $("#tName").classList.toggle("hidden", m.value !== "pl");
+      dp.classList.toggle("hidden", m.value !== "exist");
+      if (m.value === "exist") {
+        dp.disabled = true; dp.innerHTML = `<option>Lade …</option>`;
+        await loadDst();
+        // SH-Tunebridge → SH-Tunebridge: die Quelle selbst nicht als Ziel anbieten
+        const opts = d === "local" && srcSel.value === "local" ? dstLists.filter(x => x.id !== plSel.value) : dstLists;
+        dp.innerHTML = plOpts(opts); dp.disabled = !opts.length;
+        const same = opts.find(x => x.name === pl?.name); if (same) dp.value = same.id;
+      }
+    };
+    m.onchange = sync; await sync();
   };
   const loadSrc = async () => {
     plSel.innerHTML = `<option>Lade …</option>`; plSel.disabled = true;
     try {
-      if (srcSel.value === "local") srcLists = S.playlists.filter(p => p.origin === "lokal" || !p.origin).map(p => ({ id: p.name, name: p.name, count: p.count ?? p.tracks?.length }));
+      if (srcSel.value === "local") srcLists = S.playlists.map(p => ({ id: p.name, name: p.origin === "lokal" ? p.name : `${p.name} · ${p.origin}`, count: p.count }));
       else srcLists = await api(`/api/platforms/${srcSel.value}/playlists`);
     } catch (e) { srcLists = []; toast(e.message, "err"); }
-    plSel.innerHTML = srcLists.length ? srcLists.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.count != null ? ` (${p.count})` : ""}</option>`).join("") : `<option value="">– keine Playlists –</option>`;
-    plSel.disabled = !srcLists.length; target();
+    drawSrc(); target();
   };
-  srcSel.onchange = loadSrc; plSel.onchange = target; dstSel.onchange = target;
+  srcSel.onchange = () => { srcQ.value = ""; loadSrc(); };
+  srcQ.oninput = () => { drawSrc(); target(); };
+  plSel.onchange = target; dstSel.onchange = target;
   $("#tView").onclick = () => plSel.value && showPlatformPlaylist(srcSel.value, plSel.value, plSel.selectedOptions[0]?.textContent || "");
   await loadSrc();
   $("#tGo").onclick = async () => {
-    const like = $("#tMode")?.value === "like", name = $("#tName").value.trim();
+    const mode = $("#tMode")?.value || "pl", like = mode === "like", name = $("#tName")?.value.trim() || "";
+    const dpl = mode === "exist" ? $("#tDstPl")?.value : "";
     if (!plSel.value) return toast("Bitte eine Playlist wählen", "err");
+    if (mode === "exist" && !dpl) return toast("Bitte die Ziel-Playlist wählen", "err");
     if (srcSel.value === dstSel.value && srcSel.value !== "local") return toast("Quelle und Ziel sind gleich", "err");
     try {
-      const r = await api("/api/transfer", { method: "POST", body: { src: srcSel.value, src_id: plSel.value, dst: dstSel.value, name, like } });
+      const body = dstSel.value === "local"
+        ? { src: srcSel.value, src_id: plSel.value, dst: "local", name: mode === "exist" ? dpl : name }
+        : { src: srcSel.value, src_id: plSel.value, dst: dstSel.value, name: mode === "exist" ? $("#tDstPl").selectedOptions[0].textContent.replace(/ \(\d+\)$/, "") : name, like, dst_pid: dpl || "" };
+      if (body.src === "local" && body.dst === "local" && body.src_id === body.name) return toast("Quelle und Ziel sind dieselbe Playlist", "err");
+      const r = await api("/api/transfer", { method: "POST", body });
       Transfer.job = r.job; pollTransfer(main);
     } catch (e) { toast(e.message, "err"); }
   };
@@ -3070,9 +3123,10 @@ async function pollTransfer(main) {
       ${running ? `<button class="btn btn--sm btn--ghost" id="tCancel">Abbrechen</button>` : `<button class="btn btn--sm btn--ghost" id="tClose">${icon("x")}</button>`}</div>
     <div class="llm-bar"><div style="width:${j.state === "done" ? 100 : pct}%"></div></div>
     <div class="llm-job ${j.state === "error" ? "err" : ""}">${esc(label)}</div>
-    ${j.state === "done" ? `<div class="t-result"><span class="acc-badge ok">${icon("check")}${j.found} von ${j.total} übertragen</span>
+    ${j.state === "done" ? `<div class="t-result"><span class="acc-badge ok">${icon("check")}${j.added != null ? `${j.added} neu hinzugefügt${j.found - j.added ? ` · ${j.found - j.added} schon drin` : ""}` : `${j.found} von ${j.total} übertragen`}</span>
       ${j.url ? `<a class="btn btn--sm" href="${esc(j.url)}" target="_blank" rel="noopener">${icon("external")}In ${esc(SVC_NAME(j.dst))} öffnen</a>` : ""}
       ${j.dst === "local" ? `<a class="btn btn--sm" href="#/playlists/${encodeURIComponent(j.name)}">Playlist ansehen</a>` : ""}</div>
+      ${j.stopped ? `<div class="t-hint warn">${icon("info")}Vorzeitig gestoppt: ${esc(j.stopped)}</div>` : ""}
       ${j.missing?.length ? `<details class="t-missing"><summary>${j.missing.length} nicht gefunden</summary>${j.missing.map(m => `<div>${esc(m.artist)} – ${esc(m.title)}</div>`).join("")}</details>` : ""}` : ""}
   </div>`;
   const c = $("#tCancel"); if (c) c.onclick = () => api(`/api/transfer/${j.id}/cancel`, { method: "POST" });
@@ -3285,9 +3339,9 @@ const SETTING_HINTS = {
   ACRCLOUD_ACCESS_SECRET: "Aus dem ACRCloud-Projekt",
   LLM_URL: "OpenAI-kompatibel, z. B. http://127.0.0.1:8080/v1 (llama.cpp-Server)",
   LLM_MODEL: "Optional – Modellname für den Server",
-  YOUTUBE_OAUTH_CLIENT_ID: `Für den YouTube-Login (nur Lesen). Desktop-App-Client in der <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> – einfacher: Dienste › YouTube › „Einrichten & verbinden“`,
+  YOUTUBE_OAUTH_CLIENT_ID: `Für den YouTube-Login (Lesen; Schreibrecht erst beim Übertragen). Desktop-App-Client in der <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener">Google Cloud Console</a> – einfacher: Dienste › YouTube › „Einrichten & verbinden“`,
   YOUTUBE_OAUTH_CLIENT_SECRET: "Gehört zur YouTube-Client-ID oben",
-  SOUNDCLOUD_CLIENT_ID: `Für den SoundCloud-Login (nur Lesen, Artist Pro nötig). Redirect-URI: http://127.0.0.1:8765/api/oauth/soundcloud/callback`,
+  SOUNDCLOUD_CLIENT_ID: `Für den SoundCloud-Login (Lesen und Übertragen, Artist Pro nötig). Redirect-URI: http://127.0.0.1:8765/api/oauth/soundcloud/callback`,
   SOUNDCLOUD_CLIENT_SECRET: "Gehört zur SoundCloud-Client-ID oben",
 };
 const SERVICE_STYLE = { lastfm: ["fm", "#e25c55"], audd: ["Au", "#7aa9ea"], acrcloud: ["AC", "#e0b46a"] };
@@ -4274,7 +4328,7 @@ const Privacy = {
       [`${c.domain} (Playlists teilen)`, "nur verschlüsselte Blöcke – Server kann sie nicht lesen", c.server.share ? "beim Teilen / Ansehen von Freunde-Playlists" : "aus"],
       ["Offizielle Player (YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer)", "IP-Adresse, Geräteinfos, ggf. Cookies des Anbieters", "erst nach deinem Klick auf „Player laden“"],
       ["Deezer / Apple (Cover, Hörproben)", "deine IP-Adresse beim Laden", "beim Anzeigen/Abspielen"],
-      ["TIDAL", "deine Playlists/Songs beim Übertragen", "nur wenn verbunden"],
+      ["TIDAL, Spotify, YouTube, SoundCloud (Übertragen)", "Titel/Künstler zum Suchen, Name der neuen Playlist – YouTube braucht dafür dein extra Schreibrecht", "nur wenn verbunden und du überträgst"],
       ["GitHub", "deine IP-Adresse", "Update-Prüfung stündlich"],
       ["Hugging Face, GitHub", "deine IP-Adresse", "einmalig beim Modell-Download"],
       ["Lokales LLM", "nichts – läuft komplett auf deinem Rechner", ""],

@@ -1,4 +1,4 @@
-"""YouTube / YouTube Music über die offizielle YouTube Data API v3 – mit deinem Google-Konto (nur Lesen).
+"""YouTube / YouTube Music über die offizielle YouTube Data API v3 – mit deinem Google-Konto.
 
 Einrichtung (einmalig, kostenlos): console.cloud.google.com → Projekt → „YouTube Data API v3“ aktivieren →
 OAuth-Zustimmungsbildschirm (extern, dich selbst als Testnutzer eintragen) → Anmeldedaten → OAuth-Client-ID
@@ -7,6 +7,11 @@ kein echtes Geheimnis; es bleibt trotzdem nur auf deinem Rechner.
 Gelesen werden: deine Playlists (auch private) und „Mag ich“-Videos (darin landen meist auch Likes aus
 YouTube Music). Die YouTube-Music-eigene Bibliothek (Alben, Uploads) bietet die offizielle API nicht an.
 Hinweis: Solange die Google-App im Testmodus ist, läuft die Anmeldung nach 7 Tagen ab (dann neu verbinden).
+
+Übertragen (Playlist anlegen, Songs hinzufügen, „Mag ich“) braucht das Recht „youtube“. Es wird nicht beim
+normalen Verbinden angefragt, sondern erst, wenn du zum ersten Mal zu YouTube überträgst (Google fragt dann
+einmal nach). Tageskontingent einer eigenen Google-App: 10.000 Einheiten – eine Suche kostet 100, Hinzufügen 50.
+Das reicht für etwa 60–70 Songs am Tag; Treffer werden gemerkt, ein zweiter Lauf am nächsten Tag setzt fort.
 """
 
 from __future__ import annotations
@@ -43,27 +48,46 @@ def mark_non_music(tracks: list[Track], get) -> int:
     return n
 
 
+class QuotaExceeded(OAuthError):
+    pass
+
+
+QUOTA_MSG = ("YouTube-Tageskontingent deiner Google-App ist aufgebraucht (reicht für etwa 60–70 Songs am Tag). "
+             "Morgen erneut übertragen – am besten „In bestehende Playlist“ wählen: Gefundenes und schon "
+             "Hinzugefügtes wird übersprungen.")
+
+
 class YouTube(OAuthProvider):
     name = "youtube"
     title = "YouTube"
     AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth"
     TOKEN_URL = "https://oauth2.googleapis.com/token"
     SCOPES = "https://www.googleapis.com/auth/youtube.readonly"
+    WRITE_SCOPES = "https://www.googleapis.com/auth/youtube"
     CLIENT_ID_KEY = "YOUTUBE_OAUTH_CLIENT_ID"
     CLIENT_SECRET_KEY = "YOUTUBE_OAUTH_CLIENT_SECRET"
     SECRET_REQUIRED = True
     EXTRA_AUTH = {"access_type": "offline", "prompt": "consent"}
 
-    def _get(self, path: str, **params) -> dict:
-        r = httpx.get(f"{API}/{path}", params=params, timeout=20,
-                      headers={"Authorization": f"Bearer {self._access()}"})
+    def _req(self, method: str, path: str, params: dict | None = None, json: dict | None = None) -> dict:
+        h = {"Authorization": f"Bearer {self._access()}"}
+        r = (httpx.get(f"{API}/{path}", params=params, timeout=20, headers=h) if method == "GET"
+             else httpx.request(method, f"{API}/{path}", params=params, json=json, timeout=20, headers=h))
         if r.status_code >= 400:
             try:
-                msg = r.json()["error"]["message"]
+                err = r.json()["error"]
+                msg, reason = err.get("message", ""), ((err.get("errors") or [{}])[0]).get("reason", "")
             except Exception:  # noqa: BLE001
-                msg = r.text[:200]
+                msg, reason = r.text[:200], ""
+            if reason in ("quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded"):
+                raise QuotaExceeded(QUOTA_MSG)
+            if r.status_code == 403 and reason in ("insufficientPermissions", "forbidden") and method != "GET":
+                raise OAuthError("YouTube: Schreibrecht fehlt – unter „Übertragen“ das Schreibrecht bei Google erteilen")
             raise OAuthError(f"YouTube: {msg}")
-        return r.json()
+        return {} if r.status_code == 204 or not getattr(r, "text", "x") else r.json()
+
+    def _get(self, path: str, **params) -> dict:
+        return self._req("GET", path, params=params)
 
     def account(self) -> str | None:
         if self._acc is None:
@@ -117,3 +141,72 @@ class YouTube(OAuthProvider):
             return (items[0].get("contentDetails") or {}).get("itemCount") if items else None
         except OAuthError:
             return None
+
+    # ------------------------------------------------------------ Übertragen (nur mit Schreibrecht)
+    def _need_write(self) -> None:
+        if not self.can_write():
+            raise OAuthError("YouTube ist nur zum Lesen verbunden – unter „Übertragen“ das Schreibrecht bei Google erteilen")
+
+    def search(self, track: Track, limit: int = 5) -> list[Track]:
+        from ..linkimport import split_title
+        q = f"{', '.join(track.artists[:2])} {track.title}".strip()
+        d = self._get("search", part="snippet", type="video", videoCategoryId="10", q=q, maxResults=limit)
+        out = []
+        for it in d.get("items") or []:
+            sn, vid = it.get("snippet") or {}, (it.get("id") or {}).get("videoId")
+            if not vid:
+                continue
+            ch = sn.get("channelTitle") or ""
+            artists, title = split_title(_unescape(sn.get("title") or ""), ch.removesuffix(" - Topic"))
+            out.append(Track(title=title, artists=artists, ids={"youtube": vid},
+                             cover=((sn.get("thumbnails") or {}).get("medium") or {}).get("url")))
+        return out
+
+    def find(self, track: Track) -> Track | None:
+        from ..matching import best_match
+        m = best_match(track, self.search(track), threshold=75)
+        return m.candidate if m else None
+
+    def create_playlist(self, name: str, description: str = "") -> str:
+        self._need_write()
+        d = self._req("POST", "playlists", params={"part": "snippet,status"}, json={
+            "snippet": {"title": name[:150], "description": description or "Erstellt mit SH-Tunebridge"},
+            "status": {"privacyStatus": "private"}})
+        return d["id"]
+
+    def _video_ids(self, pid: str) -> set[str]:
+        ids, token = set(), None
+        while len(ids) < 5000:
+            d = self._get("playlistItems", part="contentDetails", playlistId=pid, maxResults=50,
+                          **({"pageToken": token} if token else {}))
+            ids |= {(x.get("contentDetails") or {}).get("videoId") for x in d.get("items") or []}
+            token = d.get("nextPageToken")
+            if not token:
+                break
+        return ids
+
+    def add_to_playlist(self, playlist_id: str, tracks: list[Track]) -> None:
+        """Fügt nur hinzu, was noch fehlt – so setzt ein zweiter Lauf (nach aufgebrauchtem Kontingent) fort."""
+        self._need_write()
+        have = self._video_ids(playlist_id)
+        for t in tracks:
+            vid = t.ids.get("youtube")
+            if not vid or vid in have:
+                continue
+            self._req("POST", "playlistItems", params={"part": "snippet"}, json={
+                "snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": vid}}})
+            have.add(vid)
+
+    def like(self, tracks: list[Track]) -> None:
+        self._need_write()
+        for t in tracks:
+            if t.ids.get("youtube"):
+                self._req("POST", "videos/rate", params={"id": t.ids["youtube"], "rating": "like"})
+
+    def playlist_url(self, pid: str) -> str:
+        return f"https://www.youtube.com/playlist?list={pid}"
+
+
+def _unescape(s: str) -> str:
+    import html
+    return html.unescape(s)

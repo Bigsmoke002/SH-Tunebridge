@@ -78,7 +78,7 @@ Marken gehören ihren jeweiligen Inhabern und dienen nur der Beschreibung, womit
 | TIDAL | **inoffiziell** (`tidalapi`, Gerätelogin wie in der TIDAL-App – nicht die offizielle Developer-API) | Playlists lesen/anlegen, Lieblingssongs |
 | Spotify | offiziell (Web API mit deiner eigenen Spotify-App, Client-ID; Besitzer braucht Premium) | eigene Playlists lesen/anlegen, Lieblingssongs |
 | Claude, OpenAI, Gemini | offiziell (dein eigener API-Key, nur nach Zustimmung) | optionale KI-Analyse von Songs/Playlists |
-| YouTube | offiziell (YouTube Data API: Google-Login mit deiner eigenen OAuth-App, nur Lesen; oEmbed für Links) | Playlists und „Mag ich“ lesen, Links einlesen |
+| YouTube | offiziell (YouTube Data API: Google-Login mit deiner eigenen OAuth-App; Schreibrecht erst beim Übertragen; oEmbed für Links) | Playlists und „Mag ich“ lesen, Links einlesen, Playlists übertragen (ca. 60–70 Songs/Tag) |
 | SoundCloud | offiziell (SoundCloud API mit deiner eigenen App – Konto braucht Artist Pro; oEmbed für Links) | Playlists und Likes lesen, Links einlesen |
 | AudD, ACRCloud | offiziell (dein eigener API-Key) | optionale Erkennung mit Audio-Ausschnitt |
 | Last.fm | offiziell (dein eigenes API-Konto; Login über die Last.fm-Web-Anmeldung) | Genre-Tags, Loved Tracks |
@@ -259,8 +259,8 @@ ohne Duplikate. Vor jeder Wiederherstellung wird der aktuelle Stand automatisch 
 |---|---|---|
 | TIDAL | ✅ Playlists/Lieblingssongs lesen, Playlists anlegen, Songs liken | Gerätelogin im Browser, kein Entwickler-Key |
 | Spotify | ✅ Playlists/Lieblingssongs lesen, Playlists anlegen | eigene kostenlose App im Spotify-Developer-Dashboard (Client-ID) |
-| YouTube / YouTube Music | ✅ Playlists und „Mag ich“ lesen (nur Lesen) | Google-Login mit eigener OAuth-App (Desktop-App, Client-ID + Secret) |
-| SoundCloud | ✅ Playlists und Likes lesen (nur Lesen) | Login mit eigener SoundCloud-App (Client-ID + Secret, Artist Pro nötig) |
+| YouTube / YouTube Music | ✅ Playlists und „Mag ich“ lesen, übertragen (Schreibrecht auf Klick, Tageskontingent ca. 60–70 Songs) | Google-Login mit eigener OAuth-App (Desktop-App, Client-ID + Secret) |
+| SoundCloud | ✅ Playlists und Likes lesen, übertragen (private Playlist, max. 500 Songs) | Login mit eigener SoundCloud-App (Client-ID + Secret, Artist Pro nötig) |
 | Apple Music | nur offiziell möglich | Apple Developer Program (99 $/Jahr) – kein inoffizieller Weg (Rechtslage) |
 
 **Neu für dich:** Alle paar Stunden (einstellbar) schaut SH-Tunebridge in deine verbundenen Dienste. Neue Likes
@@ -310,8 +310,8 @@ Titel/Künstler/Dauer. Remix/VIP/Edit wird **nicht** mit dem Original verwechsel
 |---|---|---|---|
 | Spotify | Web API, eigene App (Dev-Mode reicht für dich selbst) | ja | Seit Ende 2024 für neue Apps **keine** Recommendations/Audio-Features/Genres mehr → Genres kommen von Last.fm & Co. |
 | TIDAL | `tidalapi` (inoffiziell, Gerätelogin) – **umgesetzt** | ja | offizielle Developer-API wäre die sauberere Alternative |
-| YouTube / YouTube Music | Data API v3 mit eigenem Google-OAuth-Client – **umgesetzt (nur Lesen)** | nein | YouTube-Music-Bibliothek (Alben, Uploads) bietet die API nicht; Likes landen meist in „Mag ich“ |
-| SoundCloud | offizielle API mit eigener App (Artist Pro) – **umgesetzt (nur Lesen)** | teils | Tags der Uploader sind super für Subgenres |
+| YouTube / YouTube Music | Data API v3 mit eigenem Google-OAuth-Client – **umgesetzt (Lesen + Übertragen)** | nein | YouTube-Music-Bibliothek (Alben, Uploads) bietet die API nicht; Likes landen meist in „Mag ich“ |
+| SoundCloud | offizielle API mit eigener App (Artist Pro) – **umgesetzt (Lesen + Übertragen)** | teils | Tags der Uploader sind super für Subgenres |
 | Apple Music | MusicKit | ja | **Apple Developer Program (99 $/Jahr)** nötig |
 
 ## Genre-Erkennung

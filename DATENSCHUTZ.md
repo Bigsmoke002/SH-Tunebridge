@@ -85,10 +85,10 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
 | YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer (offizielle Player) | IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters | **erst nach deinem Klick** auf „Player laden“ (siehe unten) |
 | Webseiten, die du über „Öffnen“ oder „Kaufen“ aufrufst | IP-Adresse (dein Standard-Browser) | erst beim Klick |
-| Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud | Abruf deiner Playlists und Lieblingssongs; bei Spotify/TIDAL auf Wunsch neue Playlists anlegen | unter „Dienste“ und beim automatischen Abgleich – nur mit deinem verbundenen Konto bzw. deinem öffentlichen Profil |
+| Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud | Abruf deiner Playlists und Lieblingssongs; bei Spotify, TIDAL, YouTube und SoundCloud auf Wunsch Playlists anlegen/ergänzen und Songs liken | unter „Dienste“ und beim automatischen Abgleich – nur mit deinem verbundenen Konto bzw. deinem öffentlichen Profil |
 | Google (YouTube), SoundCloud, Last.fm | Anmeldung über deine **eigene** App (Client-ID/-Secret bzw. API key/Shared secret); Login-Token bzw. Sitzungsschlüssel und dein Last.fm-Benutzername | nur wenn du den Login einrichtest – direkt zwischen deinem Rechner und dem Dienst, kein Server dazwischen |
 | Deezer, Apple; bei verbundenen Diensten auch deren Bild-Server | deine IP-Adresse | beim Anzeigen von Covern und Abspielen von Hörproben (direkt vom Anbieter) |
-| TIDAL | Playlists/Songs | nur wenn du TIDAL verbindest und überträgst |
+| TIDAL, Spotify, YouTube, SoundCloud (Übertragen) | Titel und Künstler der zu übertragenden Songs (zum Suchen), Name der neuen Playlist | nur wenn du den Dienst verbindest und selbst „Übertragen“ startest |
 | GitHub | deine IP-Adresse | Update-Prüfung (stündlich) |
 | Hugging Face, GitHub | deine IP-Adresse | einmalig beim Download von Modell/Laufzeit |
 | Microsoft (nur Windows) | deine IP-Adresse | nur wenn WebView2 fehlt und du der Installation zustimmst (Setup oder Dialog beim Start) |
@@ -320,7 +320,11 @@ Beide Logins laufen **komplett auf deinem Rechner**: Du legst beim Dienst selbst
 SoundCloud-Entwicklerbereich) und trägst deren Client-ID und Client-Secret ein. Angemeldet wird im Browser direkt
 beim Dienst (OAuth mit PKCE); SH-Tunebridge sieht dein Passwort nie. Die Rückleitung geht an
 `127.0.0.1` (diesen Rechner), das Token liegt in `…/tokens/youtube.json` bzw. `soundcloud.json` (nur für dich
-lesbar). Berechtigung: **nur Lesen** (YouTube: `youtube.readonly`). „Trennen“ löscht das Token sofort. Für die
+lesbar). Berechtigung beim Verbinden: **nur Lesen** (YouTube: `youtube.readonly`). Erst wenn du zum ersten Mal
+zu YouTube **überträgst**, fragt SH-Tunebridge auf deinen Klick („Schreibrecht erteilen“) zusätzlich das Recht
+`youtube` an – Google zeigt dir das vorher an. Damit werden nur private Playlists angelegt, Songs hinzugefügt oder
+„Mag ich“ gesetzt, und zwar nur beim Übertragen. SoundCloud kennt keine getrennten Rechte; angelegte Playlists sind
+dort ebenfalls privat. Zum Suchen der Songs gehen Titel und Künstler an den jeweiligen Dienst. „Trennen“ löscht das Token sofort. Für die
 Verarbeitung durch Google bzw. SoundCloud gelten deren Datenschutzbestimmungen.
 
 ## Automatischer Abgleich („Neu für dich“)

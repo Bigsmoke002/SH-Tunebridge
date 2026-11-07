@@ -56,12 +56,15 @@ def _run(job: dict) -> None:
         found, missing = [], []
         if job["dst"] == "local":
             job["state"] = "adding"
+            job["added"] = 0
             for i, t in enumerate(tracks):
-                store.add_to_playlist(job["name"], t)
+                job["added"] += bool(store.add_to_playlist(job["name"], t))
                 job["done"] = i + 1
             found = tracks
         else:
             prov = get_provider(job["dst"])
+            if not getattr(prov, "can_write", lambda: True)():
+                raise PermissionError(f"{getattr(prov, 'title', job['dst'])} ist nur zum Lesen verbunden – bitte zuerst das Schreibrecht erteilen")
             job["state"] = "matching"
             for i, t in enumerate(tracks):
                 if job["cancel"]:
@@ -69,16 +72,31 @@ def _run(job: dict) -> None:
                 if t.ids.get(prov.name):
                     m = t
                 else:
-                    m = _match(prov, t)
+                    try:
+                        m = _match(prov, t)
+                    except Exception as e:
+                        # z. B. YouTube-Tageskontingent: Gefundenes ist gemerkt, ein späterer Lauf setzt fort
+                        if not found:
+                            raise
+                        job["stopped"] = str(e)
+                        missing += tracks[i:]
+                        break
                 (found.append(m) if m else missing.append(t))
                 job["done"] = i + 1
             job["state"] = "adding"
             if job["like"]:
                 prov.like(found)
             else:
-                pid = prov.create_playlist(job["name"])
-                prov.add_to_playlist(pid, found)
+                pid = job.get("dst_pid") or prov.create_playlist(job["name"])
                 job["url"] = getattr(prov, "playlist_url", lambda x: None)(pid)
+                try:
+                    prov.add_to_playlist(pid, found)
+                except Exception as e:
+                    if not job.get("dst_pid"):
+                        job["dst_pid_created"] = pid
+                    raise RuntimeError(f"{e} (Playlist wurde angelegt – später „In bestehende Playlist“ wählen, "
+                                       f"dann wird fortgesetzt)") from e
+                job["url"] = getattr(prov, "playlist_url", lambda x: None)(pid) or job.get("url")
         job.update(state="done", found=len(found),
                    missing=[{"title": t.title, "artist": ", ".join(t.artists)} for t in missing])
         from . import debuglog as dbg
@@ -93,9 +111,9 @@ def _run(job: dict) -> None:
     job["finished"] = time.time()
 
 
-def start(src: str, src_id: str, dst: str, name: str, like: bool = False) -> str:
+def start(src: str, src_id: str, dst: str, name: str, like: bool = False, dst_pid: str = "") -> str:
     jid = uuid.uuid4().hex[:10]
-    _jobs[jid] = {"id": jid, "src": src, "src_id": src_id, "dst": dst, "name": name, "like": like,
+    _jobs[jid] = {"id": jid, "src": src, "src_id": src_id, "dst": dst, "name": name, "like": like, "dst_pid": dst_pid,
                   "state": "queued", "done": 0, "total": 0, "cancel": False, "started": time.time()}
     threading.Thread(target=_run, args=(_jobs[jid],), daemon=True).start()
     return jid

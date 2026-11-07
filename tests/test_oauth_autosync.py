@@ -112,7 +112,8 @@ def test_youtube_playlists(monkeypatch):
     assert len(tr) == 1 and tr[0].ids == {"youtube": "v1"} and "Uprising" in tr[0].title
     assert calls[-2][1]["playlistId"] == "LL"
     assert calls[-1][0].endswith("/videos") and calls[-1][1]["id"] == "v1" and not tr[0].tags   # Musik: unmarkiert
-    with pytest.raises(NotImplementedError):
+    from tunebridge.providers.oauth import OAuthError
+    with pytest.raises(OAuthError, match="Schreibrecht"):     # nur Lese-Token: Übertragen erst nach Freigabe
         yt.create_playlist("x")
 
 
@@ -137,7 +138,7 @@ def test_oauth_callback_route(monkeypatch):
     assert "abgebrochen" in r.text
     assert c.get("/api/oauth/evil/callback").status_code == 404
     r = c.post("/api/transfer", json={"src": "local", "src_id": "x", "dst": "soundcloud", "name": "x"})
-    assert r.status_code == 400 and "nur lesend" in r.json()["detail"]
+    assert r.status_code == 400 and "nicht verbunden" in r.json()["detail"]     # Ziel möglich, aber erst verbinden
 
 
 def _fake_sources(monkeypatch, data: dict):

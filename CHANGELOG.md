@@ -24,8 +24,15 @@ Der Updater installiert nur signierte Versionen.
   Übernehmen immer eine neue Playlist. Jetzt gibt es auf jeder eigenen Playlist **„In andere Playlist“** und
   **„Songs holen“** (aus eigenen Playlists, importierten Exporten oder verbundenen Diensten); bei Dienst- und
   Freundes-Playlists wählt „In meine Playlists“ eine bestehende oder neue Playlist. Doppelte Songs werden
-  übersprungen, die Quelle bleibt unverändert. Unter „Übertragen“ schlägt das Namensfeld bestehende Playlists vor,
-  und importierte Exporte lassen sich dort als Quelle nutzen. „Ansehen“ zeigte bei eigenen Playlists eine leere Liste.
+  übersprungen, die Quelle bleibt unverändert. Unter „Übertragen“ lassen sich importierte Exporte
+  als Quelle nutzen. „Ansehen“ zeigte bei eigenen Playlists eine leere Liste.
+- **Neu: Übertragen zu YouTube und SoundCloud.** Beide waren bisher nur lesend angebunden. SoundCloud legt eine private
+  Playlist an (höchstens 500 Songs) oder ergänzt eine bestehende. YouTube fragt das Schreibrecht erst beim ersten
+  Übertragen per Klick bei Google an (beim normalen Verbinden bleibt es bei „nur Lesen“). Googles Tageskontingent für
+  eigene Apps reicht für etwa 60–70 Songs am Tag; wird es knapp, stoppt die Übertragung sauber, und am nächsten Tag
+  setzt „In bestehende Playlist“ fort, ohne Doppelte.
+- **Übertragen:** Suchfeld für die Playlist-Liste. Als Ziel gibt es jetzt auch **„In bestehende Playlist“**, für jeden
+  Dienst und für SH-Tunebridge.
 - Mix erstellen: Die ganze Seite samt Suchfeld und Regler nutzt die volle Breite und passt sich dem Fenster an.
 
 ## 0.9.2 – 2026-11-06

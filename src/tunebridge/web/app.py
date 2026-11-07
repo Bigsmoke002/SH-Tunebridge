@@ -998,8 +998,16 @@ async def platforms():
     out = []
     for pid, (name, info, avail) in PROVIDERS.items():
         ok, acc = (await asyncio.to_thread(_platform_state, pid)) if avail else (False, None)
-        out.append({"id": pid, "name": name, "info": info, "available": avail, "connected": ok, "account": acc, "error": _conn_err.get(pid)})
+        out.append({"id": pid, "name": name, "info": info, "available": avail, "connected": ok, "account": acc, "error": _conn_err.get(pid),
+                    "can_write": bool(ok) and await asyncio.to_thread(_can_write, pid)})
     return out
+
+
+def _can_write(pid: str) -> bool:
+    try:
+        return bool(getattr(_prov(pid), "can_write", lambda: True)())
+    except HTTPException:
+        return False
 
 
 def _prov(pid: str):
@@ -1011,10 +1019,12 @@ def _prov(pid: str):
 
 
 @app.post("/api/platforms/{pid}/login")
-def platform_login(pid: str):
+def platform_login(pid: str, write: bool = False):
+    """write=1: zusätzlich das Schreibrecht anfragen (nur YouTube unterscheidet das) – erst beim Übertragen."""
     import webbrowser
     try:
-        st = _prov(pid).login()
+        prov = _prov(pid)
+        st = prov.login(write=True) if write and getattr(prov, "WRITE_SCOPES", "") else prov.login()
     except HTTPException:
         raise
     except Exception as e:
@@ -1056,6 +1066,7 @@ class TransferReq(BaseModel):
     dst: str
     name: str = ""
     like: bool = False
+    dst_pid: str = ""           # bestehende Playlist beim Ziel-Dienst (statt neu anlegen)
 
 
 @app.post("/api/transfer")
@@ -1063,11 +1074,13 @@ def transfer_start(req: TransferReq):
     from .. import transfer
     if req.src == req.dst and req.src != "local":
         raise HTTPException(400, "Quelle und Ziel sind gleich")
-    if req.dst in ("youtube", "soundcloud"):
-        raise HTTPException(400, f"{PROVIDERS[req.dst][0]} ist nur lesend angebunden – als Ziel nicht möglich")
-    if not req.like and not req.name.strip():
+    if req.dst != "local" and hasattr(_prov(req.dst), "tok") and not _prov(req.dst).tok.get("access_token"):
+        raise HTTPException(400, f"{PROVIDERS[req.dst][0]} ist nicht verbunden – bitte zuerst verbinden")
+    if req.dst != "local" and not _can_write(req.dst):
+        raise HTTPException(409, f"{PROVIDERS[req.dst][0]} ist nur zum Lesen verbunden – bitte zuerst das Schreibrecht erteilen")
+    if not req.like and not req.dst_pid and not req.name.strip():
         raise HTTPException(400, "Name fehlt")
-    return {"job": transfer.start(req.src, req.src_id, req.dst, req.name.strip(), req.like)}
+    return {"job": transfer.start(req.src, req.src_id, req.dst, req.name.strip(), req.like, req.dst_pid.strip())}
 
 
 @app.get("/api/transfer/{jid}")

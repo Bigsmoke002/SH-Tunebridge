@@ -37,6 +37,7 @@ class OAuthProvider(Provider):
     CLIENT_SECRET_KEY = ""          # leer = Dienst braucht kein Secret
     SECRET_REQUIRED = False
     EXTRA_AUTH: dict = {}
+    WRITE_SCOPES = ""               # zusätzliche Rechte zum Übertragen – erst angefragt, wenn du wirklich überträgst
 
     def __init__(self):
         self.tok: dict = {}
@@ -80,16 +81,28 @@ class OAuthProvider(Provider):
         return d
 
     # ------------------------------------------------------------ Login
-    def login(self) -> dict:
+    def can_write(self) -> bool:
+        """Darf das gespeicherte Token Playlists anlegen? (Ohne eigene Schreib-Scopes: ja.)"""
+        if not self.WRITE_SCOPES:
+            return True
+        have = set((self.tok.get("scope") or "").split())
+        return set(self.WRITE_SCOPES.split()) <= have
+
+    def can_write_saved(self) -> bool:
+        return bool(self.WRITE_SCOPES) and self.can_write()
+
+    def login(self, write: bool = False) -> dict:
         if not self.configured():
             raise OAuthError(f"Bitte zuerst die Client-ID{' und das Client-Secret' if self.SECRET_REQUIRED else ''} "
                              f"deiner {self.title}-App eintragen")
         verifier = secrets.token_urlsafe(64)[:100]
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
         state = secrets.token_urlsafe(16)
+        # Schreibrechte nur auf Wunsch (Übertragen) – sonst bleibt es beim reinen Lesen
+        scope = " ".join(x for x in (self.SCOPES, self.WRITE_SCOPES if write or self.can_write_saved() else "") if x)
         url = self.AUTH_URL + "?" + urlencode({
             "client_id": self.client_id(), "response_type": "code", "redirect_uri": self.redirect(),
-            **({"scope": self.SCOPES} if self.SCOPES else {}), "code_challenge_method": "S256",
+            **({"scope": scope} if scope else {}), "code_challenge_method": "S256",
             "code_challenge": challenge, "state": state, **self.EXTRA_AUTH})
         self._login = {"state": "waiting", "url": url, "verifier": verifier, "csrf": state,
                        "expires": time.time() + 600}
@@ -106,7 +119,7 @@ class OAuthProvider(Provider):
             raise OAuthError(f"{self.title} lehnt ab: {r.text[:200]}")
         d = r.json()
         self.tok = {"access_token": d["access_token"], "refresh_token": d.get("refresh_token"),
-                    "expires": time.time() + int(d.get("expires_in") or 3600) - 60}
+                    "expires": time.time() + int(d.get("expires_in") or 3600) - 60, "scope": d.get("scope") or ""}
         self._save()
         self._acc = None
         self._login = {"state": "connected"}

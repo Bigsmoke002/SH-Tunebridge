@@ -10,9 +10,9 @@ PROVIDERS: dict[str, tuple[str, str, bool]] = {
     "spotify": ("Spotify", "Offizielle API mit deiner eigenen Spotify-App (Client-ID, App-Besitzer braucht Premium). "
                 "Nur eigene Playlists lesbar.", True),
     "youtube": ("YouTube / YouTube Music", "Google-Login über die offizielle YouTube Data API mit deiner eigenen "
-                "OAuth-App (Desktop-App). Nur Lesen: Playlists und „Mag ich“-Videos.", True),
+                "OAuth-App (Desktop-App). Playlists und „Mag ich“ lesen; Übertragen nach extra Freigabe (ca. 60–70 Songs/Tag).", True),
     "soundcloud": ("SoundCloud", "Login über die offizielle SoundCloud API mit deiner eigenen App (Artist Pro nötig). "
-                   "Nur Lesen: Playlists und Likes.", True),
+                   "Playlists und Likes lesen, private Playlists anlegen.", True),
     "apple": ("Apple Music", "Offiziell nur mit Apple Developer Program (99 $/Jahr).", False),
 }
 

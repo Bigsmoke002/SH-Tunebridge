@@ -1,4 +1,4 @@
-"""SoundCloud über die offizielle SoundCloud API – mit deiner eigenen SoundCloud-App (nur Lesen).
+"""SoundCloud über die offizielle SoundCloud API – mit deiner eigenen SoundCloud-App.
 
 Einrichtung (einmalig): SoundCloud lässt seit Mai 2026 Apps per Selbstbedienung anmelden, dafür braucht das
 Konto ein Artist-Pro-Abo. developers.soundcloud.com → „Create a new application“ → Redirect-URI
@@ -6,6 +6,8 @@ Konto ein Artist-Pro-Abo. developers.soundcloud.com → „Create a new applicat
 SoundCloud behandelt alle Apps als „vertraulich“, deshalb ist das Secret nötig. Es ist DEIN Secret und bleibt
 nur auf deinem Rechner – kein Server dazwischen. Login: OAuth 2.1 mit PKCE auf secure.soundcloud.com.
 Gelesen werden deine Playlists und Likes (Titel, Künstler, Cover-Adresse) – nie Musik.
+Übertragen: Songs per Titel/Künstler suchen, private Playlist anlegen oder in eine bestehende eigene Playlist
+einfügen (höchstens 500 Songs pro Playlist – Grenze von SoundCloud), Songs liken.
 """
 
 from __future__ import annotations
@@ -17,6 +19,7 @@ from .oauth import OAuthError, OAuthProvider
 
 API = "https://api.soundcloud.com"
 MAX_ITEMS = 2000
+MAX_PLAYLIST = 500          # SoundCloud nimmt nicht mehr Songs pro Playlist an
 
 
 def to_track(t: dict) -> Track:
@@ -44,6 +47,11 @@ class SoundCloud(OAuthProvider):
     CLIENT_SECRET_KEY = "SOUNDCLOUD_CLIENT_SECRET"
     SECRET_REQUIRED = True
 
+    def __init__(self):
+        super().__init__()
+        self._sc_ids: dict[str, int] = {}     # Permalink -> Track-ID (aus Suchtreffern, spart /resolve)
+        self._pl_urls: dict[str, str] = {}
+
     def check_credentials(self) -> None:
         """Client-ID/Secret vorab bei SoundCloud prüfen. Mit falschen Daten zeigt SoundClouds Anmeldeseite nur
         eine leere weiße Seite – deshalb vor dem Öffnen des Browsers klar melden, was nicht stimmt."""
@@ -68,15 +76,21 @@ class SoundCloud(OAuthProvider):
         return super().login()
 
     def _get(self, url: str, **params) -> dict | list:
+        return self._req("GET", url, params=params or None)
+
+    def _req(self, method: str, url: str, params: dict | None = None, json: dict | None = None) -> dict | list:
         if not url.startswith("http"):
             url = API + url
-        r = httpx.get(url, params=params or None, timeout=20, follow_redirects=True,
-                      headers={"Authorization": f"OAuth {self._access()}", "Accept": "application/json; charset=utf-8"})
+        h = {"Authorization": f"OAuth {self._access()}", "Accept": "application/json; charset=utf-8"}
+        r = (httpx.get(url, params=params, timeout=30, follow_redirects=True, headers=h) if method == "GET"
+             else httpx.request(method, url, params=params, json=json, timeout=30, follow_redirects=True, headers=h))
+        if r.status_code == 429:
+            raise OAuthError("SoundCloud bittet um eine Pause (zu viele Anfragen) – in ein paar Minuten erneut übertragen")
         if r.status_code == 401:
             raise OAuthError("SoundCloud-Anmeldung abgelaufen – bitte neu verbinden")
         if r.status_code >= 400:
             raise OAuthError(f"SoundCloud: {r.text[:200]}")
-        return r.json()
+        return {} if r.status_code == 204 or not getattr(r, "text", "x") else r.json()
 
     def _pages(self, path: str, **params) -> list[dict]:
         out: list[dict] = []
@@ -116,3 +130,71 @@ class SoundCloud(OAuthProvider):
             return self._get("/me").get("public_favorites_count")
         except OAuthError:
             return None
+
+    # ------------------------------------------------------------ Übertragen
+    def search(self, track: Track, limit: int = 8) -> list[Track]:
+        q = f"{', '.join(track.artists[:2])} {track.title}".strip()
+        d = self._get("/tracks", q=q, limit=limit, linked_partitioning="true")
+        out = []
+        for t in (d.get("collection") if isinstance(d, dict) else d) or []:
+            if not t.get("title") or not t.get("id"):
+                continue
+            tr = to_track(t)
+            self._sc_ids[tr.ids["soundcloud"]] = int(t["id"])
+            out.append(tr)
+        return out
+
+    def find(self, track: Track) -> Track | None:
+        from ..matching import best_match
+        cands = self.search(track)
+        if track.isrc and any(c.isrc == track.isrc for c in cands):
+            return next(c for c in cands if c.isrc == track.isrc)
+        m = best_match(track, cands, threshold=80)
+        return m.candidate if m else None
+
+    def _track_id(self, t: Track) -> int | None:
+        ref = t.ids.get("soundcloud") or ""
+        if not ref:
+            return None
+        if ref.isdigit():
+            return int(ref)
+        if ref not in self._sc_ids:
+            try:
+                d = self._get("/resolve", url=ref)
+                self._sc_ids[ref] = int(d["id"]) if isinstance(d, dict) and d.get("id") else 0
+            except OAuthError:
+                self._sc_ids[ref] = 0
+        return self._sc_ids[ref] or None
+
+    def create_playlist(self, name: str, description: str = "") -> str:
+        d = self._req("POST", "/playlists", json={"playlist": {
+            "title": name[:100], "sharing": "private", "description": description or "Erstellt mit SH-Tunebridge"}})
+        pid = str(d["id"])
+        if d.get("permalink_url"):
+            self._pl_urls[pid] = d["permalink_url"]
+        return pid
+
+    def add_to_playlist(self, playlist_id: str, tracks: list[Track]) -> None:
+        """SoundCloud ersetzt beim Speichern die ganze Liste – deshalb vorhandene Songs mitschicken, Doppelte weglassen."""
+        cur = self._get(f"/playlists/{playlist_id}", show_tracks="true")
+        ids = [int(t["id"]) for t in (cur.get("tracks") or []) if t.get("id")] if isinstance(cur, dict) else []
+        if isinstance(cur, dict) and cur.get("permalink_url"):
+            self._pl_urls[playlist_id] = cur["permalink_url"]
+        have = set(ids)
+        for t in tracks:
+            tid = self._track_id(t)
+            if tid and tid not in have:
+                ids.append(tid)
+                have.add(tid)
+        if len(ids) > MAX_PLAYLIST:
+            ids = ids[:MAX_PLAYLIST]
+        self._req("PUT", f"/playlists/{playlist_id}", json={"playlist": {"tracks": [{"id": i} for i in ids]}})
+
+    def like(self, tracks: list[Track]) -> None:
+        for t in tracks:
+            tid = self._track_id(t)
+            if tid:
+                self._req("POST", f"/likes/tracks/{tid}")
+
+    def playlist_url(self, pid: str) -> str | None:
+        return self._pl_urls.get(pid)

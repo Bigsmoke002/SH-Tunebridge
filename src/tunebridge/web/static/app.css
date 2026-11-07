@@ -1833,3 +1833,21 @@ input[type=range].mx-range::-webkit-slider-thumb { width: 16px !important; heigh
 .mg-form { display: grid; gap: 12px; }
 .mg-form .field { display: flex; flex-direction: column; gap: 6px; }
 .mg-form .select, .mg-form .input { width: 100%; }
+
+/* Übertragen: Suche, Schreibrecht, Hinweise */
+.t-search { position: relative; display: flex; flex: 0 1 170px; min-width: 120px; }
+.t-search i[data-icon] { position: absolute; left: 9px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--text-3); pointer-events: none; }
+.t-search .input { width: 100%; padding-left: 29px; }
+.t-target .select#tSrcPl { flex: 1; min-width: 160px; }
+.t-perm { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-3); color: var(--text-2); font-size: 13px; }
+.t-perm i[data-icon] { width: 16px; height: 16px; color: var(--accent); flex: none; }
+.t-perm .btn { flex: none; margin-left: auto; }
+.t-hint { margin-top: 6px; font-size: 12px; color: var(--text-3); max-width: 520px; }
+.t-hint.warn { display: flex; gap: 6px; align-items: flex-start; color: var(--text-2); margin: 8px 0; max-width: none; }
+.t-hint.warn i[data-icon] { width: 14px; height: 14px; flex: none; margin-top: 2px; }
+.transfer-flow .field.grow { flex: 1 1 300px; min-width: 0; }
+.transfer-flow .field.grow .t-target { flex-wrap: wrap; }
+.t-target .select { min-width: 0; }
+.t-target #tMode { flex: 0 0 auto; width: auto; }
+.t-target #tName, .t-target #tDstPl { flex: 1 1 160px; min-width: 0; width: auto; }
+.t-target #tSrcPl { flex: 1 1 170px; width: auto; }

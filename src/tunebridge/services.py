@@ -4,8 +4,8 @@ Rechtlich sauber: nur offizielle Schnittstellen, nur eigene Konten bzw. öffentl
 * Spotify, TIDAL   – eigenes, verbundenes Konto (Lesen + neue Playlists anlegen)
 * Deezer           – öffentliches Profil (Lieblingssongs + öffentliche Playlists), ohne Login
 * Last.fm          – öffentliches Profil (Loved Tracks), eigener Last.fm-Key
-* YouTube          – Google-Login (eigene OAuth-App, nur Lesen) oder öffentliche Playlists eines Kanals (API-Key)
-* SoundCloud       – Login mit eigener SoundCloud-App (Artist Pro nötig, nur Lesen)
+* YouTube          – Google-Login (eigene OAuth-App; Schreibrecht erst beim Übertragen) oder öffentliche Playlists eines Kanals (API-Key)
+* SoundCloud       – Login mit eigener SoundCloud-App (Artist Pro nötig)
 * Apple Music      – nur Datei-Export (offizielle API kostet 99 $/Jahr)
 """
 
