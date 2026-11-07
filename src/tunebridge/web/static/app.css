@@ -479,8 +479,11 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 @keyframes blink { 50% { opacity: .35; } }
 #spec { width: 100%; height: 100%; display: block; border-radius: 50%; }
 .vu { position: relative; height: 4px; border-radius: 4px; background: var(--bg-4); overflow: visible; }
-.vu b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; width: 0; background: var(--accent); transition: width .05s linear; }
-.vu i { position: absolute; top: -2px; width: 2px; height: 8px; border-radius: 1px; background: var(--text-2); left: 0; transition: left .08s linear; }
+/* Pegel per transform statt Breite/left: ändert sich 25×/s – so ohne Layout und Neuzeichnen der Seite */
+.vu-t { position: absolute; inset: 0; border-radius: 4px; overflow: hidden; }
+.vu b { position: absolute; inset: 0; border-radius: 4px; background: var(--accent); transform: translateX(-100%); will-change: transform; }
+.vu i { position: absolute; top: -2px; left: 0; width: 100%; height: 8px; transform: translateX(-100%); will-change: transform; pointer-events: none; }
+.vu i::after { content: ""; position: absolute; right: 0; top: 0; width: 2px; height: 8px; border-radius: 1px; background: var(--text-2); }
 .link-btn { align-self: flex-start; display: inline-flex; align-items: center; gap: 6px; border: 0; background: none; color: var(--accent); font-size: 12.5px; font-weight: 550; cursor: pointer; padding: 2px 0; }
 .link-btn:hover { color: var(--accent-hover); }
 .link-btn i[data-icon] { width: 14px; height: 14px; }

@@ -3,6 +3,17 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht
+- **Weniger Last im Leerlauf auf „Erkennen“:** Die Pegelanzeige zeichnet nur noch, wenn neue Daten kommen (höchstens
+  30 Bilder/s statt bei jeder Bildwiederholung), pausiert bei Stille und hält Verbindung und Aufnahme an, sobald das
+  Fenster ins Tray geht (Windows/X11 auch beim Minimieren). Der Pegelbalken bewegt sich ohne Neuberechnung der Seite.
+  Gemessen: CPU auf „Erkennen“ mit Musik etwa halbiert (52 % → 25 % eines Kerns), bei Stille ~5 %; der Fensterprozess
+  wächst deutlich langsamer.
+- **Grafikkarte gezielter:** Mit NVIDIA unter Wayland zeichnet das Fenster jetzt über Vulkan auf der GPU statt in
+  Software (nochmals rund ein Drittel weniger Rechenzeit). Andere Systeme bleiben beim erprobten Software-Zeichnen.
+  Startet das Fenster zweimal hintereinander nicht sauber, bleibt die App dauerhaft bei Software.
+  `TUNEBRIDGE_GPU=0` erzwingt Software, `=1` die GPU, `=vulkan` den Vulkan-Weg.
+
 ## 0.10.0 – 2026-11-07
 - **Neu: Mix erstellen** (Werkzeuge › Mix erstellen, auch über Strg+K). Bis zu 5 Künstler suchen und auswählen –
   die App baut daraus eine neue Playlist aus ihren Top-Songs, ihrem Künstler-Radio und Songs ähnlicher Künstler (Deezer,

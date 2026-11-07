@@ -991,18 +991,51 @@ const Meter = {
   start(source) {
     if (this.active && this.source === source && this.ws?.readyState <= 1) return;
     this.stop();
-    this.active = true; this.source = source; this.frame = null; this.quietSince = Date.now();
+    this.active = true; this.source = source; this.frame = null; this.quietSince = Date.now(); this.loudAt = Date.now();
+    if (document.hidden) { this.suspended = true; return; }      // Fenster versteckt: erst beim Wiederzeigen öffnen
+    this.suspended = false;
     const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/level?source=${enc(source)}`);
     this.ws = ws;
     ws.onmessage = e => {
-      const f = JSON.parse(e.data); if (f.error) { this.err = f.error; return; }
+      const f = JSON.parse(e.data); if (f.error) { this.err = f.error; this.kick(); return; }
       this.err = null; this.frame = f; this.last = Date.now();
+      if (f.rms > -60) this.loudAt = this.last;
       if (f.wv) { for (const c of f.wv) this.cols.push(c); this.total += f.wv.length; this.colAt = performance.now(); if (this.cols.length > 720) this.cols.splice(0, this.cols.length - 600); }
+      if (!this.silent()) this.kick();
+      else if (!this.pausedDrawn) { this.pausedDrawn = true; this.kick(); }   // Stille: ein letztes Bild, dann Pause
     };
     ws.onclose = () => { if (this.active && this.ws === ws) setTimeout(() => this.active && this.ws === ws && this.start(source, true), 1200); };
-    const loop = () => { this.draw(); if (this.active) this.raf = requestAnimationFrame(loop); };
-    this.raf = requestAnimationFrame(loop);
+    // Kommen keine Daten mehr, muss die Anzeige trotzdem auf „Verbinde …“ wechseln
+    clearInterval(this._watch); this._watch = setInterval(() => { if (Date.now() - this.last > 1500) this.kick(); }, 700);
+    this.kick();
   },
+  // Stille: so lange nichts mehr zu hören ist, dass auch die Welle durchgelaufen ist → Zeichnen pausiert
+  silent() { return Date.now() - this.loudAt > (this.viz === "bars" ? 1500 : 4000); },
+  // Ein Bild anfordern – höchstens ~30 je Sekunde (Daten kommen mit 25/s; mehr zeichnet ohne GPU nur Last)
+  kick() {
+    if (!this.active || this.raf || document.hidden) return;
+    this.raf = requestAnimationFrame(t => {
+      this.raf = 0;
+      if (t - this.drawnAt < 30) { this.kick(); return; }
+      this.drawnAt = t; this.draw();
+      if (!this.silent()) this.pausedDrawn = false;
+      // Glätten/Einschieben noch nicht fertig → weiterzeichnen, sonst warten bis neue Daten kommen
+      if (this.settling() && !this.silent()) this.kick();
+    });
+  },
+  settling() {
+    if (this.viz !== "bars") return performance.now() - this.colAt < 45;
+    return this.bands.some(v => v > .004);
+  },
+  suspend() {   // Fenster versteckt/minimiert: Verbindung und Aufnahme (parec) beenden
+    if (!this.active || this.suspended) return;
+    const src = this.source; this.stop(); this.active = true; this.source = src; this.suspended = true;
+  },
+  resume() {
+    if (!this.suspended) return;
+    this.suspended = false; const src = this.source; this.active = false; this.start(src);
+  },
+  drawnAt: 0, loudAt: 0, pausedDrawn: false, suspended: false,
   restart(source) { this.stop(); this.start(source); },
   testing: false,
   test(source) {  // Mikrofon-Pegel kurz prüfen – nur lokal, nichts wird gesendet
@@ -1010,18 +1043,18 @@ const Meter = {
     this._testT = setTimeout(() => { this.testing = false; if (!S.listen.busy) this.stop(); }, 10000);
   },
   stop() {
-    this.active = false; this.frame = null; cancelAnimationFrame(this.raf);
+    this.active = false; this.suspended = false; this.frame = null; cancelAnimationFrame(this.raf); this.raf = 0; clearInterval(this._watch);
     if (this.ws) { const w = this.ws; this.ws = null; try { w.close(); } catch {} }
     this.idle();
   },
   idle() {  // Anzeige „aus“ (z. B. Mikrofon geschlossen)
     const sig = $("#signal"), cv = $("#spec");
     if (!sig) return;
-    this.bands.fill(0);
+    this.bands.fill(0); this._vw = this._vl = this._vc = null;
     this.cols = []; this.total = 0; this.wpeak = .2;
     sig.dataset.state = "off"; $("#orb")?.removeAttribute("data-sig");
     $("#sigText").textContent = S.listen.mode === "mic" ? "Mikrofon aus – öffnet sich erst beim Erkennen" : "Pegel aus";
-    $("#sigDb").textContent = ""; const vf = $("#vuFill"); if (vf) vf.style.width = "0%";
+    $("#sigDb").textContent = ""; const vf = $("#vuFill"), vp = $("#vuPeak"); if (vf) vf.style.transform = ""; if (vp) vp.style.transform = "";
     cv?.getContext("2d").clearRect(0, 0, cv.width, cv.height);
   },
   state() {
@@ -1084,10 +1117,13 @@ const Meter = {
     const cv = $("#spec");
     if (!cv) return;
     const f = this.frame, alive = f && Date.now() - this.last < 1500;
-    // Glätten: schnell hoch, langsam runter
+    // Glätten: schnell hoch, langsam runter – zeitbasiert, damit es bei jeder Bildrate gleich wirkt (Basis 60 Hz)
+    const now = performance.now(), k = Math.min(6, Math.max(1, (now - (this._smT || now - 16.7)) / 16.7));
+    this._smT = now;
+    const up = .3 ** k, down = .86 ** k;
     for (let i = 0; i < 32; i++) {
-      const t = alive ? f.bands[i] : 0;
-      this.bands[i] = t > this.bands[i] ? t * .7 + this.bands[i] * .3 : this.bands[i] * .86 + t * .14;
+      const t = alive ? f.bands[i] : 0, b = this.bands[i];
+      this.bands[i] = t > b ? t - (t - b) * up : t + (b - t) * down;
     }
     const dpr = window.devicePixelRatio || 1, w = cv.clientWidth, h = cv.clientHeight;
     if (!w) return;
@@ -1102,15 +1138,22 @@ const Meter = {
     const orb = $("#orb"), sig = $("#signal");
     if (orb && orb.dataset.sig !== st) orb.dataset.sig = st;
     if (sig && (sig.dataset.state !== st || $("#sigText").textContent !== text)) { sig.dataset.state = st; $("#sigText").textContent = text; }
-    const db = $("#sigDb"); if (db) db.textContent = alive ? `${Math.round(rms)} dB` : "";
+    // dB-Zahl nur ~4× je Sekunde – schneller ist sie ohnehin nicht lesbar, jede Änderung kostet Layout
+    const db = $("#sigDb"), dbt = alive ? `${Math.round(rms)} dB` : "";
+    if (db && db.textContent !== dbt && (!dbt || now - (this._dbT || 0) > 250)) { this._dbT = now; db.textContent = dbt; }
     // Pegelbalken unter der Statuszeile (−60..0 dB) mit kurzem Spitzenwert-Halter
     const pk = alive ? f.peak : -90, pct = v => Math.max(0, Math.min(100, (v + 60) / 60 * 100));
     if (pk > this.peak || Date.now() - this.peakT > 1200) { this.peak = pk; this.peakT = Date.now(); }
     const vf = $("#vuFill"), vp = $("#vuPeak");
-    if (vf) { vf.style.width = pct(rms) + "%"; vf.style.background = col; }
-    if (vp) vp.style.left = `calc(${pct(this.peak)}% - 1px)`;
+    const vw = `translateX(${(pct(rms) - 100).toFixed(1)}%)`, vl = `translateX(${(pct(this.peak) - 100).toFixed(1)}%)`;
+    if (vf && this._vw !== vw) { this._vw = vw; vf.style.transform = vw; }
+    if (vf && this._vc !== col) { this._vc = col; vf.style.background = col; }
+    if (vp && this._vl !== vl) { this._vl = vl; vp.style.transform = vl; }
   },
 };
+
+// Fenster versteckt, minimiert oder im Tray: Pegel (WebSocket + Aufnahme) anhalten, beim Zeigen weiter
+document.addEventListener("visibilitychange", () => document.hidden ? Meter.suspend() : Meter.resume());
 
 async function scanDevices(kind, onPick) {
   const box = $("#scanOut");
@@ -1176,7 +1219,7 @@ Views.listen = async (main, _, params) => {
         <div id="limitBox" class="limit-box"></div>
         <div class="signal" id="signal" data-state="${L.mode === "mic" ? "off" : "wait"}">
           <div class="signal-line"><span class="sig-dot"></span><span id="sigText">${L.mode === "mic" ? "Mikrofon aus – öffnet sich erst beim Erkennen" : "Verbinde mit Gerät …"}</span><span class="sig-db num" id="sigDb"></span></div>
-          <div class="vu" title="Pegel (−60 bis 0 dB)"><b id="vuFill"></b><i id="vuPeak"></i></div>
+          <div class="vu" title="Pegel (−60 bis 0 dB)"><span class="vu-t"><b id="vuFill"></b></span><i id="vuPeak"></i></div>
           ${L.mode === "mic" ? `<button class="link-btn mic-test" id="micTest">${icon("mic")}Pegel testen (10 s, bleibt auf dem PC)</button>` : ""}
         </div>
         <div class="listen-opts">
