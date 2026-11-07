@@ -133,7 +133,7 @@ tunebridge ui        # dasselbe im Browser
 tunebridge listen    # schnell im Terminal
 ```
 Bereiche (Seitenleiste): **Erkennen · Verlauf · Statistik · Playlists · Dienste · Neu für dich · Link einfügen ·
-Entdecken · Teilen · Verzeichnis · Genre-Datenbank · Set-Planer · Doppelte Songs · Aufteilen · Übertragen ·
+Entdecken · Mix erstellen · Teilen · Verzeichnis · Genre-Datenbank · Set-Planer · Doppelte Songs · Aufteilen · Übertragen ·
 Einstellungen**. Darunter deine eigenen Playlists (sortierbar über ⇅).
 
 Tastatur:
@@ -159,6 +159,10 @@ Keys lassen sich direkt unter *Einstellungen* eintragen.
   (erst nach Klick), Mehr vom Künstler, KI-Musik-Hinweis, Einsortieren, Ähnliche Songs, „Passt dazu“.
 - *Ähnliche Songs* zeigen BPM, Camelot-Tonart und Energie (lokal aus der Hörprobe gemessen) und „mixbar“.
 - *Entdecken*: ähnliche Songs zu Künstler + Titel; *Verlauf* und *Statistik* (mit Jahresrückblick) nur lokal.
+- *Mix erstellen*: aus bis zu 5 Künstlern eine neue Playlist mit ähnlichen Songs bauen. „Wie passend?“ von *Locker*
+  (nur Ähnlichkeit) über *Passend* (±15 % Tempo) und *Mixbar* (±6 %, harmonische Übergänge, DJ-Reihenfolge) bis
+  *DJ-genau* (±3 %, Energie-Verlauf); dazu BPM-Bereich, Tonart, Energie, Bekanntheit und Songs pro Künstler.
+  Sofort anhören, Songs tauschen oder entfernen, als Playlist speichern und im Set-Planer weiterbearbeiten.
 - *Player*: Hörproben mit ⏮ ▶ ⏭ – alle Songs der aktuellen Ansicht bilden die Warteschlange.
 
 **Playlists**

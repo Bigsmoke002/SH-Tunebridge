@@ -1673,3 +1673,30 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .side-sort i[data-icon] { width: 13px; height: 13px; }
 .app.side-min .side-sort { display: none; }
 @media (max-width: 860px) { .side-sort { display: none; } }
+
+/* Mix erstellen */
+.mix-form { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.mix-form .btn-row { justify-content: flex-start; align-items: center; gap: 12px; }
+.mix-row { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-end; }
+.mix-search { position: relative; max-width: 460px; }
+.mix-sugg { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; background: var(--bg-2); border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 4px; max-height: 320px; overflow: auto; }
+.mix-sg { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent;
+  color: var(--text); text-align: left; cursor: pointer; font: inherit; }
+.mix-sg:hover, .mix-sg:focus-visible { background: var(--bg-3); }
+.mix-sg img, .mix-sg .ph { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex: none; background: var(--bg-3); }
+.mix-sg span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mix-sg em { font-style: normal; font-size: 12px; color: var(--text-3); }
+.mix-seeds { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.mix-seed { display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 2px 0 4px; border-radius: 99px; background: var(--bg-3); font-size: 13px; }
+.mix-seed img { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+.mix-seed .icon-btn { width: 24px; height: 24px; }
+.mix-range { display: flex; align-items: center; gap: 6px; }
+.mix-range .input { width: 76px; }
+.mix-more summary { cursor: pointer; color: var(--text-2); display: inline-flex; align-items: center; gap: 8px; font-size: 13px; }
+.mix-more summary i[data-icon] { width: 15px; height: 15px; }
+.mix-more[open] summary { margin-bottom: 12px; }
+.mix-more .mix-row { margin-bottom: 12px; }
+.mix-switches { display: flex; flex-wrap: wrap; gap: 10px 22px; margin-bottom: 10px; }
+@media (max-width: 700px) { .mix-form .segmented { flex-wrap: wrap; } }
+.mix-form .field > .segmented { align-self: flex-start; max-width: 100%; }

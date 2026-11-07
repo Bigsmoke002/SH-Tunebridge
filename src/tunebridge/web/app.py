@@ -525,6 +525,70 @@ def setplan_save(jid: str, req: SetOutReq):
     return _sp(setplan.save, jid, req.order, req.name)
 
 
+# ------------------------------------------------------------------ Mix erstellen
+class MixStartReq(BaseModel):
+    seeds: list[dict]
+    opts: dict = {}
+
+
+class MixPickReq(BaseModel):
+    order: list[int]
+    name: str = ""
+
+
+@app.get("/api/mix/levels")
+def mix_levels():
+    from .. import mixgen
+    return {"levels": [{"id": k, "name": v["name"], "hint": v["hint"]} for k, v in mixgen.LEVELS.items()],
+            "count": mixgen.COUNT_DEFAULT, "count_max": mixgen.COUNT_MAX, "max_seeds": mixgen.MAX_SEEDS}
+
+
+@app.get("/api/mix/artists")
+def mix_artists(q: str = ""):
+    """Künstler bei Deezer suchen (nur der eingegebene Name geht an Deezer, nichts wird gespeichert)."""
+    from .. import mixgen
+    import httpx
+
+    from ..ratelimit import LimitReached
+    try:
+        return mixgen.search_artists(q)
+    except LimitReached as e:
+        raise HTTPException(429, str(e))
+    except (httpx.HTTPError, ValueError) as e:
+        raise HTTPException(502, f"Deezer antwortet gerade nicht ({e.__class__.__name__})")
+
+
+@app.post("/api/mix/start")
+def mix_start(req: MixStartReq):
+    from .. import mixgen
+    return {"job": _sp(mixgen.start, req.seeds, req.opts)}
+
+
+@app.get("/api/mix/{jid}")
+def mix_job(jid: str):
+    from .. import mixgen
+    return mixgen.public(_sp(mixgen.job, jid))
+
+
+@app.post("/api/mix/{jid}/cancel")
+def mix_cancel(jid: str):
+    from .. import mixgen
+    _sp(mixgen.job, jid)["cancel"] = True
+    return {"ok": True}
+
+
+@app.post("/api/mix/{jid}/describe")
+def mix_describe(jid: str, req: MixPickReq):
+    from .. import mixgen
+    return _sp(mixgen.describe, jid, req.order)
+
+
+@app.post("/api/mix/{jid}/save")
+def mix_save(jid: str, req: MixPickReq):
+    from .. import mixgen
+    return _sp(mixgen.save, jid, req.order, req.name)
+
+
 # ------------------------------------------------------------------ Doppelte Songs
 @app.get("/api/dupes")
 def dupes_find():

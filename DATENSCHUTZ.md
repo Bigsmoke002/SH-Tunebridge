@@ -209,6 +209,20 @@ Titel stimmen), damit keine Namensvettern auftauchen. Quelle ist Deezers öffent
 die Liste bleibt höchstens eine Stunde im Arbeitsspeicher und wird nicht gespeichert. Hörproben dazu kommen wie
 immer direkt vom Anbieter.
 
+## Mix erstellen
+
+Unter *Mix erstellen* baut die App aus Künstlern, die du auswählst, eine neue Playlist. Dafür geht an **Deezers
+öffentliche Schnittstelle** (ohne Login) nur der Künstlername, den du ins Suchfeld tippst, und danach die Deezer-Kennungen
+der gewählten und ähnlicher Künstler (für Top-Songs, Künstler-Radio und ähnliche Künstler). Dabei sieht Deezer
+wie bei jeder Abfrage deine IP-Adresse. Für Tempo, Tonart und Energie wird – nur wenn die gewählte Stufe oder ein eigener
+Filter es braucht – die offizielle 30-s-Hörprobe gestreamt und im Arbeitsspeicher ausgewertet (höchstens 150 pro Mix);
+gespeichert werden wie beim Set-Planer nur die drei Zahlen.
+
+Es gibt **keinen Suchverlauf**: Suchergebnisse und der fertige Mix bleiben nur im Arbeitsspeicher (höchstens 6 Stunden)
+und werden erst gespeichert, wenn du „Als Playlist speichern“ wählst – dann als normale lokale Playlist. Deine zuletzt
+gewählten Künstler und Einstellungen merkt sich nur die Oberfläche auf diesem Rechner. Nichts davon geht an den Server
+des Entwicklers oder in die Gemeinschafts-Genre-Datenbank.
+
 ## Links öffnen
 
 Links zu Diensten, Shops und Hilfeseiten öffnet die App in deinem **Standard-Browser** (nicht im App-Fenster).

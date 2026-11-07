@@ -1,0 +1,503 @@
+"""„Mix erstellen“: aus einem oder mehreren Künstlern eine neue, passende Playlist bauen.
+
+Ablauf (ein Auftrag im Hintergrund, wie beim Set-Planer):
+1. Kandidaten sammeln – Deezer (öffentliche API, ohne Login): Top-Songs der Start-Künstler, ihr Künstler-Radio und die
+   Top-Songs ähnlicher Künstler. Jeder Kandidat bekommt einen Ähnlichkeitswert (`fit`, 0..1) und einen Grund.
+2. Filtern: Fassungen (Remix/VIP/…), Songs aus der eigenen Bibliothek, höchstens N Songs pro Künstler.
+3. Tempo, Tonart, Energie – nur wenn die gewählte Stufe (oder ein eigener Filter) sie braucht. Erst aus dem
+   Song-Speicher, sonst aus der offiziellen 30-s-Hörprobe (audiofeat), nacheinander und mit Obergrenze
+   (MEASURE_MAX) – es wird nicht auf Vorrat gemessen.
+4. Bewerten (reine Rechnerei, `score`) und auswählen; bei „Mixbar“/„DJ-genau“ in DJ-Reihenfolge (setplan.order).
+
+Datenschutz/Bedingungen: An Deezer gehen nur Künstler-Kennungen bzw. der eingegebene Künstlername. Ergebnisse bleiben
+nur im Arbeitsspeicher (Aufträge 6 Std., Deezer-Antworten 1 Std.); gespeichert wird erst, wenn du „Als Playlist
+speichern“ wählst. Kein Suchverlauf. Hörproben werden nur gestreamt; gemessen werden wie überall nur drei Zahlen.
+Nichts davon geht an den Server des Entwicklers oder in die Gemeinschafts-Genre-Datenbank.
+"""
+from __future__ import annotations
+
+import math
+import statistics
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
+from . import debuglog as dbg
+from . import store
+from .audiofeat import camelot_distance
+from .matching import hard_version, normalize
+from .models import Track
+from .ratelimit import LimitReached
+from .setplan import tempo_jump
+
+# Stufen „Wie passend?“: Tempo-Abstand in % (None = egal), Tonart-Abstand zur Ziel-Tonart, Energie-Abstand,
+# DJ-Reihenfolge. Eigene Filter (BPM-Bereich, Tonart, Energie) gelten zusätzlich und immer hart.
+LEVELS: dict[str, dict] = {
+    "locker":  {"name": "Locker",   "tempo": None, "key": None, "energy": None, "order": False,
+                "hint": "ähnliche Künstler, Tempo und Tonart egal – schnell, ohne Messen"},
+    "passend": {"name": "Passend",  "tempo": 15.0, "key": None, "energy": 0.3, "order": False,
+                "hint": "ähnliches Tempo (±15 %) und ähnliche Energie"},
+    "mixbar":  {"name": "Mixbar",   "tempo": 6.0, "key": 2, "energy": 0.25, "order": True,
+                "hint": "±6 % Tempo (halbes/doppeltes zählt), ähnliche Energie, in DJ-Reihenfolge mit harmonischen Übergängen"},
+    "genau":   {"name": "DJ-genau", "tempo": 3.0, "key": 1, "energy": None, "order": True,
+                "hint": "±3 % Tempo, Übergänge in gleicher oder Nachbar-Tonart (Camelot), Energie-Verlauf wie im Set-Planer"},
+}
+POPULARITY = ("mix", "hits", "unbekannt")
+COUNT_DEFAULT, COUNT_MAX = 30, 100
+MAX_SEEDS = 5
+RELATED_PER_SEED = 12      # ähnliche Künstler je Start-Künstler
+TOP_PER_RELATED = 4        # Top-Songs je ähnlichem Künstler
+MEASURE_MAX = 150          # höchstens so viele Hörproben pro Auftrag (Rücksicht auf Deezer)
+JOB_TTL = 6 * 3600
+
+_jobs: dict[str, dict] = {}
+
+
+# ------------------------------------------------------------------ Optionen
+def clean_opts(o: dict | None) -> dict:
+    """Eingaben der Oberfläche prüfen und auf sinnvolle Grenzen bringen."""
+    o = dict(o or {})
+
+    def num(k, lo, hi, cast=float):
+        v = o.get(k)
+        if v in (None, ""):
+            return None
+        try:
+            return max(lo, min(hi, cast(v)))
+        except (TypeError, ValueError):
+            return None
+    out = {
+        "level": o.get("level") if o.get("level") in LEVELS else "passend",
+        "count": int(num("count", 5, COUNT_MAX, int) or COUNT_DEFAULT),
+        "per_artist": int(num("per_artist", 1, 10, int) or 2),
+        "popularity": o.get("popularity") if o.get("popularity") in POPULARITY else "mix",
+        "versions": bool(o.get("versions", True)),
+        "skip_library": bool(o.get("skip_library", False)),
+        "include_seeds": bool(o.get("include_seeds", True)),
+        "bpm_min": num("bpm_min", 40, 250), "bpm_max": num("bpm_max", 40, 250),
+        "energy_min": num("energy_min", 0, 1), "energy_max": num("energy_max", 0, 1),
+        "camelot": (str(o.get("camelot") or "").strip().upper() or None),
+        "curve": o.get("curve") if o.get("curve") in ("aufbau", "peak", "gleich", "runter") else "gleich",
+    }
+    if out["camelot"] and not _valid_camelot(out["camelot"]):
+        out["camelot"] = None
+    for a, b in (("bpm_min", "bpm_max"), ("energy_min", "energy_max")):
+        if out[a] is not None and out[b] is not None and out[a] > out[b]:
+            out[a], out[b] = out[b], out[a]
+    return out
+
+
+def _valid_camelot(c: str) -> bool:
+    return len(c) in (2, 3) and c[-1] in "AB" and c[:-1].isdigit() and 1 <= int(c[:-1]) <= 12
+
+
+def needs_features(opts: dict) -> bool:
+    lv = LEVELS[opts["level"]]
+    return any(lv[k] is not None for k in ("tempo", "key", "energy")) or lv["order"] or any(
+        opts[k] is not None for k in ("bpm_min", "bpm_max", "energy_min", "energy_max", "camelot"))
+
+
+# ------------------------------------------------------------------ Deezer
+def _get(url: str, **params) -> dict:
+    from .artists import _get as dz_get
+    return dz_get(url, **params)
+
+
+def _cached(key: str, fn):
+    from .artists import _cached as cached
+    return cached(f"mix:{key}", fn)
+
+
+def search_artists(q: str, limit: int = 8) -> list[dict]:
+    """Künstler bei Deezer suchen – der Nutzer wählt danach selbst aus (keine Namensvettern)."""
+    q = (q or "").strip()[:100]
+    if len(q) < 2:
+        return []
+    d = _cached(f"s:{q.lower()}", lambda: _get("https://api.deezer.com/search/artist", q=q, limit=limit))
+    return [{"id": a["id"], "name": a.get("name") or "", "picture": a.get("picture_medium"), "fans": a.get("nb_fan") or 0}
+            for a in (d.get("data") or []) if a.get("id")][:limit]
+
+
+def _item(h: dict, fit: float, why: str, seed: bool = False) -> dict | None:
+    art = h.get("artist") or {}
+    if not h.get("id") or not h.get("title") or not art.get("name"):
+        return None
+    alb = h.get("album") or {}
+    return {"title": h["title"], "artists": [art["name"]], "artist": art["name"], "artist_id": art.get("id"),
+            "album": alb.get("title"), "cover": alb.get("cover_medium"), "duration_ms": (h.get("duration") or 0) * 1000 or None,
+            "isrc": h.get("isrc"), "ids": {"deezer": str(h["id"])}, "preview_url": h.get("preview") or None,
+            "rank": h.get("rank") or 0, "fit": round(fit, 3), "why": why, "seed": seed}
+
+
+def collect(seeds: list[dict], opts: dict, job: dict | None = None) -> list[dict]:
+    """Kandidaten aus Deezer: Top-Songs der Start-Künstler, deren Radio, Top-Songs ähnlicher Künstler."""
+    seed_ids = {int(s["id"]) for s in seeds}
+    out: list[dict] = []
+
+    def add(h, fit, why, seed=False):
+        if (it := _item(h, fit, why, seed)):
+            out.append(it)
+
+    related: dict[int, tuple[float, str, str]] = {}      # Künstler-ID -> (fit, Name, über wen)
+    for s in seeds:
+        aid, name = int(s["id"]), s.get("name") or ""
+        top = _cached(f"top:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/top", limit=10)).get("data") or []
+        if opts["include_seeds"]:
+            for i, h in enumerate(top):
+                own = (h.get("artist") or {}).get("id") == aid
+                add(h, 1.0 - i * 0.02, f"von {name}" if own else f"mit {name}", seed=True)
+        radio = _cached(f"radio:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/radio", limit=50)).get("data") or []
+        for i, h in enumerate(radio):
+            if (h.get("artist") or {}).get("id") in seed_ids:
+                if opts["include_seeds"]:
+                    add(h, 0.9 - i * 0.004, f"von {name}", seed=True)
+                continue
+            add(h, max(0.45, 0.88 - i * 0.008), f"aus dem Radio von {name}")
+        rel = _cached(f"rel:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/related", limit=RELATED_PER_SEED)).get("data") or []
+        for i, a in enumerate(rel[:RELATED_PER_SEED]):
+            if a.get("id") and a["id"] not in seed_ids:
+                fit = 0.85 - i * 0.025
+                if fit > related.get(a["id"], (0,))[0]:
+                    related[a["id"]] = (fit, a.get("name") or "", name)
+        if job is not None:
+            job["done"] += 1
+
+    if job is not None:
+        job["total"] = len(seeds) + len(related)
+
+    def top_of(item):
+        rid, (fit, _name, via) = item
+        try:
+            ts = _cached(f"top:{rid}:{TOP_PER_RELATED}",
+                         lambda: _get(f"https://api.deezer.com/artist/{rid}/top", limit=TOP_PER_RELATED)).get("data") or []
+        except LimitReached:
+            return []
+        return [(h, fit - k * 0.03, f"ähnlich zu {via}") for k, h in enumerate(ts)]
+
+    with ThreadPoolExecutor(4) as ex:
+        for res in ex.map(top_of, sorted(related.items(), key=lambda kv: -kv[1][0])):
+            for h, fit, why in res:
+                add(h, fit, why)
+            if job is not None:
+                job["done"] += 1
+    return dedupe(out)
+
+
+def song_key(it: dict) -> str:
+    return f"{normalize(it['artists'][0] if it.get('artists') else '')}|{normalize(it.get('title') or '')}"
+
+
+def dedupe(items: list[dict]) -> list[dict]:
+    """Gleicher Song (Künstler + Titel inkl. Fassung, oder ISRC) nur einmal – der mit dem besten Grund bleibt."""
+    best: dict[str, dict] = {}
+    isrc_of: dict[str, str] = {}
+    for it in items:
+        k = song_key(it)
+        if it.get("isrc"):
+            k = isrc_of.setdefault(it["isrc"], k)
+        if k not in best or it["fit"] > best[k]["fit"]:
+            best[k] = it
+    return list(best.values())
+
+
+# ------------------------------------------------------------------ Filtern und Bewerten
+def prefilter(items: list[dict], opts: dict, library: set[str] | None = None) -> list[dict]:
+    out = []
+    for it in items:
+        if not opts["versions"] and hard_version(it["title"])[0]:
+            continue
+        if library and (song_key(it) in library or (it.get("isrc") and it["isrc"] in library)):
+            continue
+        out.append(it)
+    return out
+
+
+def library_keys() -> set[str]:
+    keys = set()
+    for p in store.local_playlists():
+        for t in p.tracks:
+            keys.add(f"{normalize(t.artists[0] if t.artists else '')}|{normalize(t.title)}")
+            if t.isrc:
+                keys.add(t.isrc)
+    return keys
+
+
+def popularity(items: list[dict]) -> None:
+    """Rang (Deezer „rank“) -> Perzentil 0..1 innerhalb der Kandidaten."""
+    ranks = sorted(it.get("rank") or 0 for it in items)
+    n = len(ranks)
+    for it in items:
+        r = it.get("rank") or 0
+        it["pop"] = round(sum(1 for x in ranks if x < r) / (n - 1), 3) if n > 1 else 0.5
+
+
+def reference(items: list[dict], opts: dict) -> dict:
+    """Ziel-Tempo/-Tonart/-Energie: eigene Angaben zuerst, sonst aus den gemessenen Songs der Start-Künstler."""
+    seeds = [it for it in items if it.get("seed") and it.get("bpm")] or [it for it in items if it.get("bpm")][:15]
+    ref = {"bpm": None, "camelot": opts["camelot"], "energy": None}
+    if opts["bpm_min"] is not None or opts["bpm_max"] is not None:
+        lo, hi = opts["bpm_min"] or opts["bpm_max"], opts["bpm_max"] or opts["bpm_min"]
+        ref["bpm"] = (lo + hi) / 2
+    elif seeds:
+        ref["bpm"] = ref_tempo([(it["bpm"], it.get("bpm_conf", 0.5)) for it in seeds])
+    es = [it["energy"] for it in seeds if it.get("energy") is not None]
+    if es:
+        ref["energy"] = statistics.median(es)
+    return ref
+
+
+def _octave_dist(a: float, b: float) -> float:
+    """Abstand zweier Tempi, wobei halbes/doppeltes Tempo gleich ist (0 = gleich, 0,5 = größtmöglich), in Oktaven."""
+    d = abs(math.log2(a / b)) % 1
+    return min(d, 1 - d)
+
+
+def ref_tempo(meas: list[tuple[float, float]]) -> float | None:
+    """Ziel-Tempo aus Messungen (BPM, Sicherheit) – Abstimmung statt Median.
+    Die Messung an 30-s-Hörproben verrutscht bei schneller Musik gern: halbes Tempo (DnB 174 -> 87) oder 2/3
+    (174 -> 116). Deshalb gewinnt die Tempo-Gruppe (halb/doppelt zusammengefasst, ±4 %) mit dem meisten Gewicht;
+    einzelne Ausreißer verschieben das Ziel nicht. Danach die Lage: Liegt mindestens ein Viertel der Messungen der
+    Gruppe in der doppelten Lage und bleibt die unter 185 BPM, gilt die doppelte (DnB/Dubstep werden oft halb gemessen)."""
+    pts = [(b, max(0.1, w or 0)) for b, w in meas if b and b > 0]
+    if not pts:
+        return None
+    tol = math.log2(1.04)
+
+    def weight(c):
+        return sum(w for b, w in pts if _octave_dist(b, c) <= tol)
+    best = max((b for b, _ in pts), key=lambda c: (weight(c), -abs(math.log2(c / 120))))
+    group = [b for b, _ in pts if _octave_dist(b, best) <= tol]
+    low = [b / 2 ** math.floor(math.log2(b / best) + 0.5) for b in group]       # alle in die Lage von „best“
+    ref = statistics.median(low)
+    while ref >= 185:
+        ref /= 2
+    while ref < 60:
+        ref *= 2
+    if ref * 2 <= 185 and sum(1 for b in group if abs(math.log2(b / (ref * 2))) <= tol) * 4 >= len(group):
+        ref *= 2
+    return round(ref, 1)
+
+
+def fold_to(bpm: float | None, ref: float | None) -> float | None:
+    """Tempo in die Lage des Ziel-Tempos bringen (Anzeige: 86,7 wird bei Ziel 174 zu 173,4)."""
+    if not bpm or not ref:
+        return bpm
+    return round(min((bpm, bpm * 2, bpm / 2), key=lambda c: abs(c - ref)), 1)
+
+
+def _in_bpm_range(bpm: float, lo: float | None, hi: float | None) -> bool:
+    lo, hi = lo or 0, hi or 999
+    return any(lo <= c <= hi for c in (bpm, bpm * 2, bpm / 2))
+
+
+def passes(it: dict, opts: dict, ref: dict) -> tuple[bool, str]:
+    """Harte Filter der Stufe und der eigenen Angaben. Unbekannte Werte fallen nur bei eigenen Filtern raus."""
+    lv = LEVELS[opts["level"]]
+    bpm, cam, en = it.get("bpm"), it.get("camelot"), it.get("energy")
+    if opts["bpm_min"] is not None or opts["bpm_max"] is not None:
+        if not bpm or not _in_bpm_range(bpm, opts["bpm_min"], opts["bpm_max"]):
+            return False, "Tempo außerhalb des Bereichs"
+    elif lv["tempo"] is not None and ref.get("bpm") and ((tj := tempo_jump(ref["bpm"], bpm)) is None or tj > lv["tempo"]):
+        return False, "Tempo passt nicht"
+    if opts["camelot"] and (not cam or camelot_distance(opts["camelot"], cam) > (lv["key"] if lv["key"] is not None else 1)):
+        return False, "Tonart passt nicht"
+    if opts["energy_min"] is not None or opts["energy_max"] is not None:
+        if en is None or not ((opts["energy_min"] or 0) <= en <= (opts["energy_max"] if opts["energy_max"] is not None else 1)):
+            return False, "Energie außerhalb des Bereichs"
+    elif lv["energy"] is not None and ref.get("energy") is not None and en is not None and abs(en - ref["energy"]) > lv["energy"]:
+        return False, "Energie passt nicht"
+    return True, ""
+
+
+def score(it: dict, opts: dict, ref: dict) -> float:
+    """0..1 – Ähnlichkeit führt, dazu Bekanntheit (je nach Wunsch), Tempo- und Tonart-Nähe."""
+    s = 0.6 * it["fit"]
+    pop = it.get("pop", 0.5)
+    s += 0.2 * (pop if opts["popularity"] == "hits" else 1 - pop if opts["popularity"] == "unbekannt" else 0.5)
+    lv = LEVELS[opts["level"]]
+    if lv["tempo"] is not None and ref.get("bpm") and it.get("bpm"):
+        s += 0.12 * max(0.0, 1 - tempo_jump(ref["bpm"], it["bpm"]) / max(lv["tempo"], 1))
+    if ref.get("camelot") and it.get("camelot"):
+        s += 0.08 * max(0.0, 1 - camelot_distance(ref["camelot"], it["camelot"]) / 3)
+    return round(s, 4)
+
+
+def pick(items: list[dict], opts: dict) -> tuple[list[int], list[int]]:
+    """Beste zuerst, höchstens per_artist je Künstler -> (Auswahl, Reserve) als Indizes."""
+    order = sorted(range(len(items)), key=lambda i: -items[i]["score"])
+    per: dict[str, int] = {}
+    chosen, reserve = [], []
+    for i in order:
+        a = normalize(items[i]["artist"])
+        if len(chosen) < opts["count"] and per.get(a, 0) < opts["per_artist"]:
+            chosen.append(i)
+            per[a] = per.get(a, 0) + 1
+        else:
+            reserve.append(i)
+    return chosen, reserve
+
+
+def _reasons(it: dict) -> list[str]:
+    out = [it["why"]]
+    if it.get("bpm"):
+        out.append(f"{round(it['bpm'])} BPM")
+    if it.get("camelot"):
+        out.append(it["camelot"])
+    if it.get("energy") is not None:
+        out.append(f"Energie {round(it['energy'] * 100)} %")
+    return out
+
+
+# ------------------------------------------------------------------ Auftrag
+def _measure(job: dict, items: list[dict], ref_first: list[dict]) -> None:
+    """Tempo/Tonart/Energie holen – Start-Künstler zuerst (für die Ziel-Werte), dann die besten Kandidaten.
+    Bricht ab, sobald genug passende Songs da sind oder MEASURE_MAX erreicht ist."""
+    from . import audiofeat, ratelimit
+    opts = job["opts"]
+    first = {id(it) for it in ref_first}
+    pool = ref_first + [it for it in sorted(items, key=lambda x: -x["fit"]) if id(it) not in first]
+    budget = min(len(pool), MEASURE_MAX)
+    job.update(phase="measuring", done=0, total=budget)
+    enough = int(opts["count"] * 1.3) + 5
+    ref = None
+    with ratelimit.patient():
+        for k, it in enumerate(pool[:budget]):
+            if job["cancel"]:
+                return
+            t = Track(title=it["title"], artists=it["artists"], isrc=it.get("isrc"), ids=it.get("ids") or {},
+                      preview_url=it.get("preview_url"))
+            try:
+                f = audiofeat.features(t)
+            except LimitReached:
+                job["note"] = "Deezer bremst gerade – nicht alle Songs konnten gemessen werden."
+                break
+            except Exception as e:  # noqa: BLE001 – ein kaputter Song darf den Mix nicht abbrechen
+                dbg.error("mixgen", "Tempo/Tonart nicht ermittelt", e)
+                f = None
+            it["measured"] = True
+            if f:
+                it.update(bpm=f.get("bpm"), bpm_conf=f.get("bpm_conf", 0.5), camelot=f.get("camelot"), key=f.get("key"),
+                          energy=f.get("energy"))
+            job["done"] = k + 1
+            if k + 1 >= len(ref_first):
+                ref = ref or reference(items, opts)
+                if sum(1 for x in pool[len(ref_first):k + 1] if passes(x, opts, ref)[0]) >= enough:
+                    break
+
+
+def _run(job: dict) -> None:
+    from . import ratelimit, setplan
+    opts = job["opts"]
+    try:
+        with ratelimit.patient(max_wait=60):
+            cands = collect(job["seeds"], opts, job)
+        if job["cancel"]:
+            job["state"] = "cancelled"
+            return
+        cands = prefilter(cands, opts, library_keys() if opts["skip_library"] else None)
+        if not cands:
+            job.update(state="done", items=[], order=[], reserve=[], ref={}, found=0,
+                       note="Keine Songs gefunden – andere Künstler oder lockerere Einstellungen probieren.")
+            return
+        popularity(cands)
+        if needs_features(opts):
+            seeds_first = sorted([c for c in cands if c["seed"]], key=lambda x: -x["fit"])[:6 * len(job["seeds"])]
+            _measure(job, cands, seeds_first)
+            if job["cancel"]:
+                job["state"] = "cancelled"
+                return
+            ref = reference(cands, opts)
+            # nicht gemessene Songs nur behalten, wenn keine harte Tempo-/Tonart-/Energie-Vorgabe gilt
+            pool = [c for c in cands if passes(c, opts, ref)[0] and (c.get("measured") or not needs_features(opts))]
+        else:
+            ref, pool = reference(cands, opts), cands
+        for c in pool:
+            c["bpm"] = fold_to(c.get("bpm"), ref.get("bpm"))
+            c["score"] = score(c, opts, ref)
+            c["reasons"] = _reasons(c)
+        chosen, reserve = pick(pool, opts)
+        if LEVELS[opts["level"]]["order"] and len(chosen) > 2:
+            sub = [pool[i] for i in chosen]
+            chosen = [chosen[i] for i in setplan.order(sub, opts["curve"])]
+        lost = len(cands) - len(pool)
+        note = job.get("note") or ""
+        if len(chosen) < opts["count"]:
+            note = (note + " " if note else "") + (
+                f"Nur {len(chosen)} von {opts['count']} Songs passen so genau"
+                + (f" ({lost} Kandidaten aussortiert)" if lost else "") + " – „Locker“ oder „Passend“ findet mehr.")
+        job.update(state="done", items=pool, order=chosen, reserve=reserve, found=len(cands),
+                   ref={k: v for k, v in ref.items() if v is not None}, note=note.strip())
+    except LimitReached as e:
+        job.update(state="error", error=f"{e} – bitte gleich noch einmal versuchen.")
+    except Exception as e:  # noqa: BLE001
+        dbg.error("mixgen", "Mix erstellen abgebrochen", e)
+        job.update(state="error", error=str(e))
+
+
+def start(seeds: list[dict], opts: dict | None = None) -> str:
+    seeds = [{"id": int(s["id"]), "name": str(s.get("name") or "")[:200]} for s in (seeds or [])
+             if str(s.get("id", "")).isdigit()][:MAX_SEEDS]
+    if not seeds:
+        raise ValueError("Bitte mindestens einen Künstler auswählen")
+    opts = clean_opts(opts)
+    jid = uuid.uuid4().hex[:10]
+    _jobs[jid] = {"id": jid, "seeds": seeds, "opts": opts, "state": "running", "phase": "collecting",
+                  "done": 0, "total": len(seeds), "cancel": False, "started": time.time(), "note": ""}
+    threading.Thread(target=_run, args=(_jobs[jid],), daemon=True).start()
+    for k in [k for k, j in _jobs.items() if time.time() - j["started"] > JOB_TTL]:
+        _jobs.pop(k, None)
+    return jid
+
+
+def job(jid: str) -> dict:
+    j = _jobs.get(jid)
+    if not j:
+        raise ValueError("Auftrag nicht gefunden (abgelaufen?) – bitte neu starten")
+    return j
+
+
+def public(j: dict) -> dict:
+    """Was die Oberfläche sieht (ohne interne Felder)."""
+    out = {k: j.get(k) for k in ("id", "state", "phase", "done", "total", "note", "error", "seeds", "opts",
+                                  "order", "reserve", "found", "ref")}
+    if j.get("state") == "done":
+        keep = ("title", "artists", "artist", "album", "cover", "duration_ms", "isrc", "ids", "preview_url",
+                "bpm", "camelot", "key", "energy", "reasons", "score")
+        out["items"] = [{k: it.get(k) for k in keep} for it in j["items"]]
+    return out
+
+
+def describe(jid: str, idx: list[int]) -> dict:
+    """Übergänge der aktuellen Auswahl (für „x von y Übergängen harmonisch“)."""
+    from . import setplan
+    j = job(jid)
+    idx = _checked(j, idx)
+    sub = [j["items"][i] for i in idx]
+    d = setplan.describe(sub, list(range(len(sub))), j["opts"]["curve"])
+    return {k: d[k] for k in ("harmonisch", "bekannt", "minuten")}
+
+
+def _checked(j: dict, idx: list[int]) -> list[int]:
+    if j.get("state") != "done":
+        raise ValueError("Mix ist noch nicht fertig")
+    n = len(j["items"])
+    if not idx or len(set(idx)) != len(idx) or any(not isinstance(i, int) or i < 0 or i >= n for i in idx):
+        raise ValueError("Auswahl passt nicht zum Mix")
+    return idx
+
+
+def save(jid: str, idx: list[int], name: str) -> dict:
+    j = job(jid)
+    idx = _checked(j, idx)
+    name = (name or "").strip()[:120]
+    if not name:
+        raise ValueError("Bitte einen Namen eingeben")
+    if any(p.name == name for p in store.local_playlists()):
+        raise ValueError(f"Eine Playlist „{name}“ gibt es schon – bitte anderen Namen wählen")
+    for i in idx:
+        it = j["items"][i]
+        store.add_to_playlist(name, Track(title=it["title"], artists=it["artists"], album=it.get("album"),
+                                          isrc=it.get("isrc"), ids=it.get("ids") or {}, cover=it.get("cover"),
+                                          preview_url=it.get("preview_url"), duration_ms=it.get("duration_ms")))
+    return {"name": name, "count": len(idx)}

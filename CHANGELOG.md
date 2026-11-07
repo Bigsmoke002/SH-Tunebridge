@@ -3,6 +3,17 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht (0.10.0)
+- **Neu: Mix erstellen** (Werkzeuge › Mix erstellen, auch über Strg+K). Bis zu 5 Künstler suchen und auswählen –
+  die App baut daraus eine neue Playlist aus ihren Top-Songs, ihrem Künstler-Radio und Songs ähnlicher Künstler (Deezer,
+  ohne Login). **„Wie passend?“** in vier Stufen: *Locker* (nur Ähnlichkeit, ohne Messen), *Passend* (±15 % Tempo,
+  ähnliche Energie), *Mixbar* (±6 % Tempo, halb/doppelt zählt, harmonische Übergänge in DJ-Reihenfolge) und
+  *DJ-genau* (±3 % Tempo, Energie-Verlauf wie im Set-Planer). Feineinstellungen: BPM-Bereich, Tonart (Camelot),
+  Energie, Bekanntheit (Hits/gemischt/eher unbekannt), höchstens N Songs pro Künstler, Remixe ja/nein, Songs aus
+  den eigenen Playlists weglassen. Jede Zeile zeigt, warum der Song dabei ist, dazu BPM, Tonart und Energie. Alles
+  sofort anhören, einzelne Songs gegen passende aus der Reserve tauschen oder entfernen, als Playlist speichern und
+  im Set-Planer weiterbearbeiten. Kein Suchverlauf; gespeichert wird erst die fertige Playlist.
+
 ## 0.9.2 – 2026-11-06
 - **Windows: Selbst-Update repariert.** Das Hilfsskript, das beim Neustart die alte gegen die neue Version tauscht,
   startete aus der fensterlosen App heraus nicht – die App beendete sich, das Update blieb liegen. Jetzt läuft der
