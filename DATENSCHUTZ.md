@@ -211,10 +211,14 @@ immer direkt vom Anbieter.
 
 ## Mix erstellen
 
-Unter *Mix erstellen* baut die App aus Künstlern, die du auswählst, eine neue Playlist. Dafür geht an **Deezers
-öffentliche Schnittstelle** (ohne Login) nur der Künstlername, den du ins Suchfeld tippst, und danach die Deezer-Kennungen
-der gewählten und ähnlicher Künstler (für Top-Songs, Künstler-Radio und ähnliche Künstler). Dabei sieht Deezer
-wie bei jeder Abfrage deine IP-Adresse. Für Tempo, Tonart und Energie wird – nur wenn die gewählte Stufe oder ein eigener
+Unter *Mix erstellen* baut die App aus Künstlern, die du auswählst, oder aus einem Genre/Subgenre eine neue Playlist.
+Dafür geht an **Deezers öffentliche Schnittstelle** (ohne Login) nur der Künstlername, den du ins Suchfeld tippst, und
+danach die Deezer-Kennungen der gewählten und ähnlicher Künstler (für Top-Songs, Künstler-Radio und ähnliche Künstler).
+Bei der **Suche nach Genre** gehen nur die Genre-Tags (z. B. „liquid funk“) an **MusicBrainz** (offene Datenbank, CC0)
+und – nur wenn du einen eigenen Last.fm-Key eingetragen hast – an **Last.fm**; die gefundenen Künstlernamen werden
+danach bei Deezer gesucht. Deine Bibliothek, deine eigenen Einordnungen und die Gemeinschafts-Genre-Datenbank (falls
+geladen) werden nur auf deinem Rechner ausgewertet und verlassen ihn nicht. Dabei sehen die Dienste wie bei jeder
+Abfrage deine IP-Adresse. Für Tempo, Tonart und Energie wird – nur wenn die gewählte Stufe oder ein eigener
 Filter es braucht – die offizielle 30-s-Hörprobe gestreamt und im Arbeitsspeicher ausgewertet (höchstens 150 pro Mix);
 gespeichert werden wie beim Set-Planer nur die drei Zahlen.
 

@@ -1,15 +1,18 @@
-"""„Mix erstellen“: aus einem oder mehreren Künstlern eine neue, passende Playlist bauen.
+"""„Mix erstellen“: aus Künstlern oder einem (Sub-)Genre eine neue, passende Playlist bauen.
 
 Ablauf (ein Auftrag im Hintergrund, wie beim Set-Planer):
 1. Kandidaten sammeln – Deezer (öffentliche API, ohne Login): Top-Songs der Start-Künstler, ihr Künstler-Radio und die
-   Top-Songs ähnlicher Künstler. Jeder Kandidat bekommt einen Ähnlichkeitswert (`fit`, 0..1) und einen Grund.
+   Top-Songs ähnlicher Künstler. Bei der Genre-Suche kommen die Künstler aus Bibliothek, eigenen Einordnungen,
+   Gemeinschafts-DB, MusicBrainz und Last.fm (siehe „Genre-Suche“). Jeder Kandidat bekommt einen Ähnlichkeitswert
+   (`fit`, 0..1) und einen Grund.
 2. Filtern: Fassungen (Remix/VIP/…), Songs aus der eigenen Bibliothek, höchstens N Songs pro Künstler.
 3. Tempo, Tonart, Energie – nur wenn die gewählte Stufe (oder ein eigener Filter) sie braucht. Erst aus dem
    Song-Speicher, sonst aus der offiziellen 30-s-Hörprobe (audiofeat), nacheinander und mit Obergrenze
    (MEASURE_MAX) – es wird nicht auf Vorrat gemessen.
 4. Bewerten (reine Rechnerei, `score`) und auswählen; bei „Mixbar“/„DJ-genau“ in DJ-Reihenfolge (setplan.order).
 
-Datenschutz/Bedingungen: An Deezer gehen nur Künstler-Kennungen bzw. der eingegebene Künstlername. Ergebnisse bleiben
+Datenschutz/Bedingungen: An Deezer gehen nur Künstler-Kennungen bzw. Künstlernamen, an MusicBrainz/Last.fm nur die
+Genre-Tags (z. B. „liquid funk“). Ergebnisse bleiben
 nur im Arbeitsspeicher (Aufträge 6 Std., Deezer-Antworten 1 Std.); gespeichert wird erst, wenn du „Als Playlist
 speichern“ wählst. Kein Suchverlauf. Hörproben werden nur gestreamt; gemessen werden wie überall nur drei Zahlen.
 Nichts davon geht an den Server des Entwicklers oder in die Gemeinschafts-Genre-Datenbank.
@@ -181,6 +184,249 @@ def collect(seeds: list[dict], opts: dict, job: dict | None = None) -> list[dict
                 add(h, fit, why)
             if job is not None:
                 job["done"] += 1
+    return dedupe(out)
+
+
+# ------------------------------------------------------------------ Genre-Suche
+# Woher Künstler/Songs eines (Sub-)Genres kommen – in dieser Reihenfolge der Verlässlichkeit:
+#   1. deine Bibliothek (Song-Speicher + eigene Playlists) und deine eigenen Einordnungen – kostet keine Abfrage
+#   2. Gemeinschafts-Genre-Datenbank (nur wenn du sie geladen hast)
+#   3. MusicBrainz: Künstler mit passendem Tag (1 Abfrage, CC0)
+#   4. Last.fm: Top-Künstler und Top-Songs des Tags (nur mit eigenem Last.fm-Key)
+# Danach werden die Künstler bei Deezer gesucht (nur bei eindeutigem Namen) und ihre Top-Songs genommen. Die Genres
+# stammen von Künstlern (nicht von jedem einzelnen Song) – deshalb steht im Grund z. B. „Liquid laut MusicBrainz“.
+# Erst wenn das nicht reicht (oder bei „Locker“/„Passend“), wird über das Künstler-Radio aufgefüllt – solche Songs
+# gelten als unbestätigt und fallen bei „DJ-genau“ weg.
+MAX_GENRE_ARTISTS = 24
+MB_PER_QUERY = 60
+SRC_LABEL = {"bibliothek": "deiner Bibliothek", "eigene": "deinen Einordnungen", "gemeinschaft": "Gemeinschafts-DB",
+             "musicbrainz": "MusicBrainz", "lastfm": "Last.fm", "haupt": "MusicBrainz"}
+SRC_WEIGHT = {"bibliothek": 0.95, "eigene": 0.95, "gemeinschaft": 0.85, "lastfm": 0.82, "musicbrainz": 0.8, "haupt": 0.55}
+MIN_SUB_ARTISTS = 6        # weniger Künstler fürs Subgenre gefunden -> mit dem Hauptgenre auffüllen (als unbestätigt)
+
+
+def check_genre(g: dict | None) -> dict | None:
+    """{"genre": …, "sub": …} gegen den Genre-Baum prüfen."""
+    from .genres.taxonomy import TAXONOMY
+    if not g or g.get("genre") not in TAXONOMY:
+        return None
+    sub = g.get("sub") or None
+    if sub and (sub == "_" or sub not in TAXONOMY[g["genre"]]):
+        sub = None
+    return {"genre": g["genre"], "sub": sub}
+
+
+def genre_label(g: dict) -> str:
+    return f"{g['genre']} › {g['sub']}" if g.get("sub") else g["genre"]
+
+
+def genre_tags(g: dict, n: int = 3) -> list[str]:
+    """Die ersten Tag-Synonyme aus dem Genre-Baum (das sind die Tags, die in MusicBrainz/Last.fm stehen)."""
+    from .genres.taxonomy import TAXONOMY
+    return list(dict.fromkeys(TAXONOMY[g["genre"]][g["sub"] or "_"]))[:n]
+
+
+def _local_genre(g: dict) -> tuple[list[dict], dict[str, str]]:
+    """Songs der Bibliothek mit diesem Genre (als Kandidaten) und Künstler -> Quelle."""
+    from . import genredb
+    items, arts = [], {}
+    for d in store.tracks_by_genre(g["genre"], g["sub"]):
+        if not d.get("title") or not d.get("artists"):
+            continue
+        it = {"title": d["title"], "artists": d["artists"][:1], "artist": d["artists"][0], "artist_id": None,
+              "album": d.get("album"), "cover": d.get("cover"), "duration_ms": d.get("duration_ms"), "isrc": d.get("isrc"),
+              "ids": d.get("ids") or {}, "preview_url": d.get("preview_url"), "rank": 0, "fit": 0.95,
+              "why": f"{_short(g)} · aus deiner Bibliothek", "seed": True}
+        items.append(it)
+        arts.setdefault(d["artists"][0], "bibliothek")
+    try:
+        for v in genredb.votes(2000):
+            if v.get("genre") == g["genre"] and (not g["sub"] or v.get("subgenre") == g["sub"]) and v.get("artist"):
+                arts.setdefault(v["artist"].split(",")[0].strip(), "eigene")
+    except Exception as e:  # noqa: BLE001 – Einordnungen sind eine Zugabe
+        dbg.error("mixgen", "Eigene Einordnungen nicht lesbar", e)
+    return items, arts
+
+
+def _community_artists(g: dict, limit: int = 15) -> list[str]:
+    """Künstler, die in der Gemeinschafts-Genre-DB mindestens zweimal mit diesem Genre stehen (nur wenn geladen)."""
+    from collections import Counter
+
+    from . import consent, genredb
+    if not consent.server("genredb"):
+        return []
+    d = genredb._load_community()
+    if not d:
+        return []
+    cnt: Counter = Counter()
+    for k, hit in d["songs"].items():
+        if "|" in k and hit and hit[0] == g["genre"] and (not g["sub"] or (len(hit) > 1 and hit[1] == g["sub"])):
+            cnt[k.split("|")[0]] += 1
+    return [a for a, n in cnt.most_common(limit) if n >= 2]
+
+
+def mb_relevant(tags_of_artist: list[dict], want: set[str], family: set[str]) -> int:
+    """Stimmen für das gesuchte Genre, wenn es beim Künstler ein Schwerpunkt ist – sonst 0.
+    Schwerpunkt = Stimmen für das Genre + seine Familie (bei Liquid z. B. auch „drum and bass“) sind mindestens halb so
+    viele wie für den stärksten Tag des Künstlers. So fliegt z. B. Prince mit einer Einzelstimme „deep house“ raus."""
+    counts = {(t.get("name") or "").lower(): max(0, t.get("count", 0)) for t in tags_of_artist or []}
+    votes = sum(c for n, c in counts.items() if n in want)
+    if votes <= 0:
+        return 0
+    related = sum(c for n, c in counts.items() if n in want or n in family)
+    return votes if related * 2 >= max(counts.values(), default=0) else 0
+
+
+def _mb_artists(g: dict) -> list[tuple[str, str]]:
+    """MusicBrainz: Künstler mit passendem Tag -> [(Name, Beschreibung)], die mit den meisten Stimmen zuerst."""
+    from .genres.sources import musicbrainz
+    from .genres.taxonomy import TAXONOMY
+    tags = genre_tags(g)
+    q = " OR ".join(f'tag:"{t}"' for t in tags)
+
+    def load():
+        try:
+            return musicbrainz._get("artist", query=q, limit=MB_PER_QUERY)
+        except LimitReached:                     # MusicBrainz meldet gern kurz „ausgelastet“ (503) – Pause abwarten, einmal nachfassen
+            from . import ratelimit
+            with ratelimit.patient(max_wait=15):
+                return musicbrainz._get("artist", query=q, limit=MB_PER_QUERY)
+    d = _cached(f"mb:{q}", load)
+    want = {t.lower() for t in TAXONOMY[g["genre"]][g["sub"] or "_"]}
+    family = {t.lower() for syn in TAXONOMY[g["genre"]].values() for t in syn}
+    rows = []
+    for a in d.get("artists") or []:
+        if a.get("name") and (votes := mb_relevant(a.get("tags"), want, family)):
+            rows.append((votes, a.get("score", 0), a["name"], a.get("disambiguation") or ""))
+    rows.sort(key=lambda r: (-r[0], -r[1]))
+    return [(r[2], r[3]) for r in rows]
+
+
+def _lastfm(g: dict) -> tuple[list[str], list[tuple[str, str]]]:
+    """Last.fm (nur mit Key): Top-Künstler und Top-Songs des ersten passenden Tags."""
+    from . import config
+    if not config.opt("LASTFM_API_KEY"):
+        return [], []
+    from .genres.sources.lastfm import LastFM
+    lf = LastFM()
+    for tag in genre_tags(g, 2):
+        a = _cached(f"lfa:{tag}", lambda tag=tag: lf._call("tag.getTopArtists", tag=tag, limit=30))
+        t = _cached(f"lft:{tag}", lambda tag=tag: lf._call("tag.getTopTracks", tag=tag, limit=50))
+        arts = [x["name"] for x in (a.get("topartists") or {}).get("artist", []) if x.get("name")]
+        trs = [(x["artist"]["name"], x["name"]) for x in (t.get("tracks") or {}).get("track", [])
+               if x.get("name") and (x.get("artist") or {}).get("name")]
+        if arts or trs:
+            return arts, trs
+    return [], []
+
+
+def deezer_artist(name: str) -> dict | None:
+    """Künstler bei Deezer über den Namen – nur bei genau gleichem Namen; bei Namensvettern der mit den meisten Fans."""
+    n = normalize(name)
+    if not n:
+        return None
+    d = _cached(f"s:{name.lower()}", lambda: _get("https://api.deezer.com/search/artist", q=name, limit=8))
+    same = [a for a in d.get("data") or [] if a.get("id") and normalize(a.get("name") or "") == n]
+    return max(same, key=lambda a: a.get("nb_fan") or 0) if same else None
+
+
+def _short(g: dict) -> str:
+    return g["sub"] or g["genre"]
+
+
+def collect_genre(g: dict, opts: dict, job: dict | None = None) -> list[dict]:
+    out, arts = _local_genre(g)
+    sources: dict[str, set[str]] = {}
+    for a, src in arts.items():
+        sources.setdefault(a, set()).add(src)
+
+    def note(msg):
+        if job is not None:
+            job["note"] = ((job.get("note") or "") + " " + msg).strip()
+    for a in _community_artists(g):
+        sources.setdefault(a, set()).add("gemeinschaft")
+    try:
+        for a, _desc in _mb_artists(g)[:MAX_GENRE_ARTISTS]:
+            sources.setdefault(a, set()).add("musicbrainz")
+    except Exception as e:  # noqa: BLE001 – MusicBrainz ist eine von mehreren Quellen (auch LimitReached)
+        dbg.problem("mixgen", f"MusicBrainz nicht erreichbar: {e}")
+        note("MusicBrainz war gerade nicht erreichbar.")
+    lf_tracks: list[tuple[str, str]] = []
+    try:
+        lf_arts, lf_tracks = _lastfm(g)
+        for a in lf_arts:
+            sources.setdefault(a, set()).add("lastfm")
+    except Exception as e:  # noqa: BLE001 – Last.fm ist eine Zugabe (auch LimitReached)
+        dbg.problem("mixgen", f"Last.fm nicht erreichbar: {e}")
+    if g["sub"] and len({normalize(a) for a in sources}) < MIN_SUB_ARTISTS:
+        try:
+            for a, _desc in _mb_artists({"genre": g["genre"], "sub": None})[:MAX_GENRE_ARTISTS]:
+                sources.setdefault(a, set()).add("haupt")
+            note(f"Zu „{g['sub']}“ gibt es kaum Daten – ergänzt mit Künstlern aus {g['genre']} (Subgenre nicht bestätigt).")
+        except Exception as e:  # noqa: BLE001
+            dbg.problem("mixgen", f"MusicBrainz (Hauptgenre) nicht erreichbar: {e}")
+    # gleiche Künstler aus mehreren Quellen zusammenführen (Schreibweisen), dann nach Verlässlichkeit ordnen
+    merged: dict[str, tuple[str, set[str]]] = {}
+    for a, srcs in sources.items():
+        k = normalize(a)
+        if k:
+            name, s0 = merged.get(k, (a, set()))
+            merged[k] = (name, s0 | srcs)
+
+    def weight(srcs):
+        return min(1.0, max(SRC_WEIGHT[s] for s in srcs) + 0.05 * (len(srcs) - 1))
+    ranked = sorted(merged.values(), key=lambda x: -weight(x[1]))[:MAX_GENRE_ARTISTS]
+    if job is not None:
+        job.update(total=len(ranked), done=0)
+
+    def one(entry):
+        name, srcs = entry
+        try:
+            da = deezer_artist(name)
+            if not da:
+                return []
+            top = _cached(f"top:{da['id']}:6", lambda: _get(f"https://api.deezer.com/artist/{da['id']}/top", limit=6)).get("data") or []
+        except LimitReached:
+            return []
+        w = weight(srcs)
+        sure = srcs - {"haupt"}
+        if sure:
+            why = f"{_short(g)} laut " + " + ".join(SRC_LABEL[s] for s in sorted(sure, key=lambda s: -SRC_WEIGHT[s]))
+        else:
+            why = f"{g['genre']} laut MusicBrainz – {g['sub']} nicht bestätigt"
+        res = []
+        for k, h in enumerate(top):
+            if (h.get("artist") or {}).get("id") == da["id"] and (it := _item(h, w - k * 0.03, why, seed=bool(sure))):
+                res.append(it)
+        return res
+    with ThreadPoolExecutor(4) as ex:
+        for res in ex.map(one, ranked):
+            out.extend(res)
+            if job is not None:
+                job["done"] += 1
+    have = {song_key(it) for it in out}
+    for artist, title in lf_tracks:
+        it = {"title": title, "artists": [artist], "artist": artist, "artist_id": None, "album": None, "cover": None,
+              "duration_ms": None, "isrc": None, "ids": {}, "preview_url": None, "rank": 0, "fit": 0.85,
+              "why": f"{_short(g)} laut Last.fm (Song)", "seed": True}
+        if song_key(it) not in have:
+            out.append(it)
+    # auffüllen über das Künstler-Radio – nur wenn nötig oder bei lockeren Stufen; diese Songs sind unbestätigt
+    confirmed = len(dedupe(out))
+    if opts["level"] != "genau" and (opts["level"] in ("locker", "passend") or confirmed < opts["count"] * 2):
+        for entry in ranked[:3]:
+            try:
+                da = deezer_artist(entry[0])
+                if not da:
+                    continue
+                radio = _cached(f"radio:{da['id']}", lambda da=da: _get(f"https://api.deezer.com/artist/{da['id']}/radio", limit=50)).get("data") or []
+            except LimitReached:
+                break
+            for i, h in enumerate(radio):
+                if (it := _item(h, max(0.35, 0.6 - i * 0.005), f"aus dem Radio von {da.get('name') or entry[0]}")):
+                    out.append(it)
+    if not ranked and not out:
+        note(f"Für „{genre_label(g)}“ wurden keine Künstler gefunden.")
     return dedupe(out)
 
 
@@ -391,27 +637,32 @@ def _run(job: dict) -> None:
     opts = job["opts"]
     try:
         with ratelimit.patient(max_wait=60):
-            cands = collect(job["seeds"], opts, job)
+            cands = collect_genre(job["genre"], opts, job) if job.get("genre") else collect(job["seeds"], opts, job)
         if job["cancel"]:
             job["state"] = "cancelled"
             return
         cands = prefilter(cands, opts, library_keys() if opts["skip_library"] else None)
         if not cands:
             job.update(state="done", items=[], order=[], reserve=[], ref={}, found=0,
-                       note="Keine Songs gefunden – andere Künstler oder lockerere Einstellungen probieren.")
+                       note=((job.get("note") or "") + " Keine Songs gefunden – andere Auswahl oder lockerere Einstellungen probieren.").strip())
             return
         popularity(cands)
         if needs_features(opts):
-            seeds_first = sorted([c for c in cands if c["seed"]], key=lambda x: -x["fit"])[:6 * len(job["seeds"])]
+            seeds_first = sorted([c for c in cands if c["seed"]], key=lambda x: -x["fit"])[:6 * max(2, len(job["seeds"]))]
             _measure(job, cands, seeds_first)
             if job["cancel"]:
                 job["state"] = "cancelled"
                 return
             ref = reference(cands, opts)
+            if job.get("genre") and ref.get("bpm") and opts["bpm_min"] is None and opts["bpm_max"] is None:
+                from .audiofeat import fold_bpm
+                ref["bpm"] = round(fold_bpm(ref["bpm"], job["genre"]["genre"]), 1)   # DnB 87 -> 174, House bleibt
             # nicht gemessene Songs nur behalten, wenn keine harte Tempo-/Tonart-/Energie-Vorgabe gilt
             pool = [c for c in cands if passes(c, opts, ref)[0] and (c.get("measured") or not needs_features(opts))]
         else:
             ref, pool = reference(cands, opts), cands
+        if job.get("genre") and opts["level"] == "genau":
+            pool = [c for c in pool if c["seed"]]                 # nur bestätigte Genre-Treffer
         for c in pool:
             c["bpm"] = fold_to(c.get("bpm"), ref.get("bpm"))
             c["score"] = score(c, opts, ref)
@@ -435,15 +686,19 @@ def _run(job: dict) -> None:
         job.update(state="error", error=str(e))
 
 
-def start(seeds: list[dict], opts: dict | None = None) -> str:
+def start(seeds: list[dict] | None, opts: dict | None = None, genre: dict | None = None) -> str:
+    g = check_genre(genre) if genre else None
+    if genre and not g:
+        raise ValueError("Dieses Genre kenne ich nicht – bitte aus der Liste wählen")
     seeds = [{"id": int(s["id"]), "name": str(s.get("name") or "")[:200]} for s in (seeds or [])
              if str(s.get("id", "")).isdigit()][:MAX_SEEDS]
-    if not seeds:
-        raise ValueError("Bitte mindestens einen Künstler auswählen")
+    if not seeds and not g:
+        raise ValueError("Bitte mindestens einen Künstler oder ein Genre auswählen")
     opts = clean_opts(opts)
     jid = uuid.uuid4().hex[:10]
-    _jobs[jid] = {"id": jid, "seeds": seeds, "opts": opts, "state": "running", "phase": "collecting",
-                  "done": 0, "total": len(seeds), "cancel": False, "started": time.time(), "note": ""}
+    _jobs[jid] = {"id": jid, "seeds": [] if g else seeds, "genre": g, "opts": opts, "state": "running",
+                  "phase": "collecting", "done": 0, "total": 1 if g else len(seeds), "cancel": False,
+                  "started": time.time(), "note": ""}
     threading.Thread(target=_run, args=(_jobs[jid],), daemon=True).start()
     for k in [k for k, j in _jobs.items() if time.time() - j["started"] > JOB_TTL]:
         _jobs.pop(k, None)
@@ -459,7 +714,7 @@ def job(jid: str) -> dict:
 
 def public(j: dict) -> dict:
     """Was die Oberfläche sieht (ohne interne Felder)."""
-    out = {k: j.get(k) for k in ("id", "state", "phase", "done", "total", "note", "error", "seeds", "opts",
+    out = {k: j.get(k) for k in ("id", "state", "phase", "done", "total", "note", "error", "seeds", "genre", "opts",
                                   "order", "reserve", "found", "ref")}
     if j.get("state") == "done":
         keep = ("title", "artists", "artist", "album", "cover", "duration_ms", "isrc", "ids", "preview_url",

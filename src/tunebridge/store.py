@@ -415,6 +415,16 @@ def song_put(keys: list[str], track: dict, extra: dict) -> None:
                       (k, t, x, now, now))
 
 
+def tracks_by_genre(genre: str, sub: str | None = None, limit: int = 400) -> list[dict]:
+    """Songs aus Song-Speicher und eigenen Playlists mit diesem Genre (und Subgenre) – nur lokal („Mix erstellen“)."""
+    q = "json_extract(track,'$.genre') = ?" + (" AND json_extract(track,'$.subgenre') = ?" if sub else "")
+    args = [genre, sub] if sub else [genre]
+    with _conn() as c:
+        rows = c.execute(f"SELECT track FROM entries WHERE {q} ORDER BY ts DESC LIMIT ?", [*args, limit]).fetchall()
+        rows += c.execute(f"SELECT track FROM songs WHERE {q} ORDER BY used DESC LIMIT ?", [*args, limit]).fetchall()
+    return [json.loads(r["track"]) for r in rows]
+
+
 # ------------------------------------------------------------ Nicht erkannt / Genre unbekannt
 def miss_add(kind: str, source: str, level_db: float | None, player: dict | None,
              song: dict | None, details: dict) -> int:

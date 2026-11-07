@@ -527,8 +527,9 @@ def setplan_save(jid: str, req: SetOutReq):
 
 # ------------------------------------------------------------------ Mix erstellen
 class MixStartReq(BaseModel):
-    seeds: list[dict]
+    seeds: list[dict] = []
     opts: dict = {}
+    genre: dict | None = None
 
 
 class MixPickReq(BaseModel):
@@ -561,7 +562,7 @@ def mix_artists(q: str = ""):
 @app.post("/api/mix/start")
 def mix_start(req: MixStartReq):
     from .. import mixgen
-    return {"job": _sp(mixgen.start, req.seeds, req.opts)}
+    return {"job": _sp(mixgen.start, req.seeds, req.opts, req.genre)}
 
 
 @app.get("/api/mix/{jid}")

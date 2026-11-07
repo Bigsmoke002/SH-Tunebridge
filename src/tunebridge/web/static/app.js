@@ -1878,16 +1878,30 @@ function spRender() {
 /* ---------- Mix erstellen: aus Künstlern eine neue Playlist – „Wie passend?“ von locker bis DJ-genau */
 const MIX_DEFAULTS = { level: "passend", count: 30, per_artist: 2, popularity: "mix", versions: true, include_seeds: true,
   skip_library: false, bpm_min: "", bpm_max: "", camelot: "", energy_min: "", energy_max: "", curve: "gleich" };
-const Mix = { seeds: store.get("mixSeeds", []), opts: { ...MIX_DEFAULTS, ...store.get("mixOpts", {}) }, job: null, data: null, order: [], reserve: [] };
+const Mix = { seeds: store.get("mixSeeds", []), opts: { ...MIX_DEFAULTS, ...store.get("mixOpts", {}) }, job: null, data: null, order: [], reserve: [],
+  mode: store.get("mixMode", "artists"), genre: store.get("mixGenre", "") };
+const genreLabel = (g, sub) => sub ? `${g} › ${sub}` : g;
+const mixGenres = () => Object.entries(TAXONOMY || {}).flatMap(([g, subs]) => [genreLabel(g), ...subs.map(x => genreLabel(g, x))]);
+function mixParseGenre(v) {
+  const [g, sub] = (v || "").split(" › ").map(x => x.trim());
+  if (!g || !(g in (TAXONOMY || {}))) return null;
+  if (sub && !TAXONOMY[g].includes(sub)) return null;
+  return { genre: g, sub: sub || null };
+}
 const CAMELOT_ALL = Array.from({ length: 12 }, (_, i) => [`${i + 1}A`, `${i + 1}B`]).flat();
 Views.mix = async (main) => {
   const meta = await api("/api/mix/levels");
   const o = Mix.opts;
   const seg = (id, items, cur) => `<div class="segmented" id="${id}">${items.map(([v, l, h]) => `<button data-v="${v}" ${h ? `title="${esc(h)}"` : ""} class="${v === cur ? "on" : ""}">${esc(l)}</button>`).join("")}</div>`;
   main.innerHTML = `<div class="page view-enter">
-    <div class="page-head"><div><h1>Mix erstellen</h1><p>Wähle Künstler – SH-Tunebridge baut daraus eine neue Playlist mit ähnlichen Songs. Du bestimmst, wie genau Tempo, Tonart und Energie passen sollen, und kannst alles sofort anhören.</p></div></div>
+    <div class="page-head"><div><h1>Mix erstellen</h1><p>Wähle Künstler oder ein Genre – SH-Tunebridge baut daraus eine neue Playlist mit passenden Songs. Du bestimmst, wie genau Tempo, Tonart und Energie passen sollen, und kannst alles sofort anhören.</p></div></div>
     <div class="card mix-form">
-      <div class="field"><label>Künstler (bis zu ${meta.max_seeds})</label>
+      <div class="field"><label>Ausgangspunkt</label>${seg("mxMode", [["artists", "Nach Künstlern"], ["genre", "Nach Genre"]], Mix.mode)}</div>
+      <div class="field ${Mix.mode === "genre" ? "" : "hidden"}" id="mxGenreF"><label>Genre oder Subgenre</label>
+        <div class="mix-search"><div class="input-icon">${icon("tag")}<input class="input" id="mxGenre" list="mxGenreList" placeholder="z. B. Drum & Bass › Liquid" value="${esc(Mix.genre)}" autocomplete="off"></div></div>
+        <datalist id="mxGenreList">${mixGenres().map(l => `<option value="${esc(l)}">`).join("")}</datalist>
+        <div class="cell-sub" style="white-space:normal">Künstler kommen aus deiner Bibliothek, deinen Einordnungen, der Gemeinschafts-Genre-Datenbank (falls geladen), MusicBrainz und – mit eigenem Key – Last.fm. Gesendet wird nur der Genre-Name.</div></div>
+      <div class="field ${Mix.mode === "genre" ? "hidden" : ""}" id="mxArtistF"><label>Künstler (bis zu ${meta.max_seeds})</label>
         <div class="mix-search"><div class="input-icon">${icon("search")}<input class="input" id="mxQ" placeholder="z. B. Netsky, Calibre, Hybrid Minds" autocomplete="off"></div>
           <div class="mix-sugg hidden" id="mxSugg" role="listbox"></div></div>
         <div class="mix-seeds" id="mxSeeds"></div></div>
@@ -1913,16 +1927,25 @@ Views.mix = async (main) => {
         <div class="cell-sub" style="white-space:normal">Eigene Angaben gelten immer streng. Tempo zählt auch halb/doppelt (87 ↔ 174 BPM). Gemessen wird aus der offiziellen 30-s-Hörprobe – nur so viele Songs wie nötig, Bekanntes kommt aus dem Speicher.</div>
       </details>
       <div class="btn-row"><button class="btn btn--primary" id="mxGo">${icon("shuffle")}Mix erstellen</button>
-        <span class="cell-sub">Quelle: Deezer (öffentlich, ohne Login). Nichts wird gespeichert, bis du die Playlist speicherst.</span></div>
+        <span class="cell-sub" id="mxSrc"></span></div>
     </div>
     <div id="mxJob"></div><div id="mxOut"></div></div>`;
   hydrateIcons(main);
   const hint = () => { const l = meta.levels.find(x => x.id === Mix.opts.level); $("#mxHint").textContent = l?.hint || "";
     $("#mxCurveF").classList.toggle("hidden", !["mixbar", "genau"].includes(Mix.opts.level)); };
-  hint(); mixSeedsDraw();
+  const src = () => { $("#mxSrc").textContent = (Mix.mode === "genre" ? "Quellen: MusicBrainz, Last.fm (mit Key), Deezer – ohne Login." : "Quelle: Deezer (öffentlich, ohne Login).")
+    + " Nichts wird gespeichert, bis du die Playlist speicherst."; };
+  hint(); src(); mixSeedsDraw();
   const bindSeg = (id, key, after) => $$(`#${id} button`).forEach(b => b.onclick = () => {
     Mix.opts[key] = b.dataset.v; $$(`#${id} button`).forEach(x => x.classList.toggle("on", x === b)); mixSaveOpts(); after?.(); });
   bindSeg("mxLevel", "level", hint); bindSeg("mxPop", "popularity");
+  $$("#mxMode button").forEach(b => b.onclick = () => {
+    Mix.mode = b.dataset.v; store.set("mixMode", Mix.mode); $$("#mxMode button").forEach(x => x.classList.toggle("on", x === b));
+    $("#mxGenreF").classList.toggle("hidden", Mix.mode !== "genre"); $("#mxArtistF").classList.toggle("hidden", Mix.mode === "genre");
+    src(); (Mix.mode === "genre" ? $("#mxGenre") : $("#mxQ")).focus();
+  });
+  $("#mxGenre").onchange = () => { Mix.genre = $("#mxGenre").value.trim(); store.set("mixGenre", Mix.genre); };
+  $("#mxGenre").onkeydown = e => { if (e.key === "Enter") $("#mxGo").click(); };
   // Künstlersuche (Deezer) – kurz warten, bis fertig getippt ist
   let tmr = 0, seq = 0;
   const q = $("#mxQ"), sugg = $("#mxSugg");
@@ -1944,8 +1967,17 @@ Views.mix = async (main) => {
   $$(".mix-form input, .mix-form select").forEach(el => { if (el !== q) el.addEventListener("change", () => { readOpts(); mixSaveOpts(); }); });
   $("#mxGo").onclick = async () => {
     readOpts(); mixSaveOpts();
-    if (!Mix.seeds.length) { toast("Bitte zuerst einen Künstler suchen und auswählen", "err"); return q.focus(); }
-    const body = { seeds: Mix.seeds.map(s => ({ id: s.id, name: s.name })), opts: Object.fromEntries(Object.entries(Mix.opts).map(([k, v]) => [k, v === "" ? null : v])) };
+    const opts = Object.fromEntries(Object.entries(Mix.opts).map(([k, v]) => [k, v === "" ? null : v]));
+    let body;
+    if (Mix.mode === "genre") {
+      Mix.genre = $("#mxGenre").value.trim(); store.set("mixGenre", Mix.genre);
+      const g = mixParseGenre(Mix.genre);
+      if (!g) { toast("Bitte ein Genre aus der Liste wählen (z. B. „Drum & Bass › Liquid“)", "err"); return $("#mxGenre").focus(); }
+      body = { genre: g, opts };
+    } else {
+      if (!Mix.seeds.length) { toast("Bitte zuerst einen Künstler suchen und auswählen", "err"); return q.focus(); }
+      body = { seeds: Mix.seeds.map(s => ({ id: s.id, name: s.name })), opts };
+    }
     try { Mix.job = (await api("/api/mix/start", { method: "POST", body })).job; Mix.data = null; mixPoll(); } catch (e) { toast(e.message, "err"); }
   };
   if (Mix.data) mixRender();
@@ -1969,10 +2001,10 @@ async function mixPoll() {
     let j; try { j = await api(`/api/mix/${jid}`); } catch (e) { box.innerHTML = ""; return toast(e.message, "err"); }
     if (j.state === "done") { box.innerHTML = ""; Mix.data = j; Mix.order = [...j.order]; Mix.reserve = [...j.reserve]; return mixRender(); }
     if (j.state !== "running") { box.innerHTML = `<div class="notice">${icon("info")}<div>${j.state === "error" ? esc(j.error) : "Abgebrochen."}</div></div>`; return hydrateIcons(box); }
-    const what = j.phase === "measuring" ? "Messe Tempo, Tonart und Energie …" : "Suche ähnliche Künstler und Songs …";
+    const what = j.phase === "measuring" ? "Messe Tempo, Tonart und Energie …" : j.genre ? `Suche Künstler für ${esc(genreLabel(j.genre.genre, j.genre.sub))} …` : "Suche ähnliche Künstler und Songs …";
     box.innerHTML = `<div class="card t-job"><div class="t-job-head"><b>${what}</b><span class="cell-sub">${j.done}/${j.total}</span>
       <button class="btn btn--xs btn--ghost" id="mxCancel">Abbrechen</button></div><div class="llm-bar"><div style="width:${Math.round(j.done / (j.total || 1) * 100)}%"></div></div>
-      <div class="cell-sub" style="margin-top:6px">${j.phase === "measuring" ? "Aus der offiziellen 30-s-Hörprobe – nur so viele wie nötig, Bekanntes kommt sofort aus dem Speicher." : "Deezer: Top-Songs, Künstler-Radio und ähnliche Künstler."}</div></div>`;
+      <div class="cell-sub" style="margin-top:6px">${j.phase === "measuring" ? "Aus der offiziellen 30-s-Hörprobe – nur so viele wie nötig, Bekanntes kommt sofort aus dem Speicher." : (j.genre ? "Bibliothek, Gemeinschafts-DB, MusicBrainz (und Last.fm) – danach Top-Songs bei Deezer." : "Deezer: Top-Songs, Künstler-Radio und ähnliche Künstler.")}</div></div>`;
     hydrateIcons(box);
     $("#mxCancel").onclick = () => api(`/api/mix/${jid}/cancel`, { method: "POST" });
     await new Promise(r => setTimeout(r, 900));
@@ -2006,7 +2038,7 @@ async function mixRender() {
   $$("[data-sw]", out).forEach(b => b.onclick = () => { const k = +b.dataset.sw, nxt = Mix.reserve.shift(); if (nxt == null) return; Mix.order[k] = nxt; mixRender(); });
   $("#mxPlay").onclick = () => { Player.playList(Mix.order.map(i => withPreview({ ...it[i] }))); toast("Alle Hörproben nacheinander – unten im Player weiter/stoppen"); };
   $("#mxAgain").onclick = () => $("#mxGo")?.click();
-  const defName = `Mix – ${Mix.data.seeds.map(s => s.name).slice(0, 3).join(", ")}`;
+  const defName = `Mix – ${d.genre ? genreLabel(d.genre.genre, d.genre.sub) : d.seeds.map(s => s.name).slice(0, 3).join(", ")}`;
   $("#mxSave").onclick = () => modal({ title: "Als Playlist speichern", body: `<input class="input" id="mxName" value="${esc(defName)}" style="width:100%">`, confirm: "Speichern",
     onConfirm: async box => { const r = await api(`/api/mix/${Mix.job}/save`, { method: "POST", body: { order: Mix.order, name: $("#mxName", box).value } });
       toast(`„${r.name}“ mit ${r.count} Songs angelegt`); refreshMeta();
@@ -4116,6 +4148,7 @@ const Privacy = {
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
       ["Deezer („Mix erstellen“)", "eingegebener Künstlername bzw. Kennungen der gewählten und ähnlicher Künstler", "nur beim Suchen und Erstellen eines Mixes"],
+      ["MusicBrainz, Last.fm („Mix erstellen“ nach Genre)", "nur der Genre-Name als Tag (z. B. „liquid funk“); Last.fm nur mit eigenem Key", "nur beim Erstellen eines Genre-Mixes"],
       ["Genre-Datenbank", "deine Einordnungen bleiben lokal; Playlist-Namen werden nur lokal ausgewertet", c.server.genres ? "Beiträge: mit deiner Einwilligung" : "Beiträge: aus"],
       [`${c.domain} (Gemeinschafts-Genre-Datenbank)`, "nur die Anfrage – Datei ist signiert, enthält nur Song → Genre", c.server.genredb && c.privacy_at ? "einmal am Tag (abwählbar)" : "aus"],
       [`${c.domain} (Playlists teilen)`, "nur verschlüsselte Blöcke – Server kann sie nicht lesen", c.server.share ? "beim Teilen / Ansehen von Freunde-Playlists" : "aus"],
@@ -5347,7 +5380,7 @@ const SEARCH_PAGES = [
   ["#/inbox", "Neu für dich", "inbox", "automatischer abgleich neue songs likes einsortieren filter"],
   ["#/links", "Link einfügen", "external", "url link öffnen playlist link"],
   ["#/discover", "Entdecken", "compass", "ähnliche songs neue musik finden bpm tonart"],
-  ["#/mix", "Mix erstellen", "shuffle", "neue playlist künstler ähnliche künstler mix generieren tempo bpm tonart camelot energie passend"],
+  ["#/mix", "Mix erstellen", "shuffle", "neue playlist künstler genre subgenre ähnliche künstler mix generieren tempo bpm tonart camelot energie passend"],
   ["#/share", "Teilen", "share", "playlists teilen freunde schlüssel verschlüsselt"],
   ["#/directory", "Verzeichnis", "globe", "öffentliche playlists veröffentlichen melden stöbern"],
   ["#/genredb", "Genre-Datenbank", "tag", "genre festlegen einordnungen gemeinschaft"],

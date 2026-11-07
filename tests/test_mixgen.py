@@ -193,3 +193,95 @@ def test_reference_tempo_is_robust():
 def test_collab_is_not_labelled_as_own_song():
     j, _ = run({"level": "locker", "count": 50, "per_artist": 10})
     assert all(it["why"] == "von Seed" for it in j["items"] if it["artist"] == "Seed" and it["seed"])
+
+
+# ------------------------------------------------------------------ Genre-Suche
+LIQ = {"genre": "Drum & Bass", "sub": "Liquid"}
+
+
+@pytest.fixture
+def fake_mb(monkeypatch):
+    from tunebridge.genres.sources import musicbrainz
+    seen = []
+
+    def mb_get(path, **params):
+        seen.append(params["query"])
+        if "liquid" in params["query"]:
+            return {"artists": [
+                {"name": "Liq A", "score": 100, "tags": [{"name": "drum and bass", "count": 4}, {"name": "liquid funk", "count": 2}]},
+                {"name": "Liq B", "score": 95, "tags": [{"name": "liquid funk", "count": 1}]},
+                {"name": "Prinz", "score": 99, "tags": [{"name": "funk", "count": 12}, {"name": "liquid funk", "count": 1}]},
+                {"name": "Nur Treffer", "score": 98, "tags": [{"name": "rock", "count": 3}]}]}
+        return {"artists": [{"name": "Liq B", "score": 90, "tags": [{"name": "drum and bass", "count": 3}]}]}
+    monkeypatch.setattr(musicbrainz, "_get", mb_get)
+    ids = {"Liq A": 20, "Liq B": 21, "Seed": 1}
+
+    def dz(url, **params):
+        if "/search/artist" in url:
+            n = params.get("q")
+            return {"data": [{"id": ids[n], "name": n, "nb_fan": 10}] if n in ids else []}
+        return _fake_get(url, **params)
+    monkeypatch.setattr(artists, "_get", dz)
+    monkeypatch.delenv("LASTFM_API_KEY", raising=False)
+    return seen
+
+
+def run_genre(g, opts=None):
+    opts = mixgen.clean_opts(opts)
+    j = {"id": "g", "seeds": [], "genre": mixgen.check_genre(g), "opts": opts, "state": "running", "phase": "collecting",
+         "done": 0, "total": 1, "cancel": False, "started": time.time(), "note": ""}
+    mixgen._run(j)
+    assert j["state"] == "done", j.get("error")
+    return j, [j["items"][i] for i in j["order"]]
+
+
+def test_check_genre_and_tags():
+    assert mixgen.check_genre({"genre": "Drum & Bass", "sub": "Liquid"}) == LIQ
+    assert mixgen.check_genre({"genre": "Drum & Bass", "sub": "Gibtsnicht"}) == {"genre": "Drum & Bass", "sub": None}
+    assert mixgen.check_genre({"genre": "Polka"}) is None
+    assert "liquid funk" in mixgen.genre_tags(LIQ)
+
+
+def test_mb_focus_rule():
+    want, fam = {"liquid funk"}, {"liquid funk", "drum and bass"}
+    assert mixgen.mb_relevant([{"name": "drum and bass", "count": 4}, {"name": "liquid funk", "count": 1}], want, fam) == 1
+    assert mixgen.mb_relevant([{"name": "funk", "count": 12}, {"name": "liquid funk", "count": 1}], want, fam) == 0
+    assert mixgen.mb_relevant([{"name": "rock", "count": 3}], want, fam) == 0
+
+
+def test_genre_mix_uses_confirmed_artists_and_library(fake_mb):
+    store.add_to_playlist("Liquid Abend", Track("Eigener Song", ["Liq C"], genre="Drum & Bass", subgenre="Liquid"))
+    j, picked = run_genre(LIQ, {"level": "locker", "count": 40, "per_artist": 10})
+    whys = {it["artist"]: it["reasons"][0] for it in picked}
+    assert "Liquid laut MusicBrainz" in whys["Rel10"]                        # Liq A (Deezer-ID 20)
+    assert whys["Liq C"].endswith("aus deiner Bibliothek")
+    assert not any("Prinz" in it["artist"] or "Nur Treffer" in it["artist"] for it in picked)
+    assert any(it["reasons"][0].startswith("aus dem Radio") for it in picked)   # „Locker“ füllt über das Radio auf
+    assert j["genre"] == LIQ and j["found"] > 5
+
+
+def test_genre_dj_exact_only_confirmed(fake_mb):
+    _, picked = run_genre(LIQ, {"level": "genau", "count": 40, "per_artist": 10})
+    assert picked and all(not it["reasons"][0].startswith("aus dem Radio") for it in picked)
+
+
+def test_niche_subgenre_falls_back_to_main_genre(fake_mb, monkeypatch):
+    monkeypatch.setattr(mixgen, "_mb_artists", lambda g: [] if g["sub"] else [("Liq B", "")])
+    j, picked = run_genre({"genre": "Drum & Bass", "sub": "Jungle"}, {"level": "locker", "count": 10})
+    assert "kaum Daten" in j["note"]
+    assert any("Jungle nicht bestätigt" in it["reasons"][0] for it in picked)
+
+
+def test_genre_api(fake_mb):
+    from fastapi.testclient import TestClient
+
+    from tunebridge.web import app as webapp
+    c = TestClient(webapp.app)
+    assert c.post("/api/mix/start", json={"genre": {"genre": "Polka"}}).status_code == 400
+    jid = c.post("/api/mix/start", json={"genre": LIQ, "opts": {"level": "locker", "count": 5}}).json()["job"]
+    for _ in range(100):
+        j = c.get(f"/api/mix/{jid}").json()
+        if j["state"] != "running":
+            break
+        time.sleep(0.05)
+    assert j["state"] == "done" and j["genre"] == LIQ and len(j["order"]) == 5

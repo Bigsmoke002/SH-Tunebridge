@@ -13,6 +13,13 @@ Der Updater installiert nur signierte Versionen.
   den eigenen Playlists weglassen. Jede Zeile zeigt, warum der Song dabei ist, dazu BPM, Tonart und Energie. Alles
   sofort anhören, einzelne Songs gegen passende aus der Reserve tauschen oder entfernen, als Playlist speichern und
   im Set-Planer weiterbearbeiten. Kein Suchverlauf; gespeichert wird erst die fertige Playlist.
+- **Mix erstellen nach Genre:** statt Künstlern ein Genre oder Subgenre aus dem Genre-Baum wählen (z. B.
+  *Drum & Bass › Liquid*, *Dubstep › Riddim*). Die Künstler kommen aus deiner Bibliothek, deinen eigenen Einordnungen,
+  der Gemeinschafts-Genre-Datenbank (falls geladen), MusicBrainz (nur Künstler, bei denen das Genre ein Schwerpunkt ist –
+  einzelne Zufalls-Stimmen zählen nicht) und mit eigenem Key Last.fm. Jeder Song sagt, woher sein Genre stammt
+  („Liquid laut MusicBrainz“). Das Ziel-Tempo richtet sich nach dem typischen Tempo des Genres (DnB 174 statt 87).
+  Zu Nischen-Subgenres mit wenig Daten wird mit dem Hauptgenre ergänzt – deutlich als „nicht bestätigt“ markiert;
+  bei „DJ-genau“ bleiben nur bestätigte Treffer.
 
 ## 0.9.2 – 2026-11-06
 - **Windows: Selbst-Update repariert.** Das Hilfsskript, das beim Neustart die alte gegen die neue Version tauscht,
