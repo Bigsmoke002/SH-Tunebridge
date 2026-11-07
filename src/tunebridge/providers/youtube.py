@@ -16,6 +16,8 @@ Das reicht für etwa 60–70 Songs am Tag; Treffer werden gemerkt, ein zweiter L
 
 from __future__ import annotations
 
+import time
+
 import httpx
 
 from ..models import Track
@@ -52,6 +54,10 @@ class QuotaExceeded(OAuthError):
     pass
 
 
+class NotFound(OAuthError):
+    pass
+
+
 QUOTA_MSG = ("YouTube-Tageskontingent deiner Google-App ist aufgebraucht (reicht für etwa 60–70 Songs am Tag). "
              "Morgen erneut übertragen – am besten „In bestehende Playlist“ wählen: Gefundenes und schon "
              "Hinzugefügtes wird übersprungen.")
@@ -68,6 +74,11 @@ class YouTube(OAuthProvider):
     CLIENT_SECRET_KEY = "YOUTUBE_OAUTH_CLIENT_SECRET"
     SECRET_REQUIRED = True
     EXTRA_AUTH = {"access_type": "offline", "prompt": "consent"}
+    RETRY_WAIT = 2.0            # Sekunden; neue Playlists sind bei YouTube nicht sofort sichtbar
+
+    def __init__(self):
+        super().__init__()
+        self._fresh: set[str] = set()
 
     def _req(self, method: str, path: str, params: dict | None = None, json: dict | None = None) -> dict:
         h = {"Authorization": f"Bearer {self._access()}"}
@@ -81,6 +92,8 @@ class YouTube(OAuthProvider):
                 msg, reason = r.text[:200], ""
             if reason in ("quotaExceeded", "dailyLimitExceeded", "rateLimitExceeded"):
                 raise QuotaExceeded(QUOTA_MSG)
+            if r.status_code == 404 and reason == "playlistNotFound":
+                raise NotFound("YouTube findet die Playlist (noch) nicht – bitte in einer Minute erneut versuchen")
             if r.status_code == 403 and reason in ("insufficientPermissions", "forbidden") and method != "GET":
                 raise OAuthError("YouTube: Schreibrecht fehlt – unter „Übertragen“ das Schreibrecht bei Google erteilen")
             raise OAuthError(f"YouTube: {msg}")
@@ -172,6 +185,7 @@ class YouTube(OAuthProvider):
         d = self._req("POST", "playlists", params={"part": "snippet,status"}, json={
             "snippet": {"title": name[:150], "description": description or "Erstellt mit SH-Tunebridge"},
             "status": {"privacyStatus": "private"}})
+        self._fresh.add(d["id"])
         return d["id"]
 
     def _video_ids(self, pid: str) -> set[str]:
@@ -188,13 +202,21 @@ class YouTube(OAuthProvider):
     def add_to_playlist(self, playlist_id: str, tracks: list[Track]) -> None:
         """Fügt nur hinzu, was noch fehlt – so setzt ein zweiter Lauf (nach aufgebrauchtem Kontingent) fort."""
         self._need_write()
-        have = self._video_ids(playlist_id)
+        # Gerade angelegt: YouTube kennt die Playlist oft erst nach ein paar Sekunden – sie ist ohnehin leer
+        have = set() if playlist_id in self._fresh else self._video_ids(playlist_id)
         for t in tracks:
             vid = t.ids.get("youtube")
             if not vid or vid in have:
                 continue
-            self._req("POST", "playlistItems", params={"part": "snippet"}, json={
-                "snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": vid}}})
+            body = {"snippet": {"playlistId": playlist_id, "resourceId": {"kind": "youtube#video", "videoId": vid}}}
+            for attempt in range(6):
+                try:
+                    self._req("POST", "playlistItems", params={"part": "snippet"}, json=body)
+                    break
+                except NotFound:
+                    if attempt == 5:
+                        raise
+                    time.sleep(self.RETRY_WAIT * (attempt + 1))
             have.add(vid)
 
     def like(self, tracks: list[Track]) -> None:

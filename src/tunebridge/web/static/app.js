@@ -2685,22 +2685,86 @@ async function platformLogin(p, main, write = false) {
   }
 }
 
+/* Auswahlliste mit eingebauter Suche (lange Playlist-Listen) – Tastatur: ↑ ↓ Enter Esc */
+function picker(host, { placeholder = "Playlist wählen", empty = "Keine Playlists", onChange } = {}) {
+  const st = { items: [], value: "", open: false, hi: 0, loading: false };
+  host.classList.add("pk");
+  host.innerHTML = `<button type="button" class="pk-btn"></button>
+    <div class="pk-pop hidden"><label class="pk-search">${icon("search")}<input placeholder="Playlist suchen …" autocomplete="off" spellcheck="false"></label>
+    <div class="pk-list" role="listbox"></div></div>`;
+  const btn = $(".pk-btn", host), pop = $(".pk-pop", host), q = $("input", pop), list = $(".pk-list", pop);
+  const cur = () => st.items.find(x => x.id === st.value);
+  const drawBtn = () => {
+    const it = cur();
+    btn.innerHTML = (st.loading ? `<span class="pk-ph">Lade …</span>`
+      : it ? `<span class="pk-name">${esc(it.name)}</span>${it.count != null ? `<span class="pk-count">${it.count}</span>` : ""}`
+      : `<span class="pk-ph">${esc(st.items.length ? placeholder : empty)}</span>`) + icon("chevron");
+    btn.disabled = st.loading || !st.items.length;
+    hydrateIcons(btn);
+  };
+  const hits = () => { const n = q.value.toLowerCase().trim(); return st.items.filter(x => !n || x.name.toLowerCase().includes(n)); };
+  const drawList = () => {
+    const h = hits(); st.hi = Math.min(st.hi, Math.max(0, h.length - 1));
+    list.innerHTML = h.length ? h.map((x, i) => `<button type="button" class="pk-item ${x.id === st.value ? "on" : ""} ${i === st.hi ? "hi" : ""}" data-i="${i}">
+      <span class="pk-name">${esc(x.name)}</span>${x.sub ? `<span class="pk-sub">${esc(x.sub)}</span>` : ""}${x.count != null ? `<span class="pk-count">${x.count}</span>` : ""}</button>`).join("")
+      : `<div class="pk-none">Keine Treffer</div>`;
+    $$(".pk-item", list).forEach(b => b.onclick = () => pick(h[+b.dataset.i]));
+    $(".pk-item.hi", list)?.scrollIntoView({ block: "nearest" });
+  };
+  const outside = e => { if (!host.contains(e.target)) close(); };
+  const open = () => {
+    st.open = true; pop.classList.remove("hidden"); host.classList.add("open");
+    q.value = ""; st.hi = Math.max(0, st.items.findIndex(x => x.id === st.value)); drawList(); q.focus();
+    setTimeout(() => document.addEventListener("mousedown", outside), 0);
+  };
+  const close = () => { st.open = false; pop.classList.add("hidden"); host.classList.remove("open"); document.removeEventListener("mousedown", outside); };
+  const pick = it => { if (!it) return; st.value = it.id; close(); drawBtn(); onChange?.(it); };
+  btn.onclick = () => st.open ? close() : open();
+  q.oninput = () => { st.hi = 0; drawList(); };
+  q.onkeydown = e => {
+    const h = hits();
+    if (e.key === "ArrowDown") { e.preventDefault(); st.hi = Math.min(h.length - 1, st.hi + 1); drawList(); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); st.hi = Math.max(0, st.hi - 1); drawList(); }
+    else if (e.key === "Enter") { e.preventDefault(); pick(h[st.hi]); }
+    else if (e.key === "Escape") { e.preventDefault(); close(); btn.focus(); }
+  };
+  drawBtn();
+  return {
+    get value() { return st.value; },
+    get item() { return cur(); },
+    loading() { st.loading = true; drawBtn(); },
+    set(items, value) { st.items = items; st.loading = false; st.value = items.some(x => x.id === value) ? value : (items[0]?.id || ""); drawBtn(); if (st.open) drawList(); },
+  };
+}
+
 Views.transfer = async (main) => {
   const plats = await api("/api/platforms");
   const conn = plats.filter(p => p.connected);
-  const svcs = [{ id: "local", name: "SH-Tunebridge" }, ...conn];
-  const dsts = svcs;
+  const svcs = [{ id: "local", name: "SH-Tunebridge", can_write: true }, ...conn];
+  const T = { src: "local", dst: conn[0]?.id || "local", mode: "pl" };
+  const badge = id => { if (id === "local") return `<span class="ss-badge" style="--pc:var(--accent)">SH</span>`;
+    const [m, c] = svcStyle(id); return `<span class="ss-badge" style="--pc:${c}">${m}</span>`; };
+  const chips = (key) => svcs.map(s => `<button type="button" class="tf-svc" data-${key}="${s.id}">${badge(s.id)}<span>${esc(s.name.split(" / ")[0])}</span></button>`).join("");
   main.innerHTML = `<div class="page view-enter">
     <div class="page-head"><div><h1>Übertragen</h1><p>Playlists und Lieblingssongs zwischen SH-Tunebridge und deinen Diensten mitnehmen.</p></div></div>
     ${conn.length ? "" : `<div class="notice">${icon("info")}<div>Verbinde unten zuerst einen Dienst – dann kannst du z. B. deine einsortierten Songs als Playlist zu TIDAL schicken oder eine TIDAL-Playlist holen und nach Genres aufteilen.</div></div>`}
-    <div class="card transfer-flow">
-      <div class="field"><label>Von</label><select class="select" id="tSrc">${svcs.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>
-      <div class="field grow"><label>Playlist</label><div class="t-target"><label class="t-search">${icon("search")}<input class="input" id="tSrcQ" placeholder="Suchen …" autocomplete="off" spellcheck="false"></label><select class="select" id="tSrcPl"><option>Lade …</option></select>
-        <button class="btn btn--sm btn--ghost" id="tView" title="Songs ansehen und vorhören">${icon("play")}Ansehen</button></div></div>
-      <div style="padding-top:20px;color:var(--text-3)">${icon("arrow")}</div>
-      <div class="field"><label>Nach</label><select class="select" id="tDst">${dsts.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join("")}</select></div>
-      <div class="field grow" id="tTarget"></div>
-      <div class="field"><label>&nbsp;</label><button class="btn btn--primary" id="tGo">${icon("transfer")}Übertragen</button></div>
+    <div class="card tf">
+      <div class="tf-grid">
+        <section class="tf-side">
+          <div class="tf-h"><span class="mx-num">1</span>Von</div>
+          <div class="tf-svcs">${chips("src")}</div>
+          <div class="tf-lbl">Playlist</div>
+          <div class="tf-row"><div id="tSrcPick" class="tf-grow"></div>
+            <button class="btn btn--ghost tf-view" id="tView" title="Songs ansehen und vorhören">${icon("play")}Ansehen</button></div>
+        </section>
+        <div class="tf-arrow">${icon("arrow")}</div>
+        <section class="tf-side">
+          <div class="tf-h"><span class="mx-num">2</span>Nach</div>
+          <div class="tf-svcs">${chips("dst")}</div>
+          <div id="tTarget"></div>
+        </section>
+      </div>
+      <div class="tf-foot"><div class="tf-sum" id="tSum"></div><button class="btn btn--primary" id="tGo">${icon("transfer")}Übertragen</button></div>
     </div>
     <div id="tJob"></div>
     <div class="section-title">Dienste</div>
@@ -2710,96 +2774,90 @@ Views.transfer = async (main) => {
         <p>${p.connected && p.account ? `Angemeldet als <b>${esc(p.account)}</b>` : esc(p.info)}</p>
         ${p.available ? (p.connected ? `<button class="btn btn--sm btn--ghost" data-logout="${p.id}">Trennen</button>` : `<button class="btn btn--sm btn--primary" data-login="${p.id}">${icon("key")}Verbinden</button>`) : ""}</div></div>`; }).join("")}</div>
   </div>`;
+  hydrateIcons(main);
   $$("[data-login]").forEach(b => b.onclick = () => platformLogin(plats.find(p => p.id === b.dataset.login), main));
   $$("[data-logout]").forEach(b => b.onclick = () => modal({ title: "Verbindung trennen?", text: "Das gespeicherte Login-Token wird gelöscht.", confirm: "Trennen", danger: true,
     onConfirm: async () => { await api(`/api/platforms/${b.dataset.logout}/logout`, { method: "POST" }); Views.transfer(main); } }));
 
-  let srcLists = [], dstLists = [];
-  const srcSel = $("#tSrc"), plSel = $("#tSrcPl"), dstSel = $("#tDst"), srcQ = $("#tSrcQ");
-  if (dsts.length > 1) dstSel.value = dsts[1].id;
-  const plOpts = (list, q = "") => {
-    const n = (q || "").toLowerCase().trim(), hit = list.filter(p => !n || p.name.toLowerCase().includes(n));
-    return hit.length ? hit.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.count != null ? ` (${p.count})` : ""}</option>`).join("")
-      : `<option value="">${list.length ? "– kein Treffer –" : "– keine Playlists –"}</option>`;
+  const svcName = id => (svcs.find(s => s.id === id)?.name || SVC_NAME(id)).split(" / ")[0];
+  const localLists = () => S.playlists.map(p => ({ id: p.name, name: p.name, count: p.count, sub: p.origin === "lokal" ? "" : `Export · ${p.origin}` }));
+  const lists = {};                                  // Dienst -> Playlists (einmal pro Seitenaufruf laden)
+  const loadLists = async sid => {
+    if (sid === "local") return localLists();
+    if (!lists[sid]) lists[sid] = api(`/api/platforms/${sid}/playlists`).catch(e => { toast(e.message, "err"); delete lists[sid]; return []; });
+    return lists[sid];
   };
-  const drawSrc = () => {
-    const keep = plSel.value;
-    plSel.innerHTML = plOpts(srcLists, srcQ.value);
-    if ([...plSel.options].some(o => o.value === keep)) plSel.value = keep;
-    plSel.disabled = !plSel.value;
+  const srcPick = picker($("#tSrcPick"), { onChange: () => { renderTarget(); } });
+  let dstPick = null;
+  const markChips = () => {
+    $$("[data-src]", main).forEach(b => b.classList.toggle("on", b.dataset.src === T.src));
+    $$("[data-dst]", main).forEach(b => b.classList.toggle("on", b.dataset.dst === T.dst));
   };
-  const loadDst = async () => {
-    const d = dstSel.value;
-    if (d === "local") dstLists = S.playlists.filter(p => p.origin === "lokal").map(p => ({ id: p.name, name: p.name, count: p.count }));
-    else {
-      try { dstLists = (await api(`/api/platforms/${d}/playlists`)).filter(p => p.id !== "__liked__" && p.own !== false); }
-      catch (e) { dstLists = []; toast(e.message, "err"); }
-    }
+  const summary = () => {
+    const box = $("#tSum"), go = $("#tGo"), it = srcPick.item, p = plats.find(x => x.id === T.dst);
+    let err = "";
+    if (!it) err = "Playlist wählen";
+    else if (T.src === T.dst && T.src !== "local") err = "Quelle und Ziel sind derselbe Dienst";
+    else if (p && !p.can_write) err = "Erst das Schreibrecht erteilen";
+    else if (T.mode === "exist" && !dstPick?.value) err = "Ziel-Playlist wählen";
+    else if (T.mode === "pl" && !$("#tName")?.value.trim()) err = "Namen eingeben";
+    else if (T.src === "local" && T.dst === "local" && T.mode === "pl" && $("#tName").value.trim() === it.id) err = "Anderen Namen wählen – das ist die Quelle selbst";
+    go.disabled = !!err;
+    if (err) { box.innerHTML = `<span class="tf-sum-hint">${esc(err)}</span>`; return; }
+    const what = `<b>${esc(it.name)}</b>${it.count != null ? ` · ${it.count} Songs` : ""}`;
+    const to = T.mode === "like" ? `zu deinen <b>Lieblingssongs</b>` : T.mode === "exist" ? `in <b>${esc(dstPick.item.name)}</b>` : `als neue Playlist <b>${esc($("#tName").value.trim())}</b>`;
+    box.innerHTML = `${badge(T.src)}${what}<span class="tf-sum-arrow">${icon("arrow")}</span>${badge(T.dst)}<span>${esc(svcName(T.dst))} ${to}</span>`;
+    hydrateIcons(box);
   };
-  const target = async () => {
-    const pl = srcLists.find(x => x.id === plSel.value);
-    const d = dstSel.value, toSvc = d !== "local", p = plats.find(x => x.id === d);
-    const mode = $("#tMode")?.value || "pl";
-    const box = $("#tTarget");
+  const renderTarget = async () => {
+    const box = $("#tTarget"), p = plats.find(x => x.id === T.dst), toSvc = T.dst !== "local";
+    dstPick = null;
     if (toSvc && p && !p.can_write) {
-      box.innerHTML = `<label>Als</label><div class="t-perm">${icon("key")}<span>${esc(p.name)} ist nur zum Lesen verbunden.
-        Zum Übertragen fragt Google einmal nach dem Recht, Playlists anzulegen.</span>
+      box.innerHTML = `<div class="t-perm">${icon("key")}<span>${esc(p.name)} ist nur zum Lesen verbunden. Zum Übertragen fragt
+        ${T.dst === "youtube" ? "Google" : esc(p.name)} einmal nach dem Recht, Playlists anzulegen.</span>
         <button class="btn btn--sm btn--primary" id="tPerm">Schreibrecht erteilen</button></div>`;
-      hydrateIcons(box);
-      $("#tPerm").onclick = () => platformLogin(p, main, true);
-      $("#tGo").disabled = true;
-      return;
+      hydrateIcons(box); $("#tPerm").onclick = () => platformLogin(p, main, true);
+      return summary();
     }
-    $("#tGo").disabled = false;
-    box.innerHTML = `<label>Als</label><div class="t-target">
-      <select class="select" id="tMode"><option value="pl">Neue Playlist</option><option value="exist">In bestehende Playlist</option>${toSvc ? `<option value="like">Zu Lieblingssongs</option>` : ""}</select>
-      <input class="input" id="tName" value="${esc(pl ? pl.name : "")}" placeholder="Name der Playlist">
-      <select class="select hidden" id="tDstPl"><option>Lade …</option></select></div>
-      ${d === "youtube" ? `<div class="t-hint">YouTube erlaubt eigenen Apps etwa 60–70 Songs pro Tag. Ist das Kontingent aufgebraucht, morgen „In bestehende Playlist“ wählen – Vorhandenes wird übersprungen.</div>` : ""}
-      ${d === "soundcloud" ? `<div class="t-hint">SoundCloud legt die Playlist privat an (höchstens 500 Songs).</div>` : ""}`;
-    const m = $("#tMode"), dp = $("#tDstPl");
-    m.value = [...m.options].some(o => o.value === mode) ? mode : "pl";
-    const sync = async () => {
-      $("#tName").classList.toggle("hidden", m.value !== "pl");
-      dp.classList.toggle("hidden", m.value !== "exist");
-      if (m.value === "exist") {
-        dp.disabled = true; dp.innerHTML = `<option>Lade …</option>`;
-        await loadDst();
-        // SH-Tunebridge → SH-Tunebridge: die Quelle selbst nicht als Ziel anbieten
-        const opts = d === "local" && srcSel.value === "local" ? dstLists.filter(x => x.id !== plSel.value) : dstLists;
-        dp.innerHTML = plOpts(opts); dp.disabled = !opts.length;
-        const same = opts.find(x => x.name === pl?.name); if (same) dp.value = same.id;
-      }
-    };
-    m.onchange = sync; await sync();
+    if (!toSvc && T.mode === "like") T.mode = "pl";
+    const modes = [["pl", "Neue Playlist"], ["exist", "Bestehende"], ...(toSvc ? [["like", "Lieblingssongs"]] : [])];
+    box.innerHTML = `<div class="tf-lbl">Als</div>
+      <div class="segmented tf-modes">${modes.map(([k, l]) => `<button type="button" data-mode="${k}" class="${T.mode === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      ${T.mode === "pl" ? `<input class="input tf-name" id="tName" maxlength="150" placeholder="Name der neuen Playlist" value="${esc(srcPick.item?.name || "")}">` : ""}
+      ${T.mode === "exist" ? `<div id="tDstPick"></div>` : ""}
+      ${T.dst === "youtube" ? `<div class="t-hint">YouTube erlaubt eigenen Apps etwa 60–70 Songs pro Tag. Reicht es nicht, morgen „Bestehende“ wählen – Vorhandenes wird übersprungen.</div>` : ""}
+      ${T.dst === "soundcloud" ? `<div class="t-hint">SoundCloud legt die Playlist privat an (höchstens 500 Songs).</div>` : ""}`;
+    $$("[data-mode]", box).forEach(b => b.onclick = () => { T.mode = b.dataset.mode; renderTarget(); });
+    const name = $("#tName"); if (name) name.oninput = summary;
+    if (T.mode === "exist") {
+      dstPick = picker($("#tDstPick"), { placeholder: "Ziel-Playlist wählen", onChange: summary });
+      dstPick.loading(); summary();
+      const all = await loadLists(T.dst);
+      if (!dstPick || !document.body.contains($("#tDstPick"))) return;
+      // eigene Playlists; bei SH-Tunebridge → SH-Tunebridge nicht die Quelle selbst
+      const opts = all.filter(x => x.id !== "__liked__" && x.own !== false && !x.sub && !(T.dst === "local" && T.src === "local" && x.id === srcPick.value));
+      dstPick.set(opts, (opts.find(x => x.name === srcPick.item?.name) || {}).id);
+    }
+    summary();
   };
-  const loadSrc = async () => {
-    plSel.innerHTML = `<option>Lade …</option>`; plSel.disabled = true;
-    try {
-      if (srcSel.value === "local") srcLists = S.playlists.map(p => ({ id: p.name, name: p.origin === "lokal" ? p.name : `${p.name} · ${p.origin}`, count: p.count }));
-      else srcLists = await api(`/api/platforms/${srcSel.value}/playlists`);
-    } catch (e) { srcLists = []; toast(e.message, "err"); }
-    drawSrc(); target();
+  const setSrc = async sid => {
+    T.src = sid; markChips(); srcPick.loading(); summary();
+    const l = await loadLists(sid);
+    if (T.src !== sid) return;
+    srcPick.set(l, srcPick.value); renderTarget();
   };
-  srcSel.onchange = () => { srcQ.value = ""; loadSrc(); };
-  srcQ.oninput = () => { drawSrc(); target(); };
-  plSel.onchange = target; dstSel.onchange = target;
-  $("#tView").onclick = () => plSel.value && showPlatformPlaylist(srcSel.value, plSel.value, plSel.selectedOptions[0]?.textContent || "");
-  await loadSrc();
+  $$("[data-src]", main).forEach(b => b.onclick = () => setSrc(b.dataset.src));
+  $$("[data-dst]", main).forEach(b => b.onclick = () => { T.dst = b.dataset.dst; markChips(); renderTarget(); });
+  $("#tView").onclick = () => srcPick.value && showPlatformPlaylist(T.src, srcPick.value, srcPick.item?.name || "");
+  markChips();
+  await setSrc("local");
   $("#tGo").onclick = async () => {
-    const mode = $("#tMode")?.value || "pl", like = mode === "like", name = $("#tName")?.value.trim() || "";
-    const dpl = mode === "exist" ? $("#tDstPl")?.value : "";
-    if (!plSel.value) return toast("Bitte eine Playlist wählen", "err");
-    if (mode === "exist" && !dpl) return toast("Bitte die Ziel-Playlist wählen", "err");
-    if (srcSel.value === dstSel.value && srcSel.value !== "local") return toast("Quelle und Ziel sind gleich", "err");
-    try {
-      const body = dstSel.value === "local"
-        ? { src: srcSel.value, src_id: plSel.value, dst: "local", name: mode === "exist" ? dpl : name }
-        : { src: srcSel.value, src_id: plSel.value, dst: dstSel.value, name: mode === "exist" ? $("#tDstPl").selectedOptions[0].textContent.replace(/ \(\d+\)$/, "") : name, like, dst_pid: dpl || "" };
-      if (body.src === "local" && body.dst === "local" && body.src_id === body.name) return toast("Quelle und Ziel sind dieselbe Playlist", "err");
-      const r = await api("/api/transfer", { method: "POST", body });
-      Transfer.job = r.job; pollTransfer(main);
-    } catch (e) { toast(e.message, "err"); }
+    const it = srcPick.item; if (!it) return;
+    const body = { src: T.src, src_id: it.id, dst: T.dst, like: T.mode === "like",
+      name: T.mode === "exist" ? dstPick.item.name : T.mode === "pl" ? $("#tName").value.trim() : "",
+      dst_pid: T.mode === "exist" && T.dst !== "local" ? dstPick.value : "" };
+    try { const r = await api("/api/transfer", { method: "POST", body }); Transfer.job = r.job; pollTransfer(main); }
+    catch (e) { toast(e.message, "err"); }
   };
   if (Transfer.job) pollTransfer(main);
 };

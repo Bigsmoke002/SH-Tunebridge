@@ -59,7 +59,7 @@ def test_youtube_transfer_skips_existing_and_reports_quota(monkeypatch):
     found = [yt.find(Track(t, ["K"])) for t in ("A", "B")]
     assert [f.ids["youtube"] for f in found] == ["v-A", "v-B"]
     assert yt.create_playlist("Mix") == "PL1"
-    yt.add_to_playlist("PL1", found)
+    yt.add_to_playlist("PL-ALT", found)                              # bestehende Playlist: Vorhandenes wird gelesen
     inserted = [c[3]["snippet"]["resourceId"]["videoId"] for c in fake.calls if c[0] == "POST" and c[1].endswith("playlistItems")]
     assert inserted == ["v-B"]                                       # v-A war schon drin
     assert next(c for c in fake.calls if c[1].endswith("/playlists"))[3]["status"]["privacyStatus"] == "private"
@@ -154,3 +154,28 @@ def test_transfer_without_write_permission(monkeypatch):
     monkeypatch.setattr(webapp, "_prov", lambda pid: _tok(YouTube()))
     r = TestClient(webapp.app).post("/api/transfer", json={"src": "local", "src_id": "Quelle", "dst": "youtube", "name": "X"})
     assert r.status_code == 409 and "Schreibrecht" in r.json()["detail"]
+
+
+def test_youtube_new_playlist_not_visible_yet(monkeypatch):
+    """Nutzer-Meldung: „The playlist identified with the request's playlistId parameter cannot be found“ direkt
+    nach dem Anlegen – YouTube braucht ein paar Sekunden. Kein Auslesen der neuen Playlist, Hinzufügen wird wiederholt."""
+    yt = _tok(YouTube(), "https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube")
+    yt.RETRY_WAIT = 0
+    tries = {"n": 0}
+    nf = {"error": {"message": "cannot be found", "errors": [{"reason": "playlistNotFound"}]}}
+
+    def route(m, url, p, j):
+        if url.endswith("/playlists") and m == "POST":
+            return 200, {"id": "PLNEW"}
+        if url.endswith("/playlistItems") and m == "GET":
+            return 404, nf                         # würde früher sofort scheitern
+        if url.endswith("/playlistItems") and m == "POST":
+            tries["n"] += 1
+            return (404, nf) if tries["n"] <= 2 else (200, {})
+        return 404, {}
+    fake = FakeHttp(route)
+    monkeypatch.setattr(httpx, "request", fake)
+    monkeypatch.setattr(httpx, "get", lambda url, **kw: fake("GET", url, **kw))
+    pid = yt.create_playlist("Neu")
+    yt.add_to_playlist(pid, [Track("A", ["K"], ids={"youtube": "v1"})])
+    assert tries["n"] == 3 and not any(c[0] == "GET" for c in fake.calls)

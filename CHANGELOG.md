@@ -31,8 +31,12 @@ Der Updater installiert nur signierte Versionen.
   Übertragen per Klick bei Google an (beim normalen Verbinden bleibt es bei „nur Lesen“). Googles Tageskontingent für
   eigene Apps reicht für etwa 60–70 Songs am Tag; wird es knapp, stoppt die Übertragung sauber, und am nächsten Tag
   setzt „In bestehende Playlist“ fort, ohne Doppelte.
-- **Übertragen:** Suchfeld für die Playlist-Liste. Als Ziel gibt es jetzt auch **„In bestehende Playlist“**, für jeden
-  Dienst und für SH-Tunebridge.
+- **Übertragen neu gestaltet:** zwei klare Spalten „Von“ und „Nach“ mit Dienst-Knöpfen, die Playlist-Auswahl hat die
+  Suche direkt eingebaut (auch per Tastatur), unten eine Zusammenfassung, was wohin geht. Als Ziel gibt es jetzt auch
+  **„Bestehende“** Playlist, für jeden Dienst und für SH-Tunebridge.
+- **Behoben (YouTube):** „The playlist identified with the request's playlistId parameter cannot be found“ direkt nach
+  dem Anlegen. YouTube braucht ein paar Sekunden, bis eine neue Playlist sichtbar ist; die App wartet jetzt kurz und
+  versucht es erneut.
 - Mix erstellen: Die ganze Seite samt Suchfeld und Regler nutzt die volle Breite und passt sich dem Fenster an.
 
 ## 0.9.2 – 2026-11-06
