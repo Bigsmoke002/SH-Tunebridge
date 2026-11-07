@@ -29,7 +29,7 @@ def sources() -> list[dict]:
 
 def load(service: str, pid: str) -> list[Track]:
     if service == "local":
-        return next((p.tracks for p in store.local_playlists() if p.name == pid), [])
+        return next((p.tracks for p in [*store.local_playlists(), *store.exported_playlists()] if p.name == pid), [])
     if service == "link":               # pid = "<auftrag>" oder "<auftrag>:1,4,7" (Auswahl)
         from . import linkimport
         jid, _, sel = pid.partition(":")

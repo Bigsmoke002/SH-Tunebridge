@@ -20,6 +20,13 @@ Der Updater installiert nur signierte Versionen.
   („Liquid laut MusicBrainz“). Das Ziel-Tempo richtet sich nach dem typischen Tempo des Genres (DnB 174 statt 87).
   Zu Nischen-Subgenres mit wenig Daten wird mit dem Hauptgenre ergänzt – deutlich als „nicht bestätigt“ markiert;
   bei „DJ-genau“ bleiben nur bestätigte Treffer.
+- **Behoben: Playlists ließen sich nicht in andere Playlists übernehmen** (Nutzer-Meldung). Bisher entstand beim
+  Übernehmen immer eine neue Playlist. Jetzt gibt es auf jeder eigenen Playlist **„In andere Playlist“** und
+  **„Songs holen“** (aus eigenen Playlists, importierten Exporten oder verbundenen Diensten); bei Dienst- und
+  Freundes-Playlists wählt „In meine Playlists“ eine bestehende oder neue Playlist. Doppelte Songs werden
+  übersprungen, die Quelle bleibt unverändert. Unter „Übertragen“ schlägt das Namensfeld bestehende Playlists vor,
+  und importierte Exporte lassen sich dort als Quelle nutzen. „Ansehen“ zeigte bei eigenen Playlists eine leere Liste.
+- Mix erstellen: Suchfeld und Regler nutzen die volle Breite und passen sich dem Fenster an.
 
 ## 0.9.2 – 2026-11-06
 - **Windows: Selbst-Update repariert.** Das Hilfsskript, das beim Neustart die alte gegen die neue Version tauscht,

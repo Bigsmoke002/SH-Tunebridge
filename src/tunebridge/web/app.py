@@ -775,6 +775,36 @@ def rename(name: str, req: RenameReq):
     return {"ok": True}
 
 
+class MergeReq(BaseModel):
+    src: str = "local"          # "local" oder eine Dienst-ID (auch friend-…)
+    src_id: str
+
+
+MERGE_MAX = 5000
+
+
+@app.post("/api/playlists/{name:path}/merge")
+def merge_playlist(name: str, req: MergeReq):
+    """Songs einer anderen Playlist (lokal, Export oder Dienst) in eine bestehende oder neue lokale Playlist übernehmen.
+    Doppelte Songs werden übersprungen, die Reihenfolge der Quelle bleibt erhalten."""
+    target = name.strip()[:200]
+    if not target:
+        raise HTTPException(400, "Name der Ziel-Playlist fehlt")
+    if req.src == "local":
+        if req.src_id == target:
+            raise HTTPException(400, "Quelle und Ziel sind dieselbe Playlist")
+        src = next((p for p in [*store.local_playlists(), *store.exported_playlists()] if p.name == req.src_id), None)
+        if src is None:
+            raise HTTPException(404, "Playlist nicht gefunden")
+        tracks = src.tracks
+    else:
+        from .. import services
+        _, tracks = _svc_call(services.load, req.src, req.src_id)
+    tracks = tracks[:MERGE_MAX]
+    added = sum(bool(store.add_to_playlist(target, t)) for t in tracks)
+    return {"name": target, "added": added, "dupes": len(tracks) - added, "total": len(tracks)}
+
+
 @app.delete("/api/playlists/{name:path}")
 def delete_playlist(name: str):
     store.delete_playlist(name)

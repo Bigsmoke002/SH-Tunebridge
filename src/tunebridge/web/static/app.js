@@ -1649,6 +1649,61 @@ Views.playlists = async (main) => {
   draw();
 };
 
+/* ---------- Playlists zusammenführen: Songs einer Playlist (lokal, Export, Dienst, Freund) in eine bestehende oder neue lokale übernehmen */
+async function plMerge(target, src, srcId) {
+  const r = await api(`/api/playlists/${enc(target)}/merge`, { method: "POST", body: { src, src_id: srcId } });
+  toast(r.added ? `${r.added} Songs zu „${r.name}“ hinzugefügt${r.dupes ? ` · ${r.dupes} ${r.dupes === 1 ? "war" : "waren"} schon drin` : ""}` : `Alle ${r.total} Songs waren schon in „${r.name}“`);
+  await refreshMeta();
+  return r;
+}
+// Schieben: Quelle steht fest, Ziel wählen (bestehende lokale Playlist oder neue)
+function plMergeTo(src, srcId, srcName) {
+  const locals = S.playlists.filter(p => p.origin === "lokal" && !(src === "local" && p.name === srcId));
+  modal({ title: "In Playlist übernehmen", text: `Die Songs aus „${esc(srcName)}“ kommen zusätzlich in die gewählte Playlist. Doppelte werden übersprungen, „${esc(srcName)}“ bleibt unverändert.`,
+    confirm: "Übernehmen",
+    body: `<div class="mg-form"><div class="field"><label>Ziel</label><select class="select" id="mgDst">
+        <option value="">＋ Neue Playlist …</option>${locals.map(p => `<option value="${esc(p.name)}">${esc(p.name)} (${p.count})</option>`).join("")}</select></div>
+      <div class="field" id="mgNewF"><label>Name der neuen Playlist</label><input class="input" id="mgNew" value="${esc(srcName)}" maxlength="200"></div></div>`,
+    onConfirm: async box => {
+      const dst = $("#mgDst", box).value || $("#mgNew", box).value.trim();
+      if (!dst) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; }
+      const r = await plMerge(dst, src, srcId);
+      location.hash = `#/playlists/${enc(r.name)}`;
+    } });
+  const dst = $("#mgDst"), nf = $("#mgNewF");
+  if (locals.length) dst.value = locals[0].name;
+  const sync = () => nf.classList.toggle("hidden", !!dst.value);
+  dst.onchange = sync; sync();
+}
+// Holen: Ziel steht fest, Quelle wählen (eigene Playlists, Exporte, verbundene Dienste)
+async function plMergeFrom(target, onDone) {
+  if (!SideSvc.loaded) await SideSvc.load();
+  const srcs = [{ id: "local", name: "Deine Playlists" }, ...SideSvc.list];
+  modal({ title: "Songs aus anderer Playlist holen", text: `Die Songs kommen zusätzlich in „${esc(target)}“. Doppelte werden übersprungen, die Quelle bleibt unverändert.`,
+    confirm: "Hinzufügen",
+    body: `<div class="mg-form"><div class="field"><label>Von</label><select class="select" id="mgSrc">${srcs.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join("")}</select></div>
+      <div class="field"><label>Playlist</label><select class="select" id="mgPl"></select></div></div>`,
+    onConfirm: async box => {
+      const pl = $("#mgPl", box);
+      if (!pl.value) { toast("Bitte eine Playlist wählen", "err"); throw { silent: true }; }
+      await plMerge(target, $("#mgSrc", box).value, pl.value);
+      onDone?.();
+    } });
+  const srcSel = $("#mgSrc"), plSel = $("#mgPl");
+  const fill = async () => {
+    plSel.disabled = true; plSel.innerHTML = `<option value="">Lade …</option>`;
+    let list;
+    if (srcSel.value === "local") list = S.playlists.filter(p => p.name !== target || p.origin !== "lokal")
+      .map(p => ({ id: p.name, name: p.origin === "lokal" ? p.name : `${p.name} · ${p.origin}`, count: p.count }));
+    else { const r = await SideSvc.fetch(srcSel.value); list = Array.isArray(r) ? r : []; if (r?.error) toast(r.error, "err"); }
+    if (!document.body.contains(plSel)) return;
+    plSel.innerHTML = list.length ? list.map(p => `<option value="${esc(p.id)}">${esc(p.name)}${p.count != null ? ` (${p.count})` : ""}</option>`).join("")
+      : `<option value="">– keine Playlists –</option>`;
+    plSel.disabled = !list.length;
+  };
+  srcSel.onchange = fill; fill();
+}
+
 Views.playlist = async (main, name) => {
   const d = await api(`/api/playlists/${enc(name)}`);
   const tracks = d.entries.map(e => withPreview(e.track));
@@ -1660,6 +1715,8 @@ Views.playlist = async (main, name) => {
       back: ["#/playlists", "Playlists"], extra: top ? [`meist ${esc(top.label)}`] : [],
       sorts: [["", "Reihenfolge"], ["title", "Titel"], ["artist", "Künstler"], ["genre", "Genre"]],
       actions: `<button class="btn btn--sm btn--ghost" id="plRename">${icon("pencil")}Umbenennen</button>
+        <button class="btn btn--sm btn--ghost" id="plMergeTo" title="Diese Songs zusätzlich in eine andere Playlist übernehmen">${icon("copy")}In andere Playlist</button>
+        <button class="btn btn--sm btn--ghost" id="plMergeFrom" title="Songs aus einer anderen Playlist oder einem Dienst hierher holen">${icon("plus")}Songs holen</button>
         <a class="btn btn--sm btn--ghost" href="#/split?pl=${enc(name)}">${icon("split")}Nach Genre aufteilen</a>
         <button class="btn btn--sm btn--ghost btn--danger" id="plDelete">${icon("trash")}Löschen</button>` })}
     <div class="tl" id="plList"></div></div>`;
@@ -1678,6 +1735,8 @@ Views.playlist = async (main, name) => {
     });
   } });
   // App-eigener Dialog statt confirm(): der native Dialog kann das App-Fenster (pywebview) blockieren
+  $("#plMergeTo").onclick = () => plMergeTo("local", name, name);
+  $("#plMergeFrom").onclick = () => plMergeFrom(name, () => Views.playlist(main, name));
   $("#plDelete").onclick = () => modal({
     title: "Playlist löschen?", text: `„${esc(name)}“ wird gelöscht. Die Songs bleiben im Verlauf.`, confirm: "Löschen", danger: true,
     onConfirm: async () => {
@@ -2663,7 +2722,8 @@ Views.transfer = async (main) => {
     const toSvc = dstSel.value !== "local";
     $("#tTarget").innerHTML = `<label>Als</label><div class="t-target">
       ${toSvc ? `<select class="select" id="tMode"><option value="pl">Neue Playlist</option><option value="like">Zu Lieblingssongs</option></select>` : ""}
-      <input class="input" id="tName" value="${esc(pl ? pl.name : "")}" placeholder="Name der Playlist"></div>`;
+      <input class="input" id="tName" value="${esc(pl ? pl.name : "")}" placeholder="Name der Playlist" ${toSvc ? "" : `list="tLocalPls" title="Name einer bestehenden Playlist = Songs kommen dazu (Doppelte werden übersprungen)"`}></div>
+      ${toSvc ? "" : `<datalist id="tLocalPls">${S.playlists.filter(p => p.origin === "lokal").map(p => `<option value="${esc(p.name)}">`).join("")}</datalist>`}`;
     const mode = $("#tMode");
     if (mode) mode.onchange = () => $("#tName").classList.toggle("hidden", mode.value === "like");
   };
@@ -2694,7 +2754,7 @@ Views.transfer = async (main) => {
 async function showPlatformPlaylist(svc, plid, name) {
   let tracks;
   try {
-    tracks = svc === "local" ? (S.playlists.find(p => p.name === plid)?.tracks || [])
+    tracks = svc === "local" ? (await api(`/api/playlists/${enc(plid)}`)).entries.map(e => e.track)
       : await api(`/api/platforms/${svc}/playlists/${encodeURIComponent(plid)}/tracks`);
   } catch (e) { return toast(e.message, "err"); }
   modal({ title: name, text: `${tracks.length} Songs · Hörproben (30 s) nur, wo der Dienst sie offiziell anbietet – sonst sucht SH-Tunebridge bei Deezer.`,
@@ -4986,12 +5046,8 @@ Views.share = async (main) => {
   st.friends.forEach(f => loadF(f.id));
   $$("[data-fre]", main).forEach(b => b.onclick = () => loadF(b.dataset.fre, true));
 };
-Share.copy = (fid, pid, name) => modal({ title: "In deine Playlists übernehmen", text: "Kopiert die Songliste (Titel, Künstler, Album) in eine eigene Playlist in SH-Tunebridge.",
-  body: `<input class="input" id="shCpN" maxlength="200" style="width:100%" value="${esc(name)}">`, confirm: "Übernehmen",
-  onConfirm: async box => {
-    try { const r = await api(`/api/share/friends/${fid}/copy/${encodeURIComponent(pid)}`, { method: "POST", body: { name: $("#shCpN", box).value } }); toast(`${r.added} Songs in „${r.name}“`); refreshMeta(); }
-    catch (e) { toast(e.message, "err"); throw { silent: true }; }
-  } });
+// Freundes-Playlist übernehmen: in eine bestehende oder neue eigene Playlist (früher nur neu)
+Share.copy = async (fid, pid, name) => { await refreshMeta(); plMergeTo(`friend-${fid}`, pid, name); };
 
 const SVC_STYLE = {
   spotify: ["S", "#1ed760"], tidal: ["T", "#d6dbe2"], youtube: ["YT", "#ff5a50"], deezer: ["D", "#a238ff"],
@@ -5135,7 +5191,7 @@ Views.svcPlaylist = async (main, sid, pid, name) => {
       back: sid.startsWith("friend-") ? ["#/share", "Teilen"] : [`#/services?svc=${sid}`, `${sname}-Playlists`],
       sorts: [["", "Reihenfolge"], ["title", "Titel"], ["artist", "Künstler"], ["album", "Album"], ["dur", "Länge"]],
       actions: `<a class="btn btn--sm btn--primary" href="${sortHref}">${icon("layers")}Sortieren lassen</a>
-        ${sid.startsWith("friend-") ? `<button class="btn btn--sm btn--ghost" id="plCopy">${icon("download")}In meine Playlists</button>` : ""}
+        <button class="btn btn--sm btn--ghost" id="plCopy" title="Songs in eine bestehende oder neue lokale Playlist übernehmen">${icon("download")}In meine Playlists</button>
         <button class="btn btn--sm btn--ghost" id="plReload">${icon("repeat")}Neu laden</button>` })}
     <div class="pls-src">${icon("info")}${sid.startsWith("friend-") ? `Geteilt von ${esc(sname)} (Ende-zu-Ende verschlüsselt, nur Titel/Künstler/Album). Hörproben suchst du über die Song-Details selbst.` : `Titel, Künstler und Cover-Adressen kommen über die offizielle Schnittstelle von ${esc(sname)} und liegen nur im Arbeitsspeicher. Hörproben (30 s) werden direkt beim Anbieter gestreamt.`}</div>
     <div class="tl tl--svc" id="plList"></div></div>`;
@@ -5144,7 +5200,7 @@ Views.svcPlaylist = async (main, sid, pid, name) => {
     { h3: "Album", h4: "Länge", empty: "Diese Playlist ist leer.", bind: box => {
       $$(".tl-row", box).forEach(row => row.ondblclick = () => $(".tl-play", row)?.click());
     } });
-  const cpb = $("#plCopy"); if (cpb) cpb.onclick = () => Share.copy(sid.slice(7), pid, name);
+  $("#plCopy").onclick = async () => { await refreshMeta(); plMergeTo(sid, pid, name); };
   $("#plReload").onclick = async () => { await svcTracks(sid, pid, true).catch(e => toast(e.message, "err")); Views.svcPlaylist(main, sid, pid, name); };
 };
 

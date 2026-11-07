@@ -1699,7 +1699,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .mx-pick { display: flex; flex-direction: column; gap: 10px; }
 
 /* Künstlersuche */
-.mix-search { position: relative; max-width: 520px; }
+.mix-search { position: relative; width: 100%; }
 .mix-sugg { position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 20; background: var(--bg-2); border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); box-shadow: var(--shadow); padding: 4px; max-height: 320px; overflow: auto; }
 .mix-sg { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 6px; background: transparent;
@@ -1742,7 +1742,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 12px; border-radius: 
 .mx-level.on .mx-meter i.on { background: var(--accent); }
 
 /* Schritt 3: Umfang */
-input[type=range].mx-range { width: 100%; max-width: 520px; height: 6px;
+input[type=range].mx-range { width: 100%; height: 6px;
   background: linear-gradient(90deg, var(--accent) var(--p, 0%), var(--bg-4) var(--p, 0%)); }
 input[type=range].mx-range::-webkit-slider-thumb { width: 16px !important; height: 16px !important; background: var(--accent) !important; border: 3px solid var(--bg-2) !important; }
 .mx-row3 { display: flex; flex-wrap: wrap; gap: 14px 24px; align-items: flex-end; }
@@ -1828,3 +1828,8 @@ input[type=range].mx-range::-webkit-slider-thumb { width: 16px !important; heigh
   .mx-cover { width: 40px; height: 40px; }
   .mx-feat .mx-chip:nth-child(2) { display: none; }
 }
+
+/* Playlists zusammenführen */
+.mg-form { display: grid; gap: 12px; }
+.mg-form .field { display: flex; flex-direction: column; gap: 6px; }
+.mg-form .select, .mg-form .input { width: 100%; }
