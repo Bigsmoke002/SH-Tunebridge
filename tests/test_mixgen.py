@@ -285,3 +285,24 @@ def test_genre_api(fake_mb):
             break
         time.sleep(0.05)
     assert j["state"] == "done" and j["genre"] == LIQ and len(j["order"]) == 5
+
+
+def test_measure_runs_in_parallel(fake_deezer, monkeypatch):
+    import threading
+    state = {"now": 0, "max": 0}
+    lock = threading.Lock()
+
+    def slow(t, deezer_bpm=None, refresh=False):
+        with lock:
+            state["now"] += 1
+            state["max"] = max(state["max"], state["now"])
+        time.sleep(0.02)
+        with lock:
+            state["now"] -= 1
+        fake_deezer.append(t.title)
+        return {"bpm": 174.0, "camelot": "8A", "key": "Am", "energy": 0.7}
+    monkeypatch.setattr(audiofeat, "features", slow)
+    monkeypatch.setattr(mixgen, "MEASURE_MAX", 20)
+    run({"level": "passend", "count": 50})
+    assert 1 < state["max"] <= mixgen.MEASURE_WORKERS
+    assert len(fake_deezer) <= 20

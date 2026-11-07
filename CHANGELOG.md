@@ -18,6 +18,8 @@ Der Updater installiert nur signierte Versionen.
   Gemeinschaft 610 → 2 ms, Playlists 420 → 22 ms, Doppelte Songs 3,4 s → 13 ms beim erneuten Öffnen). Die
   Playlist-Übersicht liest nur noch Genre und Cover statt jeden Song komplett. „Doppelte Songs“ zeigt lange Listen
   in Portionen („Weitere anzeigen“) statt alles auf einmal. Titel- und Künstlervergleich merkt sich Ergebnisse.
+- **Mix erstellen schneller:** Hörproben werden zu viert gleichzeitig gemessen (Deezers Anfrage-Grenze gilt weiter für
+  alle zusammen). Ein neuer „Mixbar“-Mix mit 30 Songs: 29 → 21 s; mehr lässt Deezers Grenze nicht zu.
 
 ## 0.10.0 – 2026-11-07
 - **Neu: Mix erstellen** (Werkzeuge › Mix erstellen, auch über Strg+K). Bis zu 5 Künstler suchen und auswählen –

@@ -52,6 +52,7 @@ MAX_SEEDS = 5
 RELATED_PER_SEED = 12      # ähnliche Künstler je Start-Künstler
 TOP_PER_RELATED = 4        # Top-Songs je ähnlichem Künstler
 MEASURE_MAX = 150          # höchstens so viele Hörproben pro Auftrag (Rücksicht auf Deezer)
+MEASURE_WORKERS = 4       # gleichzeitige Messungen – das Deezer-Budget (ratelimit) gilt trotzdem für alle zusammen
 JOB_TTL = 6 * 3600
 
 _jobs: dict[str, dict] = {}
@@ -598,6 +599,7 @@ def _reasons(it: dict) -> list[str]:
 # ------------------------------------------------------------------ Auftrag
 def _measure(job: dict, items: list[dict], ref_first: list[dict]) -> None:
     """Tempo/Tonart/Energie holen – Start-Künstler zuerst (für die Ziel-Werte), dann die besten Kandidaten.
+    Mehrere Hörproben gleichzeitig (Laden wartet aufs Netz); Deezers Budget regelt ratelimit für alle Threads.
     Bricht ab, sobald genug passende Songs da sind oder MEASURE_MAX erreicht ist."""
     from . import audiofeat, ratelimit
     opts = job["opts"]
@@ -607,28 +609,47 @@ def _measure(job: dict, items: list[dict], ref_first: list[dict]) -> None:
     job.update(phase="measuring", done=0, total=budget)
     enough = int(opts["count"] * 1.3) + 5
     ref = None
-    with ratelimit.patient():
-        for k, it in enumerate(pool[:budget]):
-            if job["cancel"]:
-                return
-            t = Track(title=it["title"], artists=it["artists"], isrc=it.get("isrc"), ids=it.get("ids") or {},
-                      preview_url=it.get("preview_url"))
+    limited = threading.Event()
+
+    def one(it: dict) -> None:
+        if job["cancel"] or limited.is_set():
+            return
+        t = Track(title=it["title"], artists=it["artists"], isrc=it.get("isrc"), ids=it.get("ids") or {},
+                  preview_url=it.get("preview_url"))
+        with ratelimit.patient():            # gilt je Thread
             try:
                 f = audiofeat.features(t)
             except LimitReached:
-                job["note"] = "Deezer bremst gerade – nicht alle Songs konnten gemessen werden."
-                break
+                limited.set()
+                return
             except Exception as e:  # noqa: BLE001 – ein kaputter Song darf den Mix nicht abbrechen
                 dbg.error("mixgen", "Tempo/Tonart nicht ermittelt", e)
                 f = None
-            it["measured"] = True
-            if f:
-                it.update(bpm=f.get("bpm"), bpm_conf=f.get("bpm_conf", 0.5), camelot=f.get("camelot"), key=f.get("key"),
-                          energy=f.get("energy"))
-            job["done"] = k + 1
-            if k + 1 >= len(ref_first):
+        it["measured"] = True
+        if f:
+            it.update(bpm=f.get("bpm"), bpm_conf=f.get("bpm_conf", 0.5), camelot=f.get("camelot"), key=f.get("key"),
+                      energy=f.get("energy"))
+
+    # Erst alle Start-Songs (Ziel-Werte), dann die Kandidaten in kleinen Runden – nach jeder Runde prüfen, ob es reicht
+    n_ref = min(len(ref_first), budget)
+    rounds = [pool[:n_ref]] + [pool[i:min(i + MEASURE_WORKERS * 2, budget)]
+                              for i in range(n_ref, budget, MEASURE_WORKERS * 2)]
+    done = 0
+    with ThreadPoolExecutor(MEASURE_WORKERS, thread_name_prefix="mix-mess") as ex:
+        for chunk in rounds:
+            if not chunk:
+                continue
+            if job["cancel"]:
+                return
+            list(ex.map(one, chunk))
+            done += len(chunk)
+            job["done"] = done
+            if limited.is_set():
+                job["note"] = "Deezer bremst gerade – nicht alle Songs konnten gemessen werden."
+                break
+            if done >= n_ref:
                 ref = ref or reference(items, opts)
-                if sum(1 for x in pool[len(ref_first):k + 1] if passes(x, opts, ref)[0]) >= enough:
+                if sum(1 for x in pool[n_ref:done] if passes(x, opts, ref)[0]) >= enough:
                     break
 
 
