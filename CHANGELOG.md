@@ -6,6 +6,11 @@ Der Updater installiert nur signierte Versionen.
 ## Unveröffentlicht
 - **Lange Dialoge scrollen:** Dialoge (z. B. „Fertig – 136 Playlists angelegt“) werden höchstens so hoch wie das
   Fenster; der Inhalt scrollt, Titel und Knöpfe bleiben sichtbar. Vorher ragte der OK-Knopf unten aus dem Fenster.
+- **„Alles einlesen“ bis 80.000 Songs** (vorher 10.000). Damit das flüssig bleibt: Die Sortier-Vorschau zeigt große
+  Gruppen in Portionen („Weitere anzeigen“), die Fortschrittsabfrage schickt die Songliste erst am Ende, und ein
+  laufendes Einlesen wird auch nach vielen Stunden nicht mehr verworfen.
+- **Genres der Bibliothek beitragen ohne Gesamtgrenze** (vorher höchstens 2.000 Songs). Pro Abgleich gehen bis zu
+  2.000 Songs in Paketen à 200 raus, der Rest beim nächsten Abgleich.
 
 ## 0.10.1 – 2026-11-07
 - **Weniger Last im Leerlauf auf „Erkennen“:** Die Pegelanzeige zeichnet nur noch, wenn neue Daten kommen (höchstens

@@ -11,8 +11,8 @@ Drei Einwilligungen (alle AUS, bis der Nutzer sie erlaubt – siehe consent.py):
 Modus: „auto“ = beim Hintergrund-Abgleich alle 6 Std. mit, „manuell“ = nur per Knopf „Jetzt abgleichen“.
 
 Gesendet wird je Song nur: Künstler, Titel, ISRC, Genre, Subgenre, Herkunft, Sicherheit – nie Playlist-Namen,
-Playlists, Konten, Hörzeiten. Grenzen: höchstens LIB_PER_SYNC Bibliotheks-Songs pro Abgleich und LIB_MAX insgesamt
-(der Server nimmt pro Installation 5000 Einträge aller Arten an – es soll Platz für den Rest bleiben).
+Playlists, Konten, Hörzeiten. Keine Gesamtgrenze für Bibliotheks-Songs; pro Abgleich höchstens LIB_PER_SYNC
+(in Paketen à 200 – der Server nimmt je Installation nur eine begrenzte Zahl signierter Anfragen pro Stunde an).
 """
 from __future__ import annotations
 
@@ -26,8 +26,7 @@ from . import debuglog as dbg
 MODES = ("auto", "manuell")
 _MODE = "community:mode"
 _LAST = "community:last"
-LIB_PER_SYNC = 400          # 2 Sendungen à 200
-LIB_MAX = 2000              # insgesamt pro Installation
+LIB_PER_SYNC = 2000         # 10 Sendungen à 200 – der Rest folgt beim nächsten Abgleich
 MIN_CONF = 0.5              # unsichere Genres nicht beitragen
 _SCHEMA = "CREATE TABLE IF NOT EXISTS community_sent(key TEXT PRIMARY KEY, uid TEXT, ts REAL)"
 
@@ -77,7 +76,7 @@ def free_genre(t: dict) -> dict | None:
             "quelle": "+".join(q for q, d in (("musicbrainz", mb), ("titel", tt)) if d)}
 
 
-def lib_entries(limit: int = LIB_PER_SYNC) -> list[dict]:
+def lib_entries(limit: int | None = LIB_PER_SYNC) -> list[dict]:
     """Noch nicht beigetragene Songs aus dem Song-Speicher (ein Eintrag je Song, nicht je Schlüssel)."""
     from . import genredb
     with store._conn() as c:
@@ -87,10 +86,9 @@ def lib_entries(limit: int = LIB_PER_SYNC) -> list[dict]:
         genredb._ensure(c)
         own = {r[0] for r in c.execute("SELECT key FROM genre_votes")} | \
               {r[0] for r in c.execute("SELECT alt FROM genre_votes WHERE alt IS NOT NULL")}
-    room = max(0, LIB_MAX - len(sent))
     out, seen = [], set()
     for r in rows:
-        if len(out) >= min(limit, room):
+        if limit is not None and len(out) >= limit:
             break
         try:
             t = json.loads(r["track"])
@@ -131,7 +129,7 @@ def send_part(done: dict, force_db: bool = False) -> None:
             upload.send(outbox._package(g))
             genredb.mark_sent([e["_key"] for e in g])
             done["genres"] = len(g)
-    if consent.server("bibliothek") and (lib := lib_entries()):
+    if consent.server("bibliothek") and (lib := lib_entries(LIB_PER_SYNC)):
         upload.send(outbox._package(lib))
         _mark_lib(lib)
         done["bibliothek"] = len(lib)
@@ -155,7 +153,7 @@ def sync() -> dict:
 @store.memo_db()
 def _lib_pending() -> int:
     """Wie viele Songs noch beigetragen werden könnten – teuer (liest alle Songs), daher gemerkt bis zur nächsten Änderung."""
-    return len(lib_entries(LIB_MAX))
+    return len(lib_entries(None))
 
 
 def status() -> dict:
@@ -169,6 +167,6 @@ def status() -> dict:
             "consent": {k: consent.server(k) for k in ("genres", "bibliothek", "genredb")},
             "privacy": bool(consent.get()["privacy_at"]), "domain": consent.get()["server"]["domain"],
             "votes_pending": len(genredb.upload_entries(1000)), "votes": genredb.counts(),
-            "lib_pending": _lib_pending(), "lib_sent": sent, "lib_max": LIB_MAX,
+            "lib_pending": _lib_pending(), "lib_sent": sent,
             "lib_per_sync": LIB_PER_SYNC, "community": genredb.community_info(),
             "checked": float(store.meta_get("genredb:checked") or 0) or None}

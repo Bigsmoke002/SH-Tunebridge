@@ -51,11 +51,18 @@ def test_own_vote_wins_and_sent_not_repeated(monkeypatch):
 
 
 def test_lib_limits(monkeypatch):
-    monkeypatch.setattr(community, "LIB_MAX", 3)
     for i in range(5):
         _song("K", f"S{i}", "Drum & Bass")
         _mb("k", f"s{i}", {"drum and bass": 5})
-    assert len(community.lib_entries(10)) == 3
+    assert len(community.lib_entries(3)) == 3                    # pro Abgleich begrenzt …
+    assert len(community.lib_entries(None)) == 5                 # … insgesamt nicht
+    sent = []
+    monkeypatch.setattr("tunebridge.upload.send", lambda pkg: sent.append(pkg) or {"angenommen": len(pkg["eintraege"])})
+    monkeypatch.setattr(community, "LIB_PER_SYNC", 2)
+    _allow(bibliothek=True)
+    for _ in range(3):
+        community.sync()
+    assert community.lib_sent_count() == 5 and community.lib_entries(None) == []
 
 
 def test_sync_needs_consent():

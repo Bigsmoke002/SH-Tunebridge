@@ -18,7 +18,7 @@ import time
 from .models import Track
 
 MAX_PLAYLISTS = 300
-MAX_TRACKS = 10000
+MAX_TRACKS = 80000
 PAUSE_S = 0.4
 KINDS = ("liked", "own", "followed")
 NAMES = {"spotify": "Spotify", "tidal": "TIDAL", "soundcloud": "SoundCloud", "youtube": "YouTube",

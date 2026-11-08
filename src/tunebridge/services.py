@@ -357,7 +357,8 @@ def start(service: str, playlist: str, name: str = "", ai_check: bool = False,
                   "state": "queued", "done": 0, "total": 0, "items": [], "cancel": False, "started": time.time(),
                   **({"preset": preset} if preset is not None else {})}
     threading.Thread(target=_run, args=(_jobs[jid],), daemon=True).start()
-    for k in [k for k, j in _jobs.items() if time.time() - j["started"] > 6 * 3600]:
+    now = time.time()        # laufende Aufträge nie verwerfen – „Alles einlesen“ kann bei großen Bibliotheken Stunden dauern
+    for k in [k for k, j in _jobs.items() if (j.get("finished") and now - j["finished"] > 6 * 3600) or now - j["started"] > 72 * 3600]:
         _jobs.pop(k, None)
     return jid
 
@@ -367,7 +368,10 @@ def job(jid: str) -> dict | None:
     j = _jobs.get(jid)
     if not j:
         return None
-    out = {k: v for k, v in j.items() if k not in ("cancel", "preset")}
+    out = {k: v for k, v in j.items() if k not in ("cancel", "preset", "items")}
+    # Die Songliste erst, wenn der Auftrag fertig ist – die Oberfläche fragt sekündlich nach, und bei großen
+    # Bibliotheken (bis 80.000 Songs) wäre sonst jede Abfrage viele MB groß.
+    out["items"] = j["items"] if j.get("state") == "done" else []
     if j.get("state") == "analysing":
         out["pausen"] = [{"label": x["label"], "s": x["paused"]} for x in ratelimit.state() if x["paused"]]
     return out

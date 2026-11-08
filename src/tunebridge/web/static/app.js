@@ -4332,7 +4332,7 @@ const Consent = {
       "die erst übernimmt, was mehrere Installationen unabhängig voneinander melden. Nur Einordnungen ab jetzt."],
     ["bibliothek", "Genres meiner Bibliothek beitragen",
       "Je Song, den die App schon kennt (Erkennen, Sortieren, „Alles einlesen“): Datum, Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit. Das Genre wird nur aus " +
-      "freien Quellen abgeleitet (MusicBrainz, Angaben im Titel) – nie aus Last.fm-, Deezer- oder Apple-Daten. Auch bereits vorhandene Songs, höchstens 2000 insgesamt. " +
+      "freien Quellen abgeleitet (MusicBrainz, Angaben im Titel) – nie aus Last.fm-, Deezer- oder Apple-Daten. Auch bereits vorhandene Songs, ohne Obergrenze (pro Abgleich in Portionen). " +
       "Nie Playlist-Namen, Playlists, Konten oder Hörzeiten. Zweck: die Gemeinschafts-Genre-Datenbank vergrößern."],
     ["share", "Playlists teilen (Ende-zu-Ende verschlüsselt)",
       "Nur wenn du unter „Teilen“ Playlists freigibst oder Playlists von Freunden ansiehst: Die Playlists (Titel, Künstler, Album, ISRC, Genre – nie Musik oder Cover) " +
@@ -4656,7 +4656,7 @@ const Community = {
       <div class="section-title">Stand</div>
       <div class="card set-group"><dl class="kv">
         <dt>Eigene Einordnungen</dt><dd>${d.votes.total} gesamt · ${d.votes_pending} noch nicht beigetragen</dd>
-        <dt>Bibliothek</dt><dd>${d.lib_sent} von höchstens ${d.lib_max} beigetragen · ${d.lib_pending} bereit</dd>
+        <dt>Bibliothek</dt><dd>${d.lib_sent} beigetragen · ${d.lib_pending} bereit</dd>
         <dt>Gemeinschafts-Datenbank</dt><dd>${d.community?.songs != null ? `${d.community.songs} Songs · Stand ${esc(d.community.created || "?")}` : "noch nicht geladen"}</dd>
         <dt>Letzter Abgleich</dt><dd>${esc(last)}</dd>
       </dl>
@@ -5388,7 +5388,7 @@ function scanAllDialog(scanable) {
       ${row("k:liked", "Lieblingssongs", "Gelikte Songs / Loved Tracks", true)}
       ${row("k:own", "Eigene Playlists", "", true)}
       ${row("k:followed", "Gefolgte Playlists anderer", "Playlists, die du nur abonniert hast – oft sehr groß", false)}
-      <p class="hint" style="margin-top:10px">Grenzen: höchstens 300 Playlists pro Dienst und 10.000 verschiedene Songs. Bittet ein Dienst um eine Pause,
+      <p class="hint" style="margin-top:10px">Grenzen: höchstens 300 Playlists pro Dienst und 80.000 verschiedene Songs. Bittet ein Dienst um eine Pause,
       wartet die App sie ab – große Bibliotheken brauchen deshalb etwas Zeit (läuft im Hintergrund weiter). Gelesen wird nur über die offiziellen
       Schnittstellen mit deinem eigenen Login.</p></div>`,
     onConfirm: box => {
@@ -5546,15 +5546,18 @@ function sortCard(g, gi) {
     <div class="sort-card-act"><span class="cnt">${esc(meta)}</span>
       ${g.done ? `<span class="chip chip--ok" title="Schon angelegt">${icon("check")}angelegt</span>` : ""}
       <button class="btn btn--xs ${g.done ? "btn--ghost" : ""}" data-one="${gi}" title="Nur diese Playlist jetzt anlegen">${icon("check")}${g.done ? "Nochmal anlegen" : "Diese übernehmen"}</button></div>
-    <ul>${g.items.map(n => { const t = it[n];
+    <ul>${g.items.slice(0, g.shown || SORT_STEP).map(n => { const t = it[n];
       const sub = [t.ki ? "KI" : "", t.own ? "von dir" : "", Sorter.level <= 4 ? (t.subgenre || t.genre || "") : "", !t.genre && !t.nomusic && t.why ? t.why : "",
         t.bpm ? `${Math.round(t.bpm)} BPM` : "", t.camelot || ""].filter(Boolean);
       const pv = sortPrev(t);
       return `<li data-i="${n}" title="Klicken zum Verschieben${t.ki ? ` · KI: vorher ${esc(t.ki.vorher.filter(Boolean).join(" / ") || "?")} – ${esc(t.ki.grund || "")}` : ""}">
       <button class="icon-btn sort-play" ${playAttr(pv)} title="Reinhören">${icon(Player.isPlaying(pv.preview_url) ? "pause" : "play")}</button>
       ${t.cover ? `<img src="${esc(t.cover)}" alt="" loading="lazy">` : `<span class="ph"></span>`}
-      <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em title="${esc(sub.join(" · "))}">${sub.map(x => x === "KI" ? `<b class="chip chip--ai">KI</b>` : x === "von dir" ? `<b class="chip">von dir</b>` : esc(x)).join(" · ")}</em></div></li>`; }).join("")}</ul></div>`;
+      <div class="sl"><span>${esc(t.artist)} – ${esc(t.title)}</span><em title="${esc(sub.join(" · "))}">${sub.map(x => x === "KI" ? `<b class="chip chip--ai">KI</b>` : x === "von dir" ? `<b class="chip">von dir</b>` : esc(x)).join(" · ")}</em></div></li>`; }).join("")}</ul>
+    ${g.items.length > (g.shown || SORT_STEP) ? `<button class="btn btn--xs btn--ghost dp-more" data-more="${gi}">Weitere anzeigen (${g.items.length - (g.shown || SORT_STEP)} übrig)</button>` : ""}</div>`;
 }
+// Große Gruppen (Alles einlesen: bis 80.000 Songs) nur portionsweise zeichnen – sonst friert die Seite ein
+const SORT_STEP = 100;
 
 // Häufigstes Genre einer Gruppe (ohne Song „skip“) – nur wenn eindeutig (≥ 60 %)
 function sortDominant(g, skip = -1) {
@@ -5585,6 +5588,12 @@ async function sortSetGenre(n) {
 }
 
 function bindSortCards(root) {
+  $$("[data-more]", root).forEach(b => b.onclick = () => {
+    const gi = +b.dataset.more, g = Sorter.groups[gi];
+    g.shown = (g.shown || SORT_STEP) + 4 * SORT_STEP;
+    const tmp = document.createElement("div"); tmp.innerHTML = sortCard(g, gi);
+    const card = tmp.firstElementChild; b.closest(".sort-card").replaceWith(card); hydrateIcons(card); bindSortCards(card);
+  });
   $$("[data-one]", root).forEach(b => b.onclick = e => { e.stopPropagation(); Sorter.applyOne?.(+b.dataset.one); });
   $$("[data-aiuns]", root).forEach(b => b.onclick = async () => {
     try {

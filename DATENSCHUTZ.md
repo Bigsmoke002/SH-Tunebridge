@@ -372,8 +372,8 @@ im Song-Detail legst du mit **„Genre festlegen“** ein Genre selbst fest.
 - **Genres deiner Bibliothek beitragen (nur mit Einwilligung, Einstellungen › Gemeinschaft):** für Songs, die die App
   schon kennt, wird das Genre **neu und nur aus freien Quellen** abgeleitet – MusicBrainz-Tags (CC0) und
   Genre-Angaben im Titel – und nur gesendet, wenn es mit dem Ergebnis der App übereinstimmt. Gesendet werden je Song
-  Datum, Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit und die freie Quelle; höchstens 400 Songs pro Abgleich
-  und 2000 insgesamt. Hier zählen auch Songs, die schon vor der Einwilligung bekannt waren. Daten von Last.fm,
+  Datum, Künstler, Titel, ISRC, Genre, Subgenre, Sicherheit und die freie Quelle; höchstens 2000 Songs pro Abgleich
+  (der Rest folgt beim nächsten Abgleich), ohne Gesamtgrenze. Hier zählen auch Songs, die schon vor der Einwilligung bekannt waren. Daten von Last.fm,
   Deezer, Apple & Co. fließen **nicht** ein.
 - **Abgleich manuell oder automatisch:** unter Einstellungen › Gemeinschaft wählst du, ob Beiträge und das Laden der
   Datenbank automatisch im Hintergrund (etwa alle 6 Stunden, Datenbank einmal am Tag) oder nur per Knopf passieren.
