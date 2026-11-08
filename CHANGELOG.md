@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.10.2)
+## 0.10.2 – 2026-11-08
 - **Lange Dialoge scrollen:** Dialoge (z. B. „Fertig – 136 Playlists angelegt“) werden höchstens so hoch wie das
   Fenster; der Inhalt scrollt, Titel und Knöpfe bleiben sichtbar. Vorher ragte der OK-Knopf unten aus dem Fenster.
 - **„Alles einlesen“ bis 80.000 Songs** (vorher 10.000). Damit das flüssig bleibt: Die Sortier-Vorschau zeigt große
