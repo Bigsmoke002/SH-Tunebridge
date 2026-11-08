@@ -3,6 +3,10 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht
+- **Lange Dialoge scrollen:** Dialoge (z. B. „Fertig – 136 Playlists angelegt“) werden höchstens so hoch wie das
+  Fenster; der Inhalt scrollt, Titel und Knöpfe bleiben sichtbar. Vorher ragte der OK-Knopf unten aus dem Fenster.
+
 ## 0.10.1 – 2026-11-07
 - **Weniger Last im Leerlauf auf „Erkennen“:** Die Pegelanzeige zeichnet nur noch, wenn neue Daten kommen (höchstens
   30 Bilder/s statt bei jeder Bildwiederholung), pausiert bei Stille und hält Verbindung und Aufnahme an, sobald das
