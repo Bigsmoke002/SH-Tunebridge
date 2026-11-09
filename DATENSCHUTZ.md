@@ -277,6 +277,10 @@ Die Android-App von SH-Tunebridge erkennt Songs selbst und gleicht auf Wunsch mi
   gesperrt – das wird nicht umgangen. Gehört wird wie beim Mikrofon nur nach dem Tippen, nur im Arbeitsspeicher; an
   Shazam geht nur der Fingerabdruck. Solange die Freigabe besteht, läuft ein Dienst mit Benachrichtigung („Beenden“);
   nach 15 Minuten ohne Erkennen endet sie von selbst.
+- **Vordergrund-Dienst „Medienwiedergabe“** – nur solange der Hörproben-Player etwas in der Warteschlange hat: Steuerung
+  in der Benachrichtigung, auf dem Sperrbildschirm und über Kopfhörer-/Auto-Tasten (Android-Mediensitzung). Titel,
+  Künstler und Cover sieht dabei nur dein Handy (bzw. ein verbundenes Auto/Uhr, wie bei jeder Musik-App). Stopp oder
+  Wegwischen beendet den Dienst.
 - **Andere Apps sehen** – nur die Frage, ob die Shazam-App installiert ist (für „Verlauf aus der Shazam-App“).
 - **Apps installieren** („Unbekannte Apps installieren“) – nur damit die App ein selbst geladenes Update an den
   Android-Installer übergeben kann. Android fragt dafür einmal nach; installiert wird erst, wenn du im Installer

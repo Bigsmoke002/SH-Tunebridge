@@ -15,6 +15,7 @@ class App : Application(), ImageLoaderFactory {
         repo = Repository(Db(this), this)
         sync = PcSync(repo)
         listener = Listener(this, repo, sync)
+        Player.init(this)
         shortcuts()
     }
 

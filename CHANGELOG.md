@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Player in Benachrichtigung und Sperrbildschirm:** Hörproben lassen sich dort mit Zurück, Pause, Weiter
+  und Beenden steuern, mit Cover – auch über Kopfhörer-, Bluetooth- und Auto-Tasten. Kopfhörer abziehen pausiert,
+  ein Anruf oder eine andere Musik-App ebenfalls.
 - **Android: USB-Soundkarte:** Als Mikrofon nimmt die App jetzt immer das eingebaute Mikrofon des Handys – Android
   hatte sonst den (meist stummen) Eingang der Soundkarte genommen. Wer ein USB-/Headset-Mikrofon will, schaltet unter
   Mehr › Erkennen „Angeschlossenes Mikrofon nehmen“ ein. Beim Handy-Ton erklärt die App, warum mit Soundkarte Stille

@@ -1,7 +1,11 @@
 package de.bs002.tunebridge
 
+import android.content.Context
 import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaPlayer
+import de.bs002.tunebridge.audio.PlayerService
 import de.bs002.tunebridge.data.Track
 import de.bs002.tunebridge.net.Previews
 import kotlinx.coroutines.CoroutineScope
@@ -40,6 +44,23 @@ object Player {
     private val _state = MutableStateFlow(State())
     val state: StateFlow<State> = _state.asStateFlow()
 
+    private var ctx: Context? = null
+    private val attrs = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
+    /** Andere App spielt / Anruf: pausieren (Android-Regel „Audio-Fokus“). */
+    private val focus by lazy {
+        AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN).setAudioAttributes(attrs)
+            .setOnAudioFocusChangeListener { f -> if (f < 0 && _state.value.playing) scope.launch { playPause() } }
+            .build()
+    }
+
+    fun init(context: Context) { ctx = context.applicationContext }
+
+    private fun takeFocus() {
+        val c = ctx ?: return
+        c.getSystemService(AudioManager::class.java)?.requestAudioFocus(focus)
+        PlayerService.ensure(c)
+    }
+
     /** URL der gerade laufenden Hörprobe (für die „Reinhören“-Knöpfe). */
     private val _playing = MutableStateFlow<String?>(null)
     val playing: StateFlow<String?> = _playing.asStateFlow()
@@ -63,7 +84,7 @@ object Player {
         val s = _state.value
         if (s.loading) return
         if (m.isPlaying) { m.pause(); _state.value = s.copy(playing = false) }
-        else { m.start(); _state.value = s.copy(playing = true) }
+        else { takeFocus(); m.start(); _state.value = s.copy(playing = true) }
     }
 
     fun next() {
@@ -81,10 +102,16 @@ object Player {
     }
 
     /** Fortschritt der laufenden Hörprobe (0…1) für die Leiste im Mini-Player. */
-    fun progress(): Float = if (!prepared) 0f else mp?.runCatching { if (duration > 0) currentPosition.toFloat() / duration else 0f }?.getOrNull() ?: 0f
+    fun progress(): Float = if (!prepared) 0f else (position().toFloat() / duration()).coerceIn(0f, 1f)
+
+    fun position(): Long = if (!prepared) 0 else mp?.runCatching { currentPosition.toLong() }?.getOrNull() ?: 0
+    /** Hörproben sind 30 s; manche MP3s melden eine falsche (zu lange) Dauer. */
+    fun duration(): Long = (if (!prepared) 30_000 else mp?.runCatching { duration.toLong() }?.getOrNull() ?: 30_000).let { if (it in 1..31_000) it else 30_000 }
+    fun seekTo(ms: Long) { if (prepared) mp?.seekTo(ms.toInt()) }
 
     fun stop() {
         job?.cancel()
+        ctx?.getSystemService(AudioManager::class.java)?.abandonAudioFocusRequest(focus)
         release()
         _playing.value = null
         _state.value = State()
@@ -103,6 +130,7 @@ object Player {
         val t = s.queue.getOrNull(i) ?: return stop()
         _state.value = s.copy(index = i, playing = false, loading = true)
         _playing.value = t.previewUrl
+        takeFocus()
         // Abgelaufene Deezer-Adressen erst frisch holen (im Hintergrund), dann streamen
         job = scope.launch {
             val url = withContext(Dispatchers.IO) { Previews.resolve(t) }
@@ -117,7 +145,7 @@ object Player {
 
     private fun start(url: String) {
         mp = MediaPlayer().apply {
-            setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
+            setAudioAttributes(attrs)
             setOnPreparedListener {
                 if (mp !== it) return@setOnPreparedListener
                 misses = 0
