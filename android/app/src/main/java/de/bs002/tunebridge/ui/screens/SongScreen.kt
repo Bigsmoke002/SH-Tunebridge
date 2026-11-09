@@ -115,7 +115,7 @@ fun SongScreen(uid: String, back: () -> Unit) {
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 t.previewUrl?.let { url ->
-                    TbButton(if (playing == url) "Stopp" else "Reinhören", { Player.toggle(url) }, kind = BtnKind.Primary,
+                    TbButton(if (playing == url) "Stopp" else "Reinhören", { Player.toggle(url, t) }, kind = BtnKind.Primary,
                         icon = if (playing == url) Ico.Pause else Ico.Play)
                 }
                 TbButton("Zur Playlist", { pick = true }, icon = Ico.Plus)
@@ -160,7 +160,14 @@ fun LinkGrid(t: Track, direct: Map<String, String>) {
     val ctx = LocalContext.current
     val q = URLEncoder.encode("${t.artists.firstOrNull().orEmpty()} ${t.title}".trim(), "UTF-8")
     val alias = mapOf("apple" to "applemusic", "itunes" to "applemusic")
-    val known = direct.mapKeys { alias[it.key] ?: it.key }
+    // Bekannte Dienst-Nummern (vom PC-Abgleich) als direkte Links; eigene Links haben Vorrang
+    val fromIds = buildMap {
+        t.ids["spotify"]?.let { put("spotify", "https://open.spotify.com/track/$it") }
+        t.ids["deezer"]?.let { put("deezer", "https://www.deezer.com/track/$it") }
+        t.ids["tidal"]?.let { put("tidal", "https://tidal.com/browse/track/$it") }
+        t.ids["youtube"]?.let { put("youtubemusic", "https://music.youtube.com/watch?v=$it") }
+    }
+    val known = fromIds + direct.mapKeys { alias[it.key] ?: it.key }
     val tiles = buildList {
         known["shazam"]?.let { add(Triple("shazam", "Shazam", it to true)) }
         PLATFORMS.forEach { (id, name, search) ->

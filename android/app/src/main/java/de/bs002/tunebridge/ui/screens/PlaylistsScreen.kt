@@ -1,5 +1,7 @@
 package de.bs002.tunebridge.ui.screens
 
+import de.bs002.tunebridge.playable
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -124,7 +126,9 @@ fun PlaylistScreen(pc: String, name: String, back: () -> Unit) {
     var q by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
         TopBack(back)
-        ScreenHeader(name, p?.let { Fmt.songs(it.tracks.size) + (pcName?.let { n -> " · $n" } ?: "") })
+        ScreenHeader(name, p?.let { Fmt.songs(it.tracks.size) + (pcName?.let { n -> " · $n" } ?: "") }) {
+            if (p != null && p.tracks.any { it.playable }) PlayButtons(p.tracks, name)
+        }
         if (p == null || p.tracks.isEmpty()) {
             EmptyState(Ico.Stack, "Leer", "In dieser Playlist sind noch keine Songs.")
             return
@@ -160,7 +164,11 @@ fun PlaylistScreen(pc: String, name: String, back: () -> Unit) {
                 }
                 t.previewUrl?.let { url ->
                     Spacer(Modifier.padding(top = 14.dp))
-                    TbButton(if (playing == url) "Stopp" else "Reinhören", { Player.toggle(url) }, kind = BtnKind.Primary, icon = if (playing == url) Ico.Pause else Ico.Play)
+                    TbButton(if (playing == url) "Stopp" else "Reinhören", { Player.toggle(url, t) }, kind = BtnKind.Primary, icon = if (playing == url) Ico.Pause else Ico.Play)
+                }
+                if (t.playable && p != null) {
+                    Spacer(Modifier.padding(top = 8.dp))
+                    TbButton("Ab hier abspielen", { Player.play(p.tracks, p.tracks.indexOf(t), name); sheet = null }, kind = BtnKind.Ghost, icon = Ico.Next)
                 }
                 SectionLabel("Anhören & öffnen")
                 LinkGrid(t, emptyMap())

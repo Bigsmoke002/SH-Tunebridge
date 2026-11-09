@@ -1,8 +1,11 @@
 package de.bs002.tunebridge.ui.screens
 
+import de.bs002.tunebridge.playable
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,7 +53,9 @@ fun HistoryScreen(openSong: (String) -> Unit) {
     LaunchedEffect(list.firstOrNull()?.uid) { if (listState.firstVisibleItemIndex <= 2) listState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Verlauf", if (all.isEmpty()) null else Fmt.songs(all.size))
+        ScreenHeader("Verlauf", if (all.isEmpty()) null else Fmt.songs(all.size)) {
+            if (list.any { it.track.playable }) PlayButtons(list.map { it.track }, "Verlauf")
+        }
         if (all.isEmpty()) {
             EmptyState(Ico.Clock, "Noch leer", "Erkannte Songs landen hier – vom Handy und, wenn gekoppelt, auch die vom PC.")
             return
@@ -95,5 +100,14 @@ fun SearchField(value: String, onChange: (String) -> Unit, modifier: Modifier = 
             modifier = Modifier.weight(1f),
             decorationBox = { inner -> if (value.isEmpty()) Text(placeholder, style = TbType.body, color = Tb.text3); inner() },
         )
+    }
+}
+
+/** „Abspielen“ und „Zufällig“ für eine Liste – spielt die Hörproben nacheinander (Mini-Player unten). */
+@Composable
+fun PlayButtons(tracks: List<de.bs002.tunebridge.data.Track>, title: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.Shuffle, "Zufällig abspielen", { de.bs002.tunebridge.Player.play(tracks.shuffled(), 0, title) })
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.Play, "Abspielen", { de.bs002.tunebridge.Player.play(tracks, 0, title) }, tint = Tb.accent)
     }
 }

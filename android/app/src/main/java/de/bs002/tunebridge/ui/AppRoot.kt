@@ -133,6 +133,7 @@ private fun Main(toast: (String) -> Unit) {
                 composable("privacy", enterTransition = { slide() }, popExitTransition = { slideOut() }) { PrivacyScreen(back = { nav.popBackStack() }) }
             }
         }
+        de.bs002.tunebridge.ui.components.MiniPlayer(if (tab == null) Modifier.windowInsetsPadding(WindowInsets.navigationBars) else Modifier)
         if (tab != null) BottomBar(tab) { nav.go(it) }
     }
 }

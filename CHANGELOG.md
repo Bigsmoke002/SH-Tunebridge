@@ -7,6 +7,11 @@ Der Updater installiert nur signierte Versionen.
 - **Android: Musik auf dem eigenen Handy erkennen:** Läuft die Musik auf demselben Handy und ist „Mikrofon“ gewählt,
   schlägt die App „Handy-Ton“ vor – über das Mikrofon filtert Android den eigenen Lautsprecher oft heraus, dann kam
   „Nichts erkannt“.
+- **Android: Player mit Vor/Zurück:** Verlauf und Playlists lassen sich als Hörproben (30 s) abspielen – nacheinander
+  oder zufällig, mit Mini-Player (Zurück, Pause, Weiter) über der Navigation. Tippen auf den Song öffnet ihn ganz in
+  deiner Musik-App (Spotify, YouTube Music, Deezer, TIDAL …, direkt, wenn die App die Nummer kennt).
+- **Android: Hörproben aus PC-Playlists gingen nicht:** Deren Deezer-Adressen waren abgelaufen; die App holt jetzt
+  beim Abspielen eine frische Adresse.
 
 ## 0.11.0 – 2026-11-09
 - **Weniger Shazam-Sperren:** Die Tempo-Suche (Slowed/Sped-up) läuft nie mehr automatisch – auch nicht bei

@@ -307,6 +307,11 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
 - **Shazam (Apple):** wie am PC nur den Fingerabdruck der Aufnahme – kein hörbares Audio –, dazu Sprache/Land
   und technisch deine IP-Adresse. Teilst du einen Shazam-Link an die App, fragt sie bei Shazam die Song-Angaben
   zu dieser Song-Nummer ab.
+- **Hörproben (Player):** Erst wenn du auf Reinhören/Abspielen tippst, streamt die App die offizielle
+  30-Sekunden-Hörprobe direkt von Apple bzw. Deezer – nichts wird gespeichert. Deezer-Adressen laufen nach einiger
+  Zeit ab; dann fragt die App bei Deezer (`api.deezer.com`) nach der aktuellen Adresse – mit Deezer-Nummer, ISRC oder
+  Künstler + Titel des Songs. Deezer/Apple sehen dabei deine IP-Adresse. Den ganzen Song gibt es nur in deiner
+  Musik-App („Öffnen“).
 - **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
   direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
 - **Dein PC:** siehe unten. Sonst nichts – keine Google-Play-Dienste, kein Firebase, keine Analyse-, Absturz-
