@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import de.bs002.tunebridge.App
 import de.bs002.tunebridge.ui.Fmt
 import de.bs002.tunebridge.ui.favorite
+import de.bs002.tunebridge.ui.links
 import de.bs002.tunebridge.ui.shownGenre
 import de.bs002.tunebridge.data.Recognition
 import androidx.compose.foundation.clickable
@@ -64,6 +65,9 @@ fun HistoryScreen(openSong: (String) -> Unit, openStats: () -> Unit = {}) {
                 (!favOnly || r.favorite) && r.ts >= since && origin.matches(r) && (genre == null || r.shownGenre == genre)
         }
     }
+    var share by remember { mutableStateOf(false) }
+    if (share) ExportSheet(if (filtered0(favOnly, period, origin, genre, q)) "Verlauf (gefiltert)" else "Verlauf",
+        list.map { de.bs002.tunebridge.data.Export.Item(it.track, it.ts, it.source, it.extra.links(), it.shownGenre) }) { share = false }
     val filtered = favOnly || period != Period.All || origin != Origin.All || genre != null
     val groups = remember(list) { list.groupBy { Fmt.dayLabel(it.ts) } }
     val listState = rememberLazyListState()
@@ -73,6 +77,7 @@ fun HistoryScreen(openSong: (String) -> Unit, openStats: () -> Unit = {}) {
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Verlauf", if (all.isEmpty()) null else if (list.size != all.size) "${list.size} von ${Fmt.songs(all.size)}" else Fmt.songs(all.size)) {
             if (all.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(Ico.Chart, "Rückblick", openStats)
+            if (list.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(Ico.Share, "Teilen / exportieren", { share = true })
             if (list.any { it.track.playable }) PlayButtons(list.map { it.track }, "Verlauf")
         }
         if (all.isEmpty()) {
@@ -192,3 +197,5 @@ fun MenuChip(text: String, active: Boolean, options: List<String>, pick: (Int) -
         }
     }
 }
+
+private fun filtered0(fav: Boolean, p: Period, o: Origin, g: String?, q: String) = fav || p != Period.All || o != Origin.All || g != null || q.isNotBlank()

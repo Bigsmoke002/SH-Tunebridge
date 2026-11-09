@@ -95,6 +95,9 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {})
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f)) { TopBack(back) }
+            val ctx = LocalContext.current
+            IconBtn(Ico.Share, "Song teilen", { de.bs002.tunebridge.data.Export.shareSong(ctx, de.bs002.tunebridge.data.Export.Item(t, rec.ts, rec.source, x.links())) },
+                modifier = Modifier.padding(top = 8.dp))
             val fav = rec.favorite
             IconBtn(if (fav) Ico.HeartFill else Ico.Heart, if (fav) "Aus Favoriten entfernen" else "Zu Favoriten",
                 { App.repo.setFavorite(rec, !fav) }, tint = if (fav) Tb.danger else Tb.text2, modifier = Modifier.padding(top = 8.dp, end = 12.dp))

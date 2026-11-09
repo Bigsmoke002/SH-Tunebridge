@@ -126,7 +126,10 @@ fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Tra
     var q by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
         TopBack(back)
+        var share by remember { mutableStateOf(false) }
+        if (share && p != null) ExportSheet(name, p.tracks.map { de.bs002.tunebridge.data.Export.Item(it) }) { share = false }
         ScreenHeader(name, p?.let { Fmt.songs(it.tracks.size) + (pcName?.let { n -> " · $n" } ?: "") }) {
+            if (p != null && p.tracks.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(de.bs002.tunebridge.ui.theme.Ico.Share, "Teilen / exportieren", { share = true })
             if (p != null && p.tracks.any { it.playable }) PlayButtons(p.tracks, name)
         }
         if (p == null || p.tracks.isEmpty()) {

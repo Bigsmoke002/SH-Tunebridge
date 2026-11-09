@@ -289,6 +289,10 @@ Die Android-App von SH-Tunebridge erkennt Songs selbst und gleicht auf Wunsch mi
   Android-Installer übergeben kann. Android fragt dafür einmal nach; installiert wird erst, wenn du im Installer
   bestätigst. Ohne diese Erlaubnis funktioniert alles andere genauso.
 
+**Teilen & Export:** Erst wenn du auf Teilen tippst, schreibt die App eine Datei (Text, CSV oder M3U) mit Titel,
+Künstler, Album, ISRC, Genre, Zeitpunkt, Quelle und einem Link in ihren Cache und übergibt sie an die App, die du im
+Android-Teilen-Menü wählst. Keine Cover, keine Musik; die Datei wird beim nächsten Export ersetzt.
+
 **Schnellzugriffe:** Kachel in den Schnelleinstellungen, Startbildschirm-Widget und App-Verknüpfungen
 („Erkennen“, „Handy-Ton“) öffnen nur die App und starten das Erkennen wie ein Tipp auf den Kreis – mit denselben
 Hinweisen und Rückfragen. Das Widget zeigt den letzten Treffer, gespeichert nur auf dem Handy.

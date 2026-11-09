@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Teilen & Export:** Verlauf (auch gefiltert) und Playlists über das Teilen-Symbol als Text, CSV
+  (Excel-tauglich) oder M3U an jede App weitergeben; einzelne Songs aus der Song-Ansicht als Text mit Link.
+  Enthalten sind nur Titel, Künstler, Album, ISRC, Genre, Zeitpunkt und ein Link – keine Cover, keine Musik.
 - **Android: Rückblick:** Im Verlauf oben das Diagramm-Symbol – für 7 Tage, 30 Tage, 12 Monate oder alles: ein Satz
   zum Zeitraum, Anzahl Songs/Künstler, aktive Tage und längste Serie, Genre-Verteilung, meiste Künstler, öfter
   erkannte Songs, Wochentage und Tageszeiten, Quellen. Alles wird nur auf dem Handy berechnet.
