@@ -80,6 +80,7 @@ fun ListenScreen(openSong: (String) -> Unit, openPc: () -> Unit) {
     val history by App.repo.history.collectAsState()
     var askMic by remember { mutableStateOf(false) }
     var askSystem by remember { mutableStateOf(false) }
+    var askPhoneMusic by remember { mutableStateOf<Int?>(null) }
     val projection by CaptureService.projection.collectAsState()
 
     // Handy-Ton: System-Dialog „Aufnahme starten“ – danach übernimmt der Vordergrund-Dienst und erkennt gleich
@@ -92,9 +93,14 @@ fun ListenScreen(openSong: (String) -> Unit, openPc: () -> Unit) {
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
         if (ok) again++
     }
-    fun go(seconds: Int? = null) {
+    fun go(seconds: Int? = null, micAnyway: Boolean = false) {
         if (listener.busy) { listener.cancel(); return }
         val system = App.repo.settings.value.system
+        // Musik läuft auf diesem Handy: Das Mikrofon hört den eigenen Lautsprecher schlecht (Android filtert ihn) –
+        // Handy-Ton hört digital mit und klappt viel zuverlässiger.
+        if (!system && !micAnyway && ctx.getSystemService(android.media.AudioManager::class.java)?.isMusicActive == true) {
+            askPhoneMusic = seconds ?: settings.seconds; return
+        }
         if (system && !App.repo.settings.value.systemAck) { askSystem = true; return }
         if (!system && !App.repo.settings.value.micAck) { askMic = true; return }
         val granted = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -122,6 +128,25 @@ fun ListenScreen(openSong: (String) -> Unit, openPc: () -> Unit) {
         onOk = { App.repo.updateSettings { it.copy(micAck = true) }; askMic = false; go() },
         onCancel = { askMic = false },
     )
+    askPhoneMusic?.let { secs ->
+        AlertDialog(
+            onDismissRequest = { askPhoneMusic = null }, containerColor = Tb.bg2,
+            title = { Text("Musik läuft auf diesem Handy", style = TbType.title, color = Tb.text) },
+            text = {
+                Text("Über das Mikrofon klappt das oft nicht – Android filtert den eigenen Lautsprecher heraus. " +
+                    "„Handy-Ton“ hört direkt mit, was das Handy abspielt, und erkennt viel zuverlässiger.",
+                    style = TbType.body, color = Tb.text2)
+            },
+            confirmButton = {
+                TbButton("Handy-Ton nehmen", {
+                    askPhoneMusic = null
+                    App.repo.updateSettings { it.copy(system = true) }
+                    go(secs)
+                }, kind = BtnKind.Primary)
+            },
+            dismissButton = { TbButton("Trotzdem Mikrofon", { askPhoneMusic = null; go(secs, micAnyway = true) }, kind = BtnKind.Ghost) },
+        )
+    }
     if (askSystem) SystemNotice(
         onOk = { App.repo.updateSettings { it.copy(systemAck = true) }; askSystem = false; go() },
         onCancel = { askSystem = false },
