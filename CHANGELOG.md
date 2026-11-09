@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Dauer-Erkennen:** Unter dem Kreis „Dauer-Erkennen …“ – die App hört alle 1, 2 oder 5 Minuten kurz zu
+  (Mikrofon oder Handy-Ton), 30 Minuten bis 4 Stunden lang, und sammelt die Songs (z. B. Party, Radio). Derselbe Song
+  kommt nur einmal in den Verlauf; ohne Internet wird gemerkt. Läuft nur mit sichtbarer Benachrichtigung zum Beenden.
 - **Android: Teilen & Export:** Verlauf (auch gefiltert) und Playlists über das Teilen-Symbol als Text, CSV
   (Excel-tauglich) oder M3U an jede App weitergeben; einzelne Songs aus der Song-Ansicht als Text mit Link.
   Enthalten sind nur Titel, Künstler, Album, ISRC, Genre, Zeitpunkt und ein Link – keine Cover, keine Musik.

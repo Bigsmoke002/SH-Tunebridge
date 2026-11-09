@@ -284,6 +284,12 @@ Die Android-App von SH-Tunebridge erkennt Songs selbst und gleicht auf Wunsch mi
   in der Benachrichtigung, auf dem Sperrbildschirm und über Kopfhörer-/Auto-Tasten (Android-Mediensitzung). Titel,
   Künstler und Cover sieht dabei nur dein Handy (bzw. ein verbundenes Auto/Uhr, wie bei jeder Musik-App). Stopp oder
   Wegwischen beendet den Dienst.
+- **Dauer-Erkennen: Vordergrund-Dienst „Mikrofon“ + kurz wach halten** – nur wenn du es startest (Erkennen ›
+  „Dauer-Erkennen …“, vorher Hinweis inkl. § 201 StGB): Die App hört alle 1, 2 oder 5 Minuten für die eingestellte
+  Aufnahmedauer zu, genau wie bei einem Tipp – Ton nur im Arbeitsspeicher, an Shazam nur der Fingerabdruck. Läuft nur
+  mit sichtbarer Benachrichtigung („Beenden“; ohne erlaubte Benachrichtigungen startet es nicht) und endet spätestens
+  nach der gewählten Dauer (höchstens 4 Stunden). Damit die Abstände stimmen, hält die App das Handy so lange wach
+  (Wake-Lock); jeder Durchgang ist eine Shazam-Anfrage. Derselbe Song innerhalb von 20 Minuten wird nur einmal eingetragen.
 - **Andere Apps sehen** – nur die Frage, ob die Shazam-App installiert ist (für „Verlauf aus der Shazam-App“).
 - **Apps installieren** („Unbekannte Apps installieren“) – nur damit die App ein selbst geladenes Update an den
   Android-Installer übergeben kann. Android fragt dafür einmal nach; installiert wird erst, wenn du im Installer

@@ -193,6 +193,8 @@ fun ListenScreen(openSong: (String) -> Unit, openPc: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         Actions(state, onRetry = { go() }, onLonger = { go(20) }, openSong = openSong)
 
+        AutoCard(settings.system, projection != null, onNeedSetup = { go() })
+
         val pending by App.repo.pending.collectAsState()
         if (pending.isNotEmpty()) {
             Spacer(Modifier.height(14.dp))
@@ -417,4 +419,86 @@ private fun MicNotice(onOk: () -> Unit, onCancel: () -> Unit) {
         confirmButton = { TbButton("Verstanden", onOk, kind = BtnKind.Primary) },
         dismissButton = { TbButton("Abbrechen", onCancel, kind = BtnKind.Ghost) },
     )
+}
+
+/** Dauer-Erkennen: starten (mit Hinweis) bzw. laufenden Durchgang anzeigen. */
+@Composable
+private fun AutoCard(system: Boolean, projectionReady: Boolean, onNeedSetup: () -> Unit) {
+    val ctx = LocalContext.current
+    val run by de.bs002.tunebridge.audio.AutoService.run.collectAsState()
+    var ask by remember { mutableStateOf(false) }
+    var pending by remember { mutableStateOf<Triple<Boolean, Int, Int>?>(null) }
+    var blocked by remember { mutableStateOf(false) }
+    val notify = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { ok ->
+        val p = pending; pending = null
+        if (p != null && (ok || notesOn(ctx))) de.bs002.tunebridge.audio.AutoService.start(ctx, p.first, p.second, p.third)
+        else if (p != null) blocked = true
+    }
+    Spacer(Modifier.height(14.dp))
+    if (blocked) {
+        AlertDialog(
+            onDismissRequest = { blocked = false }, containerColor = Tb.bg2,
+            title = { Text("Benachrichtigungen nötig", style = TbType.title, color = Tb.text) },
+            text = { Text("Dauer-Erkennen hört im Hintergrund zu – das geht nur mit sichtbarer Benachrichtigung, damit du jederzeit " +
+                "siehst, dass die App zuhört, und sie beenden kannst. Bitte Benachrichtigungen für SH-Tunebridge erlauben.",
+                style = TbType.body, color = Tb.text2) },
+            confirmButton = { TbButton("Einstellungen öffnen", {
+                blocked = false
+                ctx.startActivity(android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, ctx.packageName))
+            }, kind = BtnKind.Primary) },
+            dismissButton = { TbButton("Abbrechen", { blocked = false }, kind = BtnKind.Ghost) },
+        )
+    }
+    if (run.active) {
+        val end = java.text.SimpleDateFormat("HH:mm", java.util.Locale.GERMANY).format(java.util.Date(run.until))
+        Notice("Dauer-Erkennen läuft · ${if (run.found == 1) "1 Song" else "${run.found} Songs"} gesammelt\n" +
+            "${if (run.system) "Handy-Ton" else "Mikrofon"}, alle ${run.intervalS / 60} min, bis $end\nZuletzt: ${run.status}", icon = Ico.Wave, color = Tb.accent) {
+            Row(Modifier.padding(top = 10.dp)) {
+                TbButton("Beenden", { de.bs002.tunebridge.audio.AutoService.stop(ctx) }, kind = BtnKind.Ghost, icon = Ico.X, small = true)
+            }
+        }
+        return
+    }
+    TbButton("Dauer-Erkennen …", { ask = true }, kind = BtnKind.Ghost, icon = Ico.Repeat)
+    if (!ask) return
+    var interval by remember { mutableStateOf(120) }
+    var minutes by remember { mutableStateOf(60) }
+    AlertDialog(
+        onDismissRequest = { ask = false }, containerColor = Tb.bg2,
+        title = { Text("Dauer-Erkennen", style = TbType.title, color = Tb.text) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Die App hört in Abständen kurz zu (${App.repo.settings.value.seconds} s, ${if (system) "Handy-Ton" else "Mikrofon"}) " +
+                    "und sammelt die Songs – derselbe Song kommt nur einmal in den Verlauf. Eine Benachrichtigung zeigt, dass sie läuft; " +
+                    "„Beenden“ stoppt sofort, sonst endet sie von selbst.", style = TbType.body, color = Tb.text2)
+                if (!system) Text("Nur dort nutzen, wo du Musik hörst – keine Gespräche anderer aufnehmen (§ 201 StGB). " +
+                    "Der Ton wird nie gespeichert.", style = TbType.small, color = Tb.warn)
+                Text("Alle", style = TbType.label, color = Tb.text3)
+                Segmented(listOf(60, 120, 300), interval, { "${it / 60} min" }) { interval = it }
+                Text("Wie lange", style = TbType.label, color = Tb.text3)
+                Segmented(listOf(30, 60, 120, 240), minutes, { if (it < 60) "$it min" else "${it / 60} h" }) { minutes = it }
+                Text("Braucht etwas mehr Akku; jeder Durchgang ist eine Shazam-Anfrage.", style = TbType.small, color = Tb.text3)
+            }
+        },
+        confirmButton = {
+            TbButton("Starten", {
+                ask = false
+                val s = App.repo.settings.value
+                val mic = ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                // Erst einmal normal erkennen, damit Hinweis, Berechtigung bzw. Handy-Ton-Freigabe da sind
+                if (!mic || (!system && !s.micAck) || (system && (!s.systemAck || !projectionReady))) { onNeedSetup(); return@TbButton }
+                // Ohne sichtbare Benachrichtigung kein Zuhören im Hintergrund
+                if (!notesOn(ctx)) { pending = Triple(system, interval, minutes); notify.launch(Manifest.permission.POST_NOTIFICATIONS); return@TbButton }
+                de.bs002.tunebridge.audio.AutoService.start(ctx, system, interval, minutes)
+            }, kind = BtnKind.Primary, icon = Ico.Play)
+        },
+        dismissButton = { TbButton("Abbrechen", { ask = false }, kind = BtnKind.Ghost) },
+    )
+}
+
+private fun notesOn(ctx: android.content.Context): Boolean {
+    val nm = ctx.getSystemService(android.app.NotificationManager::class.java)
+    if (nm?.areNotificationsEnabled() != true) return false
+    return nm.getNotificationChannel("auto")?.importance != android.app.NotificationManager.IMPORTANCE_NONE
 }

@@ -57,7 +57,16 @@ class Listener(context: Context, private val repo: Repository, private val sync:
     val busy: Boolean get() = _state.value is State.Recording || _state.value is State.Analysing
 
     /** [system] = Handy-Ton statt Mikrofon (braucht eine aktive Freigabe, siehe CaptureService). */
-    fun start(seconds: Int = repo.settings.value.seconds, system: Boolean = false) {
+    /** Für Dauer-Erkennen: einen Durchgang starten und auf das Ergebnis warten. */
+    suspend fun runOnce(seconds: Int, system: Boolean): State {
+        job?.join()
+        start(seconds, system, auto = true)
+        job?.join()
+        return _state.value
+    }
+
+    /** [auto] = Dauer-Erkennen: derselbe Song kurz hintereinander landet nur einmal im Verlauf. */
+    fun start(seconds: Int = repo.settings.value.seconds, system: Boolean = false, auto: Boolean = false) {
         if (job?.isActive == true) return
         lastSystem = system
         job = scope.launch {
@@ -92,7 +101,13 @@ class Listener(context: Context, private val repo: Repository, private val sync:
                     _state.value = State.NotFound(level)
                     return@launch
                 }
-                val rec = save(hit, system, level)
+                if (auto) {
+                    // Läuft der Song noch (oder lief vor Kurzem)? Dann nicht nochmal eintragen.
+                    val now = System.currentTimeMillis() / 1000.0
+                    val same = repo.history.value.firstOrNull { it.track.key == hit.track.key && now - it.ts < AUTO_DEDUPE_S }
+                    if (same != null) { _state.value = State.Found(same, false); return@launch }
+                }
+                val rec = save(hit, system, level, auto = auto)
                 _state.value = State.Found(rec, (hit.skew ?: 0.0) > TRUSTED_SKEW)
                 de.bs002.tunebridge.quick.ListenWidget.refresh(appContext)
                 autoSync()
@@ -110,7 +125,7 @@ class Listener(context: Context, private val repo: Repository, private val sync:
         }
     }
 
-    private fun save(hit: Shazam.Hit, system: Boolean, level: Float, ts: Double? = null, later: Boolean = false): Recognition {
+    private fun save(hit: Shazam.Hit, system: Boolean, level: Float, ts: Double? = null, later: Boolean = false, auto: Boolean = false): Recognition {
         val unsure = (hit.skew ?: 0.0) > TRUSTED_SKEW
         val extra = buildJsonObject {
             putJsonArray("engines") { add(JsonPrimitive("shazam")) }
@@ -126,6 +141,7 @@ class Listener(context: Context, private val repo: Repository, private val sync:
             if (unsure) put("unsure", true)
             if (system) put("handy_ton", true)
             if (later) put("offline", true)     // offline gemerkt, später erkannt
+            if (auto) put("auto", true)         // beim Dauer-Erkennen
         }
         val source = if (system) "handy-ton" else "handy-mikrofon"
         return if (ts != null) repo.add(hit.track, source, extra, ts) else repo.add(hit.track, source, extra)
@@ -189,6 +205,7 @@ class Listener(context: Context, private val repo: Repository, private val sync:
     }
 
     companion object {
+        const val AUTO_DEDUPE_S = 20 * 60.0   // Dauer-Erkennen: gleicher Song innerhalb 20 min = derselbe Durchlauf
         const val TRUSTED_SKEW = 0.005     // wie am Desktop (variants.TRUSTED_SKEW)
     }
 }

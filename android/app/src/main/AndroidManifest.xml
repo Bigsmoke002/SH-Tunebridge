@@ -10,6 +10,9 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Hörproben-Player in Benachrichtigung/Sperrbildschirm: läuft nur, solange etwas abgespielt wird -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Dauer-Erkennen: Mikrofon in Abständen, nur mit sichtbarer Benachrichtigung und begrenzter Dauer -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Updates ohne Play Store: Android-Installer öffnen (du bestätigst selbst) -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-feature android:name="android.hardware.microphone" android:required="true" />
@@ -76,6 +79,10 @@
             android:name=".audio.CaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+        <service
+            android:name=".audio.AutoService"
+            android:exported="false"
+            android:foregroundServiceType="microphone|mediaProjection" />
         <service
             android:name=".audio.PlayerService"
             android:exported="false"
