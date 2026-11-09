@@ -286,6 +286,18 @@ fun PcScreen(pcId: String, back: () -> Unit, toast: (String) -> Unit) {
                     }
                 }, kind = BtnKind.Primary, icon = Ico.Sync, enabled = !syncing)
             }
+            SectionLabel("Playlists auf dem Handy")
+            TbCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+                ListsOnPhone(link) {
+                    if (!syncing && App.sync.reachable(link).isNotEmpty()) {
+                        syncing = true
+                        scope.launch {
+                            runCatching { App.sync.sync(link.pcId) }.onSuccess { toast(syncText(it)) }.onFailure { toast(it.message ?: "Abgleich fehlgeschlagen") }
+                            syncing = false
+                        }
+                    }
+                }
+            }
             SectionLabel("Adressen, die das Handy benutzt")
             TbCard(Modifier.fillMaxWidth(), padding = 14.dp) {
                 AddrPicker(link.addrs, link.addrMode, link.useAddrs) { m, u -> App.sync.setAddrs(link.pcId, m, u) }

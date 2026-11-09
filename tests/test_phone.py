@@ -358,3 +358,20 @@ def test_similar_for_phone_is_encrypted_and_replay_safe(monkeypatch):
     assert e.value.status == 409
     with pytest.raises(phone.PhoneError):               # mit dem Sync-Kontext versiegelt -> passt nicht
         phone.handle_similar({"id": dev, "box": seal(ks, f"sync:{dev}", {**req, "rid": "s2"})})
+
+
+def test_phone_can_choose_which_playlists_it_gets():
+    from tunebridge import store
+    from tunebridge.models import Track
+    dev, secret, _ = _pair()
+    store.add_to_playlist("Techno", Track(title="A", artists=["X"]))
+    store.add_to_playlist("Chill", Track(title="B", artists=["Y"]))
+    store.add_to_playlist("Chill", Track(title="C", artists=["Z"]))
+    all_ = _sync(dev, secret)
+    assert {p["name"] for p in all_["playlists"]} >= {"Techno", "Chill"}
+    assert {"name": "Chill", "n": 2} in all_["catalog"]
+    some = _sync(dev, secret, lists=["Chill"])
+    assert [p["name"] for p in some["playlists"]] == ["Chill"]
+    assert {c["name"] for c in some["catalog"]} >= {"Techno", "Chill"}      # Übersicht bleibt vollständig
+    none = _sync(dev, secret, lists=[])
+    assert none["playlists"] == []

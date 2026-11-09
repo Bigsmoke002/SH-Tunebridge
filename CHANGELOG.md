@@ -12,6 +12,9 @@ Der Updater installiert nur signierte Versionen.
   deiner Musik-App (Spotify, YouTube Music, Deezer, TIDAL …, direkt, wenn die App die Nummer kennt).
 - **Android: Ähnliche Songs:** Bei jedem Song „Ähnliche Songs“ – vom gekoppelten PC (neue verschlüsselte Anfrage
   `/phone/v1/similar`), unterwegs nach Einwilligung direkt von Deezer. Abspielen, zur Playlist hinzufügen, öffnen.
+- **Android: Playlists auswählen:** Unter Mehr › (PC) › „Playlists auf dem Handy“ wählst du „Alle“ oder nur bestimmte
+  PC-Playlists. Der PC schickt dann nur diese (plus eine Übersicht aller Namen zum Auswählen); was du am Handy anlegst
+  oder befüllst, bleibt immer dabei und geht beim Abgleich zurück an den PC.
 - **Android: Hörproben aus PC-Playlists gingen nicht:** Deren Deezer-Adressen waren abgelaufen; die App holt jetzt
   beim Abspielen eine frische Adresse.
 

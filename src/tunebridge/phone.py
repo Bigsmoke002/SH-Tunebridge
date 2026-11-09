@@ -542,13 +542,20 @@ def apply(req: dict, device_name: str) -> dict:
     recs = store.recognitions_since(cursor, RECS_PER_SYNC, exclude_prefix="android-")
     updates = [_rec_out(r) for r in store.recognitions_by_uid([str(u) for u in (req.get("need_info") or [])[:300]])
                if r["track"].get("genre")]
-    lists, n = [], 0
+    # Welche Playlists das Handy haben will (None = alle). Die Übersicht (Name + Anzahl) geht immer mit – zum Auswählen.
+    want = req.get("lists")
+    want = {str(x)[:120] for x in want[:2000]} if isinstance(want, list) else None
+    lists, catalog, n = [], [], 0
     for name in store.playlist_names():
-        tracks = [_slim(e["track"]) for e in store.playlist_entries(name)][:max(0, MAX_PLAYLIST_TRACKS - n)]
+        entries = store.playlist_entries(name)
+        catalog.append({"name": name, "n": len(entries)})
+        if want is not None and name not in want:
+            continue
+        tracks = [_slim(e["track"]) for e in entries][:max(0, MAX_PLAYLIST_TRACKS - n)]
         n += len(tracks)
         lists.append({"name": name, "tracks": tracks, "updated": 0.0})
     return {"cursor": recs[-1]["ts"] if recs else cursor, "recs": [_rec_out(r) for r in recs], "updates": updates,
-            "playlists": lists, "pc_name": _pc_name(), "addrs": addresses(),
+            "playlists": lists, "catalog": catalog, "pc_name": _pc_name(), "addrs": addresses(),
             "more": len(recs) >= RECS_PER_SYNC}
 
 

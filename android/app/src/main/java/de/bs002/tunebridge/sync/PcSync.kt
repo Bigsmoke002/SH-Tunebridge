@@ -138,6 +138,7 @@ class PcSync(private val repo: Repository) {
         val playlists: List<Playlist>? = null,
         @SerialName("pc_name") val pcName: String? = null,
         val addrs: List<String>? = null,
+        val catalog: List<Repository.CatalogEntry>? = null,
         val more: Boolean = false,
     )
 
@@ -175,6 +176,7 @@ class PcSync(private val repo: Repository) {
                         put("deleted", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), out.deleted))
                         put("ops", repo.json.encodeToJsonElement(ListSerializer(Repository.Op.serializer()), out.ops.map { it.second }))
                         put("need_info", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), if (round == 0) out.needInfo else emptyList()))
+                        link.lists?.let { put("lists", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), it)) }
                     }.toString()
                     val key = syncKey(link.secret)
                     val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "sync:${link.deviceId}", payload)) }.toString()
@@ -185,7 +187,7 @@ class PcSync(private val repo: Repository) {
                     val plain = runCatching { Crypto.unseal(key, "sync-ok:${link.deviceId}:$rid", box) }
                         .getOrElse { throw PairError("Antwort des PCs ließ sich nicht prüfen – bitte neu koppeln") }
                     val ans = repo.json.decodeFromString<SyncAnswer>(plain)
-                    repo.applyIncoming(link, out, ans.recs, ans.updates, ans.playlists, ans.cursor, ans.pcName, addr, ans.addrs)
+                    repo.applyIncoming(link, out, ans.recs, ans.updates, ans.playlists, ans.cursor, ans.pcName, addr, ans.addrs, ans.catalog)
                     sent += out.recs.size + out.deleted.size + out.ops.size
                     received += ans.recs.size
                     lists = ans.playlists?.size ?: lists

@@ -44,6 +44,9 @@ class Repository(private val db: Db, private val context: android.content.Contex
      * alles vom PC hat.
      */
     @Serializable
+    data class CatalogEntry(val name: String, val n: Int = 0)
+
+    @Serializable
     data class PcLink(
         val pcId: String,
         val pcName: String,
@@ -58,6 +61,8 @@ class Repository(private val db: Db, private val context: android.content.Contex
         val lastSync: Double = 0.0,
         val lastSyncError: String? = null,
         val lastAddr: String? = null,
+        val lists: List<String>? = null,                 // welche PC-Playlists aufs Handy kommen (null = alle)
+        val catalog: List<CatalogEntry> = emptyList(),   // alle Playlists des PCs (Name + Anzahl) – zum Auswählen
     ) {
         /** Adressen, die das Handy anspricht – zuletzt erfolgreiche zuerst. */
         val targets: List<String>
@@ -241,6 +246,8 @@ class Repository(private val db: Db, private val context: android.content.Contex
 
     fun addToPlaylist(pc: String, name: String, track: Track) {
         queue(pc, Op("add", name, track))
+        // Am Handy angelegt/befüllt: bleibt auch bei einer Auswahl auf dem Handy
+        link(pc)?.lists?.let { l -> if (name !in l) updateLink(pc) { it.copy(lists = l + name) } }
         val cur = _playlists.value.firstOrNull { it.pc == pc && it.name == name }
         val tracks = (cur?.tracks.orEmpty()).let { if (it.any { t -> t.key == track.key }) it else it + track }
         savePlaylist(Playlist(name, tracks, System.currentTimeMillis() / 1000.0, pc))
@@ -297,9 +304,12 @@ class Repository(private val db: Db, private val context: android.content.Contex
     }
 
     /** Antwort eines PCs übernehmen: neue Erkennungen vom PC, ergänzte Song-Infos, seine Playlists, neuer Stand. */
+    /** Auswahl der PC-Playlists auf dem Handy (null = alle) – wirkt beim nächsten Abgleich. */
+    fun setLists(pc: String, lists: List<String>?) = updateLink(pc) { it.copy(lists = lists) }
+
     fun applyIncoming(
         link: PcLink, sent: Outgoing, recs: List<Recognition>, updates: List<Recognition>, playlists: List<Playlist>?,
-        cursor: Double, pcName: String?, addr: String, addrs: List<String>? = null,
+        cursor: Double, pcName: String?, addr: String, addrs: List<String>? = null, catalog: List<CatalogEntry>? = null,
     ) {
         val w = db.writableDatabase
         w.beginTransaction()
@@ -325,7 +335,7 @@ class Repository(private val db: Db, private val context: android.content.Contex
         }
         updateLink(link.pcId) {
             it.copy(sentSeq = maxOf(it.sentSeq, sent.maxSeq), cursor = cursor, lastSync = System.currentTimeMillis() / 1000.0,
-                lastSyncError = null, lastAddr = addr, pcName = pcName ?: it.pcName,
+                lastSyncError = null, lastAddr = addr, pcName = pcName ?: it.pcName, catalog = catalog ?: it.catalog,
                 // Neue Adressen des PCs (z. B. neue IP vom Router) übernehmen; bei „Bestimmte/Nur diese“ bleibt die Auswahl.
                 addrs = addrs?.filter { a -> ':' in a }?.takeIf { l -> l.isNotEmpty() } ?: it.addrs)
         }
