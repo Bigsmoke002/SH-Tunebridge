@@ -79,7 +79,7 @@ private val STYLE = mapOf(
 )
 
 @Composable
-fun SongScreen(uid: String, back: () -> Unit) {
+fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}) {
     val history by App.repo.history.collectAsState()
     val rec = history.firstOrNull { it.uid == uid }
     if (rec == null) {
@@ -120,6 +120,8 @@ fun SongScreen(uid: String, back: () -> Unit) {
                 }
                 TbButton("Zur Playlist", { pick = true }, icon = Ico.Plus)
             }
+            Spacer(Modifier.height(8.dp))
+            TbButton("Ähnliche Songs", { openSimilar(t) }, kind = BtnKind.Ghost, icon = Ico.Sparkle)
             Text(
                 "${when {
                     !rec.host.startsWith("Handy") -> "Am PC (${rec.host}) erkannt"

@@ -312,6 +312,10 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   Zeit ab; dann fragt die App bei Deezer (`api.deezer.com`) nach der aktuellen Adresse – mit Deezer-Nummer, ISRC oder
   Künstler + Titel des Songs. Deezer/Apple sehen dabei deine IP-Adresse. Den ganzen Song gibt es nur in deiner
   Musik-App („Öffnen“).
+- **Ähnliche Songs:** Kommen vom gekoppelten PC (verschlüsselt wie der Abgleich; der PC fragt Last.fm/Deezer wie bei
+  sich selbst). Ist kein PC erreichbar, holt die App sie – nur wenn du es erlaubst („Ähnliche Songs ohne PC“, Standard:
+  aus) – direkt bei Deezer: dafür gehen Titel und Künstler bzw. Deezer-Nummer/ISRC des Songs an Deezer, Deezer sieht
+  deine IP-Adresse.
 - **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
   direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
 - **Dein PC:** siehe unten. Sonst nichts – keine Google-Play-Dienste, kein Firebase, keine Analyse-, Absturz-

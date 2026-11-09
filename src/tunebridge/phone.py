@@ -449,6 +449,31 @@ def handle_sync(body: dict, client: str | None = None) -> dict:
     return {"box": seal(key, f"sync-ok:{dev_id}:{rid}", answer, limit=None)}
 
 
+def handle_similar(body: dict, client: str | None = None) -> dict:
+    """Ähnliche Songs für das Handy (Mehr dazu: similar.py) – gleiche Verschlüsselung wie der Abgleich.
+    Das Handy schickt nur Titel/Künstler/ISRC des Songs; der PC fragt Last.fm/Deezer wie bei sich selbst."""
+    dev_id = str(body.get("id") or "")[:32]
+    d = _device(dev_id)
+    key = _kdf(base64.b64decode(d["secret"]), "sync")
+    try:
+        req = unseal(key, f"similar:{dev_id}", str(body.get("box") or ""))
+    except ShareError:
+        raise PhoneError("Anfrage ließ sich nicht prüfen – bitte neu koppeln", 403) from None
+    rid = str(req.get("rid") or "")[:64]
+    _replay_check(int(req.get("ts") or 0), rid)
+    t = _track(req.get("track") or {})
+    if not t.artists or t.title == "?":
+        raise PhoneError("Song fehlt")
+    from . import ratelimit, similar
+    try:
+        cands = similar.find(t, limit=max(1, min(int(req.get("limit") or 15), 30)))
+    except ratelimit.LimitReached as e:
+        raise PhoneError(f"{e} – bitte gleich nochmal versuchen", 429) from None
+    from dataclasses import asdict
+    items = [{**_slim(asdict(c)), "match": round(m, 2)} for c, m in cands]
+    return {"box": seal(key, f"similar-ok:{dev_id}:{rid}", {"items": items}, limit=None)}
+
+
 # ------------------------------------------------------------------ Abgleich: Daten übernehmen und zurückgeben
 _TRACK_FIELDS = {f for f in Track.__dataclass_fields__}
 
@@ -583,6 +608,11 @@ def _make_app():
     async def sync(request: Request):
         import asyncio
         return await asyncio.to_thread(handle_sync, await body_of(request), _client(request))
+
+    @api.post("/phone/v1/similar")
+    async def similar_songs(request: Request):
+        import asyncio
+        return await asyncio.to_thread(handle_similar, await body_of(request), _client(request))
 
     @api.get("/phone/v1/hello")
     async def hello(request: Request):

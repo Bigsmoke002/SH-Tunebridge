@@ -199,6 +199,55 @@ class PcSync(private val repo: Repository) {
         }
     }
 
+    /**
+     * Ähnliche Songs vom ersten erreichbaren PC (gleiche Verschlüsselung wie der Abgleich; der PC fragt Last.fm/Deezer).
+     * null = gerade kein PC erreichbar.
+     */
+    suspend fun similar(track: de.bs002.tunebridge.data.Track, limit: Int = 20): List<Pair<de.bs002.tunebridge.data.Track, Double>>? =
+        withContext(Dispatchers.IO) {
+            if (!Nets.allowed()) return@withContext null
+            val nets = Nets.current()
+            for (link in repo.settings.value.pcs) {
+                val addrs = reachable(link, nets).ifEmpty { continue }
+                val rid = UUID.randomUUID().toString()
+                val payload = buildJsonObject {
+                    put("ts", System.currentTimeMillis()); put("rid", rid); put("limit", limit)
+                    put("track", buildJsonObject {
+                        put("title", track.title)
+                        put("artists", kotlinx.serialization.json.JsonArray(track.artists.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                        track.isrc?.let { put("isrc", it) }
+                    })
+                }.toString()
+                val key = syncKey(link.secret)
+                val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "similar:${link.deviceId}", payload)) }.toString()
+                val answer = try {
+                    anyAddr(listOfNotNull(link.lastAddr).filter { it in addrs }.ifEmpty { addrs }) { post(Http.lan, it, "/phone/v1/similar", body) }.second
+                } catch (e: PairError) {
+                    if (e.message?.startsWith("PC nicht erreichbar") == true) continue else throw e
+                }
+                val box = repo.json.parseToJsonElement(answer).jsonObject["box"]?.jsonPrimitive?.content ?: throw PairError("Unerwartete Antwort vom PC")
+                val plain = runCatching { Crypto.unseal(key, "similar-ok:${link.deviceId}:$rid", box) }
+                    .getOrElse { throw PairError("Antwort des PCs ließ sich nicht prüfen – bitte neu koppeln") }
+                val items = repo.json.decodeFromString<SimilarAnswer>(plain).items
+                return@withContext items.map { it.toTrack() to it.match }
+            }
+            null
+        }
+
+    @Serializable
+    private data class SimilarAnswer(val items: List<SimilarItem> = emptyList())
+
+    @Serializable
+    private data class SimilarItem(
+        val title: String, val artists: List<String> = emptyList(), val album: String? = null,
+        @SerialName("duration_ms") val durationMs: Long? = null, val isrc: String? = null,
+        val ids: Map<String, String> = emptyMap(), val genre: String? = null, val subgenre: String? = null,
+        val cover: String? = null, @SerialName("preview_url") val previewUrl: String? = null, val match: Double = 0.0,
+    ) {
+        fun toTrack() = de.bs002.tunebridge.data.Track(title = title, artists = artists, album = album, durationMs = durationMs,
+            isrc = isrc, ids = ids, genre = genre, subgenre = subgenre, cover = cover, previewUrl = previewUrl?.takeIf { it.startsWith("http") })
+    }
+
     /** Adressen-Auswahl für einen gekoppelten PC ändern. */
     fun setAddrs(pcId: String, mode: String, use: List<String>) =
         repo.updateLink(pcId) { it.copy(addrMode = mode, useAddrs = if (mode == "all") emptyList() else use.filter { a -> a in it.addrs }) }

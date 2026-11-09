@@ -335,3 +335,26 @@ def test_shazams_from_phone_become_sortable_playlists_next_to_csv():
     dataexport.save("shazam", {"playlists": [{"name": "Meine Shazams", "tracks": [Track(title="CSV neu", artists=["Y"])]}],
                                "liked": []}, "neu.csv")                          # neue CSV: Handy-Liste bleibt
     assert "Shazams vom Handy" in [p["name"] for p in dataexport.playlists("shazam")]
+
+
+def test_similar_for_phone_is_encrypted_and_replay_safe(monkeypatch):
+    from tunebridge import similar
+    from tunebridge.models import Track
+    seen = {}
+
+    def fake_find(t, limit=15):
+        seen["t"] = t
+        return [(Track(title="Strobe", artists=["deadmau5"], isrc="X1", ids={"deezer": "42"}, tags={"house": 1.0}), 0.9)]
+    monkeypatch.setattr(similar, "find", fake_find)
+    dev, secret, _ = _pair()
+    ks = phone._kdf(secret, "sync")
+    req = {"ts": int(time.time() * 1000), "rid": "s1", "track": {"title": "One More Time", "artists": ["Daft Punk"]}, "limit": 5}
+    body = {"id": dev, "box": seal(ks, f"similar:{dev}", req)}
+    ans = unseal(ks, f"similar-ok:{dev}:s1", phone.handle_similar(body)["box"])
+    assert seen["t"].title == "One More Time" and seen["t"].artists == ["Daft Punk"]
+    assert ans["items"] == [{"title": "Strobe", "artists": ["deadmau5"], "isrc": "X1", "ids": {"deezer": "42"}, "match": 0.9}]
+    with pytest.raises(phone.PhoneError) as e:          # gleiche Anfrage nochmal
+        phone.handle_similar(body)
+    assert e.value.status == 409
+    with pytest.raises(phone.PhoneError):               # mit dem Sync-Kontext versiegelt -> passt nicht
+        phone.handle_similar({"id": dev, "box": seal(ks, f"sync:{dev}", {**req, "rid": "s2"})})

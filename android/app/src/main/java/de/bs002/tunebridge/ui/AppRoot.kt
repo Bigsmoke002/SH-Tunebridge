@@ -122,10 +122,15 @@ private fun Main(toast: (String) -> Unit) {
                     PcScreen(Uri.decode(it.arguments?.getString("id").orEmpty()), back = { nav.popBackStack() }, toast = toast)
                 }
                 composable("song/{uid}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
-                    SongScreen(Uri.decode(it.arguments?.getString("uid").orEmpty()), back = { nav.popBackStack() })
+                    SongScreen(Uri.decode(it.arguments?.getString("uid").orEmpty()), back = { nav.popBackStack() },
+                        openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") })
                 }
                 composable("playlist/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
-                    PlaylistScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() })
+                    PlaylistScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() },
+                        openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") })
+                }
+                composable("similar", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    de.bs002.tunebridge.ui.screens.SimilarScreen(back = { nav.popBackStack() })
                 }
                 composable("pair", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     PairScreen(back = { nav.popBackStack() }, done = { msg -> toast(msg); nav.popBackStack() })

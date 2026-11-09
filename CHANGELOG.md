@@ -10,6 +10,8 @@ Der Updater installiert nur signierte Versionen.
 - **Android: Player mit Vor/Zurück:** Verlauf und Playlists lassen sich als Hörproben (30 s) abspielen – nacheinander
   oder zufällig, mit Mini-Player (Zurück, Pause, Weiter) über der Navigation. Tippen auf den Song öffnet ihn ganz in
   deiner Musik-App (Spotify, YouTube Music, Deezer, TIDAL …, direkt, wenn die App die Nummer kennt).
+- **Android: Ähnliche Songs:** Bei jedem Song „Ähnliche Songs“ – vom gekoppelten PC (neue verschlüsselte Anfrage
+  `/phone/v1/similar`), unterwegs nach Einwilligung direkt von Deezer. Abspielen, zur Playlist hinzufügen, öffnen.
 - **Android: Hörproben aus PC-Playlists gingen nicht:** Deren Deezer-Adressen waren abgelaufen; die App holt jetzt
   beim Abspielen eine frische Adresse.
 

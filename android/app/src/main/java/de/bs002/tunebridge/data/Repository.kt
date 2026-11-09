@@ -72,13 +72,14 @@ class Repository(private val db: Db, private val context: android.content.Contex
         val consent: Int = 0,             // akzeptierte Fassung der Datenschutz-Hinweise (0 = noch nicht)
         val micAck: Boolean = false,      // § 201 StGB-Hinweis gelesen
         val covers: Boolean = true,       // Cover-Bilder laden (Apple-Server sieht die IP)
-        val autoSync: Boolean = true,
-        val netConsent: Boolean = false,
-        val rootAck: Int = 0,
+        val autoSync: Boolean = true,     // nach jeder Erkennung und beim Öffnen abgleichen, falls ein PC erreichbar ist
+        val netConsent: Boolean = false,  // eigene Netzwerkkarten auslesen erlaubt (für den PC-Abgleich)
+        val rootAck: Int = 0,             // Warnung „Shazam per Root auslesen“ gelesen und bestätigt (Fassung)
         val system: Boolean = false,      // Quelle: Handy-Ton statt Mikrofon
         val systemAck: Boolean = false,   // Hinweis zum Handy-Ton gelesen
         val autoUpdate: Boolean = false,  // einmal am Tag bei GitHub nach einer neuen Version fragen
-        val lastUpdateCheck: Double = 0.0,             // Warnung „Shazam per Root auslesen“ gelesen und bestätigt (Fassung)  // eigene Netzwerkkarten auslesen erlaubt (für den PC-Abgleich)     // nach jeder Erkennung und beim Öffnen abgleichen, falls ein PC erreichbar ist
+        val lastUpdateCheck: Double = 0.0,
+        val similarDirect: Boolean = false, // ähnliche Songs ohne PC direkt bei Deezer holen (Einwilligung)
         val seconds: Int = 10,
         val pcs: List<PcLink> = emptyList(),
         // bis Version 1 (ein einziger PC) – nur noch zum Übernehmen gelesen

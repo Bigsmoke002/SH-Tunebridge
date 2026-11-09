@@ -45,6 +45,9 @@ class App : Application(), ImageLoaderFactory {
         lateinit var listener: Listener
             private set
 
+        /** Song, zu dem die Seite „Ähnliche Songs“ gerade Vorschläge zeigt. */
+        val similarSeed = kotlinx.coroutines.flow.MutableStateFlow<de.bs002.tunebridge.data.Track?>(null)
+
         /** Erkennen von außen angestoßen (Schnellkachel, Widget, App-Kurzbefehl): false = Mikrofon, true = Handy-Ton. */
         val listenRequest = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)
 

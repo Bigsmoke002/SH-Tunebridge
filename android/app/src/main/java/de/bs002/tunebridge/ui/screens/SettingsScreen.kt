@@ -136,6 +136,10 @@ fun SettingsScreen(openPair: () -> Unit, openPc: (String) -> Unit, openPrivacy: 
                     App.repo.updateSettings { it.copy(netConsent = v) }
                 }
                 Hairline()
+                SettingRow("Ähnliche Songs ohne PC", "Ist kein PC erreichbar, holt die App Vorschläge direkt bei Deezer – mit Titel und Künstler des Songs; Deezer sieht deine IP-Adresse. Aus: Vorschläge nur vom PC.", s.similarDirect) { v ->
+                    App.repo.updateSettings { it.copy(similarDirect = v) }
+                }
+                Hairline()
                 NavRow("Was die App sendet und speichert", openPrivacy)
             }
 
@@ -185,6 +189,7 @@ fun PrivacyScreen(back: () -> Unit) {
                 Triple(Ico.Wave, "Shazam (Apple)", "Bekommt einen Fingerabdruck der Aufnahme (Zahlenwerte, kein Ton), Zeitzone und Spracheinstellung – und technisch bedingt deine IP-Adresse. Ohne Konto, ohne Werbe-ID."),
                 Triple(Ico.Disc, "Cover & Hörproben", "Cover nur, wenn eingeschaltet; Hörproben erst nach Tippen auf „Reinhören“ oder „Abspielen“. Beides kommt von Apple bzw. Deezer, die dabei deine IP-Adresse sehen. Ist eine Deezer-Adresse abgelaufen, fragt die App bei Deezer mit Song-Nummer, ISRC oder Künstler + Titel nach der aktuellen."),
                 Triple(Ico.Shield, "Shazam-App (nur Root)", "Nur wenn du es unter Mehr › Shazam-App startest und die Warnung bestätigst: Die App liest aus der Datenbank der Shazam-App nur Song-Nummer, Titel, Künstler und Zeitpunkt deiner Shazams – keinen Standort, keine Signatur, keine Kontodaten – und löscht die Kopie sofort."),
+                Triple(Ico.Sparkle, "Ähnliche Songs", "Vom gekoppelten PC (verschlüsselt, wie der Abgleich). Ist keiner erreichbar und hast du es erlaubt, direkt bei Deezer: Titel, Künstler bzw. Deezer-Nummer/ISRC des Songs – Deezer sieht deine IP-Adresse."),
                 Triple(Ico.Sync, "Updates (GitHub)", "Nur wenn „Automatisch nach Updates suchen“ an ist (höchstens einmal am Tag) oder du selbst suchst: GitHub sieht deine IP-Adresse. Installiert wird nur eine signierte, geprüfte Version – und erst, wenn du im Android-Installer bestätigst."),
                 Triple(Ico.Monitor, "Dein PC", "Abgleich direkt im eigenen Netz, ohne Server dazwischen – nur mit PCs, denen du hier und am PC zugestimmt hast, und nur über die Adressen, die du je PC auswählst. Gesendet wird nur, wenn das Handy gerade im Netz dieses PCs ist. Dafür liest die App – erst nach deiner Zustimmung – die eigenen Netzwerkkarten (IP-Adresse, Netz), ohne Standort-Berechtigung; widerrufbar unter Mehr › Datenschutz. Jede Nachricht ist mit AES-256-GCM verschlüsselt; der Schlüssel entsteht beim Koppeln und verlässt Handy und PC nie."),
                 Triple(Ico.Shield, "Auf dem Handy", "Verlauf, Playlists und Einstellungen liegen nur in der App (nicht in Android-Sicherungen). App löschen = alles weg."),
