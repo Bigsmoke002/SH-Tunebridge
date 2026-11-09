@@ -195,7 +195,14 @@ class Listener(context: Context, private val repo: Repository, private val sync:
     fun autoSync() {
         val s = repo.settings.value
         if (s.pcs.isEmpty() || !s.autoSync) return
-        scope.launch { runCatching { sync.syncAll() } }
+        scope.launch {
+            runCatching { sync.syncAll() }
+            // Unterwegs: der PC schaut etwa alle 6 Minuten nach – danach die Antwort still abholen
+            if (repo.settings.value.pcs.any { it.relay && it.relayRid != null }) {
+                kotlinx.coroutines.delay(7 * 60_000)
+                runCatching { sync.relayPickup() }
+            }
+        }
     }
 
     private fun levelDb(pcm: ShortArray): Float {

@@ -23,15 +23,16 @@ _KEY = "consent"
 
 LOCAL = ("misses", "player", "cache")          # lokal speichern
 LOAD = ("genredb",)                   # nur laden, nichts senden – vorausgewählt, abwählbar
-SERVER = ("misses", "fehler", "songs", "genres", "genredb", "share", "bibliothek", "verzeichnis")
+SERVER = ("misses", "fehler", "songs", "genres", "genredb", "share", "bibliothek", "verzeichnis", "relay")
 # genredb = laden, share = Playlists teilen (verschlüsselt), bibliothek = Song → Genre aus dem Song-Speicher beitragen,
-# verzeichnis = öffentliches Playlist-Verzeichnis (stöbern; veröffentlichen zusätzlich je Playlist bestätigt)
+# verzeichnis = öffentliches Playlist-Verzeichnis (stöbern; veröffentlichen zusätzlich je Playlist bestätigt),
+# relay = Handy-Abgleich übers Internet (verschlüsselte Ablage; zusätzlich je Handy eingeschaltet)
 
 DEFAULTS = {
     "version": 0, "privacy_at": None,
     "local": {"misses": True, "player": True, "cache": True},
     "server": {"domain": False, "misses": False, "fehler": False, "songs": False, "genres": False, "genredb": True,
-               "share": False, "bibliothek": False, "verzeichnis": False},
+               "share": False, "bibliothek": False, "verzeichnis": False, "relay": False},
 }
 
 

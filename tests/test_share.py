@@ -34,7 +34,7 @@ class FakeServer:
                 return httpx.Response(403, json={"error": "Falscher Schlüssel"}, request=req)
             elif room["rev"] != json["rev"]:
                 return httpx.Response(409, json={"rev": room["rev"]}, request=req)
-            room.update(rev=room["rev"] + 1, priv=json["priv"], pub=json["pub"])
+            room.update(rev=room["rev"] + 1, priv=json["priv"], pub=json.get("pub"))
             return httpx.Response(200, json={"rev": room["rev"]}, request=req)
         if room is None:
             return httpx.Response(404, json={"error": "nicht da"}, request=req)

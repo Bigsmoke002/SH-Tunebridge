@@ -4424,6 +4424,10 @@ const Consent = {
       "Stöbern lädt die Liste veröffentlichter Playlists vom Server (gesendet wird nur die Suchanfrage). Veröffentlichen geht nur einzeln und mit Bestätigung: " +
       "Name der Playlist, dein selbst gewähltes Pseudonym, Genre, Beschreibung und die Songs (Titel, Künstler, Album, ISRC, Länge, Dienst-IDs – nie Musik oder Cover) " +
       "sind dann für alle sichtbar. Der Server kennt dich nur als Hash deines Installations-Schlüssels; Löschen jederzeit, automatisch nach 12 Monaten ohne Aktualisierung."],
+    ["relay", "Handy-Abgleich übers Internet (Ende-zu-Ende verschlüsselt)",
+      "Nur für Handys, bei denen du „Unterwegs“ einschaltest: Ist das Handy nicht im selben Netz, tauschen Handy und PC den Abgleich (Erkennungen, Playlist-Änderungen, " +
+      "ausgewählte Playlists – nie Audio, Konten oder Schlüssel) über eine verschlüsselte Ablage auf dem Server aus. Der Schlüssel stammt aus eurer Kopplung und verlässt die Geräte nie; " +
+      "der Server sieht nur zufällige Kennungen, unlesbare Blöcke und das Datum, keine Konten (Verbindungsdaten wie IP-Adresse protokolliert die Server-Technik höchstens 12 Monate). Dieser PC fragt dafür etwa alle 6 Minuten nach. Ablagen werden beim Abschalten gelöscht, sonst nach einem Jahr ohne Nutzung."],
     ["songs", "Erkannte Songs für die Genre-Analyse senden",
       "Je erkanntem Song: Datum, Künstler, Titel, ISRC, ermitteltes Genre/Subgenre/Nische, Sicherheit, Genre-Quelle, genutzter Dienst, Tempo-Faktor, KI-Musik-Hinweis. " +
       "Kein Hörverlauf mit Uhrzeit, keine Playlists, kein Konto. Zweck: Genre-Zuordnung und Song-Analyse für alle verbessern."],
@@ -4937,7 +4941,9 @@ const PhoneUI = {
           <div class="phone-row">
             <div class="phone-dot ${online(x) ? "on" : ""}"></div>
             <div class="phone-name"><div>${esc(x.name || "Handy")}</div>
-              <div class="cell-sub">Gekoppelt ${ago(x.added)} · zuletzt abgeglichen ${x.last_seen ? ago(x.last_seen) : "noch nie"}${x.ip ? ` · von ${esc(x.ip)}` : ""}${x.last_counts ? ` · ${x.last_counts.empfangen} empfangen, ${x.last_counts.gesendet} gesendet` : ""}${x.app ? ` · App ${esc(x.app)}` : ""}</div></div>
+              <div class="cell-sub">Gekoppelt ${ago(x.added)} · zuletzt abgeglichen ${x.last_seen ? ago(x.last_seen) : "noch nie"}${x.ip ? ` · von ${esc(x.ip)}` : ""}${x.last_counts ? ` · ${x.last_counts.empfangen} empfangen, ${x.last_counts.gesendet} gesendet` : ""}${x.app ? ` · App ${esc(x.app)}` : ""}${x.via === "internet" ? " · übers Internet" : ""}</div></div>
+            <label class="ph-relay" title="Auch unterwegs abgleichen – verschlüsselt über shtunebridge.bs002.de"><span class="cell-sub">Unterwegs</span>
+              <span class="switch"><input type="checkbox" data-ph-relay="${esc(x.id)}" ${x.relay && d.relay_allowed ? "checked" : ""}><span class="track"></span></span></label>
             <button class="btn btn--ghost btn--sm" data-ph-del="${esc(x.id)}">Entfernen</button>
           </div>`).join("")}</div>` : ""}
       </div>
@@ -4986,7 +4992,8 @@ const PhoneUI = {
         <div><span>Vom Handy empfangen</span><div>Erkennungen am Handy (Song, Zeitpunkt, Shazam-Angaben, unsicher/bestätigt), gelöschte Einträge, Änderungen an Playlists, Gerätename und App-Version.</div></div>
         <div><span>Ans Handy senden</span><div>Deine Erkennungen am PC und lokalen Playlists (Titel, Künstler, Album, ISRC, Länge, Genre, Cover- und Hörproben-Adresse, Dienst-Kennungen).</div></div>
         <div><span>Nie</span><div>Konten, Tokens, API-Keys, Einstellungen, Audio.</div></div>
-        <div><span>Wie</span><div>Ende-zu-Ende verschlüsselt (AES-256-GCM), Schlüssel nur auf Handy und PC, Schutz gegen abgefangene und wiederholte Anfragen. Kein Server dazwischen.</div></div>
+        <div><span>Wie</span><div>Ende-zu-Ende verschlüsselt (AES-256-GCM), Schlüssel nur auf Handy und PC, Schutz gegen abgefangene und wiederholte Anfragen. Im eigenen Netz kein Server dazwischen.</div></div>
+        <div><span>Unterwegs</span><div>Nur wenn du es je Handy einschaltest (hier „Unterwegs“ und in der App beim PC): Ist der PC nicht im selben Netz, legt das Handy seine Anfrage verschlüsselt auf <code>shtunebridge.bs002.de</code> ab; der PC schaut etwa alle 6 Minuten nach und legt die Antwort ebenso verschlüsselt zurück – unterwegs kommt der Abgleich also mit einigen Minuten Verzögerung an. Der Server sieht nur zufällige Kennungen, unlesbare Blöcke, Datum; wie bei jeder Verbindung protokolliert die Server-Technik IP-Adresse und Zeitpunkt der Anfragen (höchstens 12 Monate, siehe Datenschutzerklärung). Playlists über 1500 Songs gehen nur im Heimnetz. Ausschalten löscht beide Ablagen sofort.</div></div>
       </div>
       <div class="dc-note">${icon("info")}<span>Blockiert eine Firewall den Port, findet das Handy den PC nicht – unter Linux z. B. <code>sudo ufw allow from ${esc((d.networks.find(n => n.primary) || d.networks[0] || { cidr: "192.168.0.0/16" }).cidr)} to any port ${d.port} proto tcp</code>.</span></div>`;
     hydrateIcons(box);
@@ -5013,6 +5020,30 @@ const PhoneUI = {
       saveNet(m, sel);
     });
     $$("[data-net]", box).forEach(c => c.onchange = () => saveNet("some", $$("[data-net]:checked", box).map(x => x.dataset.net)));
+    $$("[data-ph-relay]", box).forEach(c => c.onchange = async () => {
+      const id = c.dataset.phRelay, on = c.checked;
+      const set = async () => {
+        try { await api(`/api/phone/devices/${encodeURIComponent(id)}/relay`, { method: "POST", body: { enabled: on } }); }
+        catch (err) { toast(err.message, "err"); }
+        this.render(box);
+      };
+      if (!on || d.relay_allowed) return set();
+      c.checked = false;
+      modal({
+        title: "Unterwegs abgleichen?",
+        text: "Ist das Handy nicht im selben Netz wie dieser PC, tauschen beide den Abgleich über eine Ablage auf https://shtunebridge.bs002.de aus. " +
+          "Alles wird vorher mit dem Schlüssel aus eurer Kopplung verschlüsselt (AES-256-GCM): der Server sieht nur zufällige Kennungen, unlesbare Blöcke, " +
+          "das Datum; wie bei jeder Verbindung protokolliert die Server-Technik IP-Adresse und Zeitpunkt der Anfragen (höchstens 12 Monate). Dieser PC fragt dafür etwa alle 6 Minuten dort nach. " +
+          "Inhalt wie im Heimnetz (Erkennungen, Playlist-Änderungen, ausgewählte Playlists bis 1500 Songs), nie Audio, Konten oder Schlüssel. " +
+          "Jederzeit abschaltbar – dann werden die Ablagen sofort gelöscht, sonst automatisch nach einem Jahr ohne Nutzung.",
+        confirm: "Erlauben und einschalten",
+        onConfirm: async () => {
+          try { await api("/api/consent", { method: "POST", body: { privacy: true, server: { domain: true, relay: true } } }); }
+          catch (err) { return toast(err.message, "err"); }
+          await set();
+        },
+      });
+    });
     $$("[data-ph-del]", box).forEach(b => b.onclick = () => modal({
       title: "Handy entfernen?", text: "Das Handy kann danach nicht mehr mit diesem PC abgleichen, bis du es neu koppelst. Bereits übertragene Songs bleiben auf beiden Geräten.",
       confirm: "Entfernen", danger: true,
@@ -5991,6 +6022,7 @@ const SETTINGS_INDEX = [
   ["datenschutz", "Offizielle Player (eingebettet)", "player eingebettet youtube spotify laden"],
   ["datenschutz", "Öffentliches Playlist-Verzeichnis nutzen", "verzeichnis öffentlich einwilligung"],
   ["datenschutz", "Playlists teilen", "teilen einwilligung verschlüsselt"],
+  ["datenschutz", "Handy-Abgleich übers Internet", "unterwegs handy internet abgleich relais einwilligung"],
   ["traffic", "Datenverbrauch", "traffic daten mb internet verbrauch"],
   ["speicher", "Zwischenspeicher", "cache speicher leeren song-speicher fingerabdrücke"],
   ["nichterkannt", "Nicht erkannt", "unerkannt fehlende songs senden"],

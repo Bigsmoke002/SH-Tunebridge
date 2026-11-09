@@ -36,7 +36,7 @@ from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from . import config, store
+from . import config, consent, store
 from . import debuglog as dbg
 from .models import Track
 from .share import ShareError, seal, unseal
@@ -219,9 +219,10 @@ def status() -> dict:
         "net": st["net"],
         "networks": [{**n, "active": (n["cidr"], n["ip"]) in eff_ids} for n in nets],
         "devices": [{"id": k, "name": d.get("name"), "added": d.get("added"), "last_seen": d.get("last_seen"),
-                     "app": d.get("app"), "last_counts": d.get("last_counts"), "ip": d.get("ip")}
+                     "app": d.get("app"), "last_counts": d.get("last_counts"), "ip": d.get("ip"),
+                     "relay": bool(d.get("relay")), "via": d.get("via")}
                     for k, d in sorted(st["devices"].items(), key=lambda kv: -(kv[1].get("last_seen") or kv[1].get("added") or 0))],
-        "pairing": pairing,
+        "pairing": pairing, "relay_allowed": consent.server("relay"),
     }
 
 
@@ -293,8 +294,10 @@ def qr_svg(text: str) -> str:
 
 def remove_device(dev_id: str) -> None:
     st = _load()
-    st["devices"].pop(dev_id, None)
+    d = st["devices"].pop(dev_id, None)
     _save(st)
+    if d and d.get("relay"):
+        _relay_delete(d)
     ensure_server()
 
 
@@ -437,16 +440,22 @@ def handle_sync(body: dict, client: str | None = None) -> dict:
     rid = str(req.get("rid") or "")[:64]
     _replay_check(int(req.get("ts") or 0), rid)
     answer = apply(req, d.get("name") or "Handy")
+    _touch(dev_id, req, answer, client)
+    return {"box": seal(key, f"sync-ok:{dev_id}:{rid}", answer, limit=None)}
+
+
+def _touch(dev_id: str, req: dict, answer: dict, client: str | None, via: str = "netz") -> None:
     st = _load()
     if dev_id in st["devices"]:
         dev = st["devices"][dev_id]
         dev["last_seen"] = time.time()
-        dev["ip"] = client or dev.get("ip")
+        dev["via"] = via
+        if via == "netz":
+            dev["ip"] = client or dev.get("ip")
         dev["app"] = str((req.get("device") or {}).get("app") or dev.get("app") or "")[:20]
         dev["name"] = str((req.get("device") or {}).get("name") or dev.get("name") or "Handy")[:60]
         dev["last_counts"] = {"empfangen": len(req.get("recs") or []), "gesendet": len(answer["recs"])}
         _save(st)
-    return {"box": seal(key, f"sync-ok:{dev_id}:{rid}", answer, limit=None)}
 
 
 def handle_similar(body: dict, client: str | None = None) -> dict:
@@ -670,6 +679,191 @@ def _enrich_later(uids: list[str]) -> None:
     threading.Thread(target=run, name="handy-anreichern", daemon=True).start()
 
 
+# ------------------------------------------------------------------ Abgleich übers Internet (Relais)
+# Für unterwegs: Handy und PC tauschen den Abgleich über zwei verschlüsselte Ablagen auf shtunebridge.bs002.de aus
+# (dieselben Teilen-Räume wie bei „Playlists teilen“). Raum-IDs, Schreib-Token und Schlüssel leiten beide aus dem
+# Geräte-Geheimnis der Kopplung ab – der Server sieht nur zufällige Kennungen und unlesbare Blöcke.
+# Nur mit Einwilligung „relay“ am PC und je Handy eingeschaltet (am Handy zusätzlich je PC).
+RELAY_MAX_AGE = 7 * 86400        # ältere Anfragen werden verworfen (Handy schickt dann eine neue)
+RELAY_LIMIT = 190 * 1024         # Server nimmt höchstens 200 KB je Block
+RELAY_TRACKS = 1500              # Playlists übers Internet nur bis zu so vielen Songs (sonst bleiben die alten)
+RELAY_EVERY = 360                # so oft schaut der PC nach (Server erlaubt ohne Konto nur wenige Anfragen pro Stunde)
+_relay_err: dict = {"t": 0.0}
+_relay_next: dict = {"t": 0.0}
+
+
+class _RelayConflict(Exception):
+    def __init__(self, rev: int):
+        super().__init__("conflict")
+        self.rev = rev
+
+
+def _relay_keys(d: dict, direction: str) -> dict:
+    """direction: "to-pc" (Handy schreibt, PC liest) oder "to-phone" (PC schreibt, Handy liest)."""
+    from .share import derive
+    return derive(_kdf(base64.b64decode(d["secret"]), f"relay-{direction}"))
+
+
+def _relay_http(method: str, k: dict, body: dict | None = None):
+    import httpx
+
+    from . import upload
+    from .share import _tok
+    if not consent.server("relay"):
+        raise PhoneError("Abgleich übers Internet ist nicht erlaubt (Einstellungen › Datenschutz)", 403)
+    path = f"/v1/share/{k['space']}" + ("/private" if method == "GET" else "")
+    try:
+        return httpx.request(method, upload.URL + path, json=body, timeout=20,
+                             headers={"User-Agent": "SH-Tunebridge-Relay", "X-Share-Token": _tok(k["token"])})
+    except httpx.HTTPError as e:
+        raise PhoneError(f"Server nicht erreichbar: {e}", 502) from e
+
+
+def _relay_get(k: dict) -> tuple[dict | None, int]:
+    r = _relay_http("GET", k)
+    if r.status_code == 404:
+        return None, 0
+    _limited(r)
+    if r.status_code != 200:
+        raise PhoneError(f"Server-Ablage: Fehler {r.status_code}", 502)
+    j = r.json()
+    return unseal(k["kpriv"], k["space"] + "/private", j["blob"]), int(j["rev"])
+
+
+def _relay_put(k: dict, rev: int, doc: dict) -> int:
+    r = _relay_http("PUT", k, {"rev": rev, "priv": seal(k["kpriv"], k["space"] + "/private", doc, limit=RELAY_LIMIT)})
+    if r.status_code == 409:
+        raise _RelayConflict(int(r.json().get("rev") or 0))
+    _limited(r)
+    if r.status_code != 200:
+        raise PhoneError(f"Server-Ablage: Fehler {r.status_code}", 502)
+    return int(r.json()["rev"])
+
+
+def _limited(r) -> None:
+    """Server sagt „zu viele Anfragen“: so lange gar nicht mehr nachsehen, wie er verlangt (mindestens 10 Minuten)."""
+    if r.status_code == 429:
+        try:
+            wait = int(r.headers.get("Retry-After") or 3600)
+        except ValueError:
+            wait = 3600
+        _relay_next["t"] = time.time() + max(600, min(wait, 6 * 3600))
+        raise PhoneError("Server: gerade zu viele Anfragen – Abgleich übers Internet macht kurz Pause", 429)
+
+
+def _relay_delete(d: dict) -> None:
+    """Beim Entfernen des Handys oder Ausschalten: beide Ablagen auf dem Server löschen (wenn erlaubt)."""
+    for direction in ("to-pc", "to-phone"):
+        try:
+            _relay_http("DELETE", _relay_keys(d, direction))
+        except PhoneError:
+            pass
+
+
+def _fit(answer: dict, key: dict) -> dict:
+    """Antwort so kürzen, dass sie in einen Server-Block passt: erst Playlists weglassen, dann weniger Erkennungen."""
+    def ok(a: dict) -> bool:
+        try:
+            seal(key["kpriv"], "x", {"ans": a}, limit=RELAY_LIMIT - 512)
+            return True
+        except ShareError:
+            return False
+    a = dict(answer)
+    if a.get("playlists") is not None and sum(len(p["tracks"]) for p in a["playlists"]) > RELAY_TRACKS:
+        a["playlists"] = None
+    if not ok(a):
+        a["playlists"] = None
+    while not ok(a) and (a["recs"] or a["updates"]):
+        if a["updates"]:
+            a["updates"] = a["updates"][: len(a["updates"]) // 2]
+            continue
+        a["recs"] = a["recs"][: len(a["recs"]) // 2]
+        a["more"] = True
+        if a["recs"]:
+            a["cursor"] = a["recs"][-1]["ts"]
+    if not ok(a):
+        a["catalog"] = []
+    return a
+
+
+def _relay_one(dev_id: str, d: dict) -> bool:
+    """Eine wartende Anfrage dieses Handys abholen, abgleichen und die Antwort ablegen. True = etwas getan."""
+    a = _relay_keys(d, "to-pc")
+    doc, rev = _relay_get(a)
+    req = (doc or {}).get("req")
+    if not isinstance(req, dict):
+        return False
+    rid, ts = str(req.get("rid") or "")[:64], int(req.get("ts") or 0)
+    stale = ts <= int(d.get("relay_ts") or 0) or time.time() - ts / 1000 > RELAY_MAX_AGE or ts / 1000 > time.time() + MAX_SKEW
+    if not stale:
+        st = _load()                             # erst merken, dann anwenden – eine Anfrage wird nie doppelt übernommen
+        if dev_id not in st["devices"]:
+            return False
+        st["devices"][dev_id]["relay_ts"] = ts
+        _save(st)
+        answer = _fit(apply(req, d.get("name") or "Handy"), a)
+        _touch(dev_id, req, answer, None, via="internet")
+        b = _relay_keys(d, "to-phone")
+        brev = int(d.get("relay_rev") or 0)
+        for _ in range(3):
+            try:
+                brev = _relay_put(b, brev, {"rid": rid, "ans": answer})
+                break
+            except _RelayConflict as e:
+                brev = e.rev
+        st = _load()
+        if dev_id in st["devices"]:
+            st["devices"][dev_id]["relay_rev"] = brev
+            _save(st)
+        dbg.event("handy", "Abgleich übers Internet", name=d.get("name"), empfangen=len(req.get("recs") or []),
+                  gesendet=len(answer["recs"]))
+    try:
+        _relay_put(a, rev, {"done": rid})        # Ablage leeren; hat das Handy inzwischen neu geschrieben, bleibt das stehen
+    except _RelayConflict:
+        pass
+    return not stale
+
+
+def relay_poll(force: bool = False) -> int:
+    """Alle Handys mit eingeschaltetem Internet-Abgleich prüfen (der Wächter ruft alle 30 s auf, nachgesehen wird
+    höchstens alle RELAY_EVERY Sekunden – und nach „zu viele Anfragen“ erst, wenn der Server es wieder erlaubt)."""
+    if not consent.server("relay"):
+        return 0
+    now = time.time()
+    if not force and now < _relay_next["t"]:
+        return 0
+    if not any(d.get("relay") for d in _load()["devices"].values()):
+        return 0
+    _relay_next["t"] = max(_relay_next["t"], now + RELAY_EVERY)
+    n = 0
+    for dev_id, d in list(_load()["devices"].items()):
+        if not d.get("relay"):
+            continue
+        try:
+            n += _relay_one(dev_id, d)
+        except (PhoneError, ShareError) as e:
+            if time.time() - _relay_err["t"] > 3600:      # Server weg: höchstens einmal pro Stunde ins Protokoll
+                _relay_err["t"] = time.time()
+                dbg.event("handy", "Abgleich übers Internet gerade nicht möglich", fehler=str(e)[:200])
+    return n
+
+
+def set_relay(dev_id: str, on: bool) -> dict:
+    """Internet-Abgleich für ein Handy ein-/ausschalten. Ausschalten löscht beide Ablagen auf dem Server."""
+    st = _load()
+    d = st["devices"].get(dev_id)
+    if not d:
+        raise PhoneError("Dieses Handy ist nicht gekoppelt", 404)
+    if on and not consent.server("relay"):
+        raise PhoneError("Bitte erst unter Einstellungen › Datenschutz „Handy-Abgleich übers Internet“ erlauben", 403)
+    if not on and d.get("relay") and consent.server("relay"):
+        _relay_delete(d)
+    d["relay"] = bool(on)
+    d.pop("relay_rev", None)
+    _save(st)
+    return status()
+
+
 # ------------------------------------------------------------------ Kleiner Server nur fürs Handy
 def _client(request: Request) -> str | None:
     return request.client.host if request.client else None
@@ -787,3 +981,7 @@ def watchdog() -> None:
         ensure_server()
     except Exception as e:  # noqa: BLE001 – z. B. Port belegt: Oberfläche zeigt „läuft nicht“
         dbg.error("handy", "Handy-Zugang ließ sich nicht starten", e, port=PORT)
+    try:
+        relay_poll()
+    except Exception as e:  # noqa: BLE001 – Server weg o. Ä.: beim nächsten Mal wieder
+        dbg.error("handy", "Abgleich übers Internet", e)

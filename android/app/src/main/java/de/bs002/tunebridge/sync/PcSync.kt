@@ -6,6 +6,7 @@ import de.bs002.tunebridge.data.Playlist
 import de.bs002.tunebridge.data.Recognition
 import de.bs002.tunebridge.data.Repository
 import de.bs002.tunebridge.net.Http
+import de.bs002.tunebridge.ui.Fmt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -143,23 +144,49 @@ class PcSync(private val repo: Repository) {
     )
 
     /** [skipped]: nicht versucht, weil das Handy gerade nicht im Netz dieses PCs ist (kein Fehler). */
-    data class Result(val pcId: String, val pcName: String, val sent: Int, val received: Int, val playlists: Int, val skipped: Boolean = false)
+    data class Result(val pcId: String, val pcName: String, val sent: Int, val received: Int, val playlists: Int, val skipped: Boolean = false,
+                      val queued: Boolean = false)
 
-    /** Mit allen gekoppelten PCs abgleichen, die gerade erreichbar sein können. Fehler je PC landen in dessen Status. */
-    suspend fun syncAll(): List<Result> = repo.settings.value.pcs.map { link ->
-        if (reachable(link).isEmpty()) Result(link.pcId, link.pcName, 0, 0, 0, skipped = true)
-        else runCatching { sync(link.pcId) }.getOrElse { Result(link.pcId, link.pcName, 0, 0, 0) }
+    /**
+     * Mit allen gekoppelten PCs abgleichen, die gerade erreichbar sein können. Fehler je PC landen in dessen Status.
+     * Nicht im Netz, aber „Unterwegs“ eingeschaltet: Anfrage übers Internet ablegen und eine fertige Antwort abholen
+     * (ohne zu warten – der PC antwortet innerhalb einiger Minuten, abgeholt wird beim nächsten Mal).
+     */
+    suspend fun syncAll(manual: Boolean = false): List<Result> = repo.settings.value.pcs.map { link ->
+        if (reachable(link).isEmpty()) {
+            if (link.relay) runCatching { relaySync(link.pcId, manual) }.getOrElse { Result(link.pcId, link.pcName, 0, 0, 0) }
+            else Result(link.pcId, link.pcName, 0, 0, 0, skipped = true)
+        } else runCatching { sync(link.pcId) }.getOrElse { Result(link.pcId, link.pcName, 0, 0, 0) }
+    }
+
+    private fun payload(link: Repository.PcLink, out: Repository.Outgoing, rid: String, round: Int) = buildJsonObject {
+        put("ts", System.currentTimeMillis())
+        put("rid", rid)
+        put("device", buildJsonObject { put("name", repo.deviceName()); put("app", BuildConfig.VERSION_NAME) })
+        put("cursor", link.cursor)
+        put("recs", repo.json.encodeToJsonElement(ListSerializer(Recognition.serializer()), out.recs))
+        put("deleted", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), out.deleted))
+        put("ops", repo.json.encodeToJsonElement(ListSerializer(Repository.Op.serializer()), out.ops.map { it.second }))
+        put("need_info", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), if (round == 0) out.needInfo else emptyList()))
+        link.lists?.let { put("lists", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), it)) }
     }
 
     /** Ein Abgleich mit einem PC (in Runden, bis beide Seiten alles haben). Wirft PairError mit verständlicher Meldung. */
-    suspend fun sync(pcId: String): Result = mutex.withLock {
+    suspend fun sync(pcId: String): Result {
+        val first = repo.link(pcId) ?: throw PairError("Dieser PC ist nicht (mehr) gekoppelt")
+        if (first.relay && reachable(first).isEmpty()) return relaySync(pcId, manual = true)
+        return lanSync(pcId)
+    }
+
+    private suspend fun lanSync(pcId: String): Result = mutex.withLock {
         withContext(Dispatchers.IO) {
             var link = repo.link(pcId) ?: throw PairError("Dieser PC ist nicht (mehr) gekoppelt")
             if (!Nets.allowed()) throw PairError("Netzwerk-Erkennung ist nicht erlaubt – ohne sie gleicht das Handy nicht ab (Mehr › Datenschutz)")
             val addrs = reachable(link)
             if (addrs.isEmpty()) {
                 val where = link.targets.joinToString(", ") { Nets.describe(it) }
-                throw PairError("Das Handy ist gerade nicht im Netz von ${link.pcName} ($where)")
+                throw PairError("Das Handy ist gerade nicht im Netz von ${link.pcName} ($where)" +
+                    " – für unterwegs beim PC „Unterwegs abgleichen“ einschalten")
             }
             var sent = 0; var received = 0; var lists = 0
             try {
@@ -167,17 +194,7 @@ class PcSync(private val repo: Repository) {
                     link = repo.link(pcId) ?: break
                     val out = repo.outgoing(link)
                     val rid = UUID.randomUUID().toString()
-                    val payload = buildJsonObject {
-                        put("ts", System.currentTimeMillis())
-                        put("rid", rid)
-                        put("device", buildJsonObject { put("name", repo.deviceName()); put("app", BuildConfig.VERSION_NAME) })
-                        put("cursor", link.cursor)
-                        put("recs", repo.json.encodeToJsonElement(ListSerializer(Recognition.serializer()), out.recs))
-                        put("deleted", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), out.deleted))
-                        put("ops", repo.json.encodeToJsonElement(ListSerializer(Repository.Op.serializer()), out.ops.map { it.second }))
-                        put("need_info", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), if (round == 0) out.needInfo else emptyList()))
-                        link.lists?.let { put("lists", repo.json.encodeToJsonElement(ListSerializer(String.serializer()), it)) }
-                    }.toString()
+                    val payload = payload(link, out, rid, round).toString()
                     val key = syncKey(link.secret)
                     val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "sync:${link.deviceId}", payload)) }.toString()
                     val (addr, answer) = anyAddr(if (round == 0) addrs else listOfNotNull(link.lastAddr).ifEmpty { addrs }) {
@@ -199,6 +216,81 @@ class PcSync(private val repo: Repository) {
                 throw if (e is PairError) e else PairError(e.message ?: "Abgleich fehlgeschlagen")
             }
         }
+    }
+
+    /** Nur abholen, was der PC inzwischen beantwortet hat (ohne neue Anfrage). */
+    suspend fun relayPickup() = repo.settings.value.pcs.filter { it.relay && it.relayRid != null }.forEach { l ->
+        runCatching { relaySync(l.pcId, manual = false, pickupOnly = true) }
+    }
+
+    @Volatile private var relayTried = 0L
+    @Volatile private var relayPause = 0L
+
+    /**
+     * Abgleich übers Internet: erst eine fertige Antwort auf die zuletzt abgelegte Anfrage abholen, dann (falls keine
+     * mehr wartet) eine neue Anfrage ablegen. Der PC schaut etwa alle 6 Minuten nach; die Antwort holt das Handy beim
+     * nächsten Abgleich bzw. einige Minuten später still ab – nichts geht verloren.
+     * Der Server erlaubt ohne Konto nur wenige Anfragen pro Stunde: automatisch höchstens alle 10 Minuten, nach
+     * „zu viele Anfragen“ eine Stunde Pause.
+     */
+    suspend fun relaySync(pcId: String, manual: Boolean, pickupOnly: Boolean = false): Result = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            var link = repo.link(pcId) ?: throw PairError("Dieser PC ist nicht (mehr) gekoppelt")
+            if (!link.relay) throw PairError("Unterwegs-Abgleich ist für ${link.pcName} aus")
+            val now = System.currentTimeMillis()
+            if (now < relayPause) throw PairError("Server: gerade zu viele Anfragen – Unterwegs-Abgleich macht bis ${Fmt.clock(relayPause / 1000.0)} Pause")
+            if (!manual && !pickupOnly && now - relayTried < 10 * 60_000) return@withContext Result(pcId, link.pcName, 0, 0, 0, queued = link.relayRid != null)
+            relayTried = now
+            val parse = Relay.parser(repo.json)
+            val inbox = Relay.keys(link.secret, "to-phone")
+            val outbox = Relay.keys(link.secret, "to-pc")
+            var received = 0; var lists = 0
+            try {
+                // 1) Antwort auf die abgelegte Anfrage abholen
+                link.relayRid?.let { rid ->
+                    val (doc, _) = Relay.get(inbox, parse)
+                    if (doc?.get("rid")?.jsonPrimitive?.content == rid) {
+                        val ans = repo.json.decodeFromJsonElement(SyncAnswer.serializer(), doc["ans"] ?: throw PairError("Unerwartete Antwort vom PC"))
+                        val dummy = Repository.Op("", "", de.bs002.tunebridge.data.Track(title = ""))
+                        val sentOut = Repository.Outgoing(emptyList(), emptyList(), link.relayOps.map { it to dummy }, emptyList(), link.relaySeq)
+                        repo.applyIncoming(link, sentOut, ans.recs, ans.updates, ans.playlists, ans.cursor, ans.pcName, repo.RELAY, null, ans.catalog)
+                        repo.updateLink(pcId) { it.copy(relayRid = null, relayOps = emptyList()) }
+                        received = ans.recs.size
+                        lists = ans.playlists?.size ?: 0
+                    }
+                }
+                link = repo.link(pcId) ?: throw PairError("Dieser PC ist nicht (mehr) gekoppelt")
+                // 2) Neue Anfrage nur, wenn keine mehr offen ist (oder die offene älter als einen Tag)
+                val waiting = link.relayRid != null && now / 1000.0 - link.relayAt < 86_400
+                if (pickupOnly || waiting) return@withContext Result(pcId, link.pcName, 0, received, lists, queued = waiting)
+                val out = repo.outgoing(link)
+                val rid = UUID.randomUUID().toString()
+                val doc = buildJsonObject { put("req", payload(link, out, rid, 0)) }.toString()
+                var rev = link.relayRev
+                for (attempt in 0 until 3) {
+                    try { rev = Relay.put(outbox, rev, doc, parse); break } catch (c: Relay.Conflict) { rev = c.rev; if (attempt == 2) throw c }
+                }
+                repo.updateLink(pcId) {
+                    it.copy(relayRid = rid, relaySeq = out.maxSeq, relayOps = out.ops.map { o -> o.first }, relayRev = rev,
+                        relayAt = now / 1000.0, lastSyncError = null)
+                }
+                Result(pcId, link.pcName, out.recs.size + out.deleted.size + out.ops.size, received, lists, queued = true)
+            } catch (e: Relay.Limited) {
+                relayPause = System.currentTimeMillis() + 3_600_000
+                repo.updateLink(pcId) { it.copy(lastSyncError = e.message) }
+                throw PairError(e.message ?: "Server: zu viele Anfragen")
+            } catch (e: Exception) {
+                repo.updateLink(pcId) { it.copy(lastSyncError = e.message) }
+                throw if (e is PairError) e else PairError("Unterwegs-Abgleich: ${e.message ?: "fehlgeschlagen"}")
+            }
+        }
+    }
+
+    /** Unterwegs-Abgleich für einen PC ein-/ausschalten. Ausschalten löscht beide Ablagen auf dem Server. */
+    suspend fun setRelay(pcId: String, on: Boolean) = withContext(Dispatchers.IO) {
+        val link = repo.link(pcId) ?: return@withContext
+        if (!on && link.relay) Relay.delete(link.secret)
+        repo.updateLink(pcId) { it.copy(relay = on, relayRid = null, relayOps = emptyList(), relayRev = 0) }
     }
 
     /**
@@ -278,5 +370,8 @@ class PcSync(private val repo: Repository) {
     fun setAddrs(pcId: String, mode: String, use: List<String>) =
         repo.updateLink(pcId) { it.copy(addrMode = mode, useAddrs = if (mode == "all") emptyList() else use.filter { a -> a in it.addrs }) }
 
-    fun unpair(pcId: String) = repo.removePc(pcId)
+    suspend fun unpair(pcId: String) {
+        repo.link(pcId)?.takeIf { it.relay }?.let { l -> withContext(Dispatchers.IO) { Relay.delete(l.secret) } }
+        repo.removePc(pcId)
+    }
 }

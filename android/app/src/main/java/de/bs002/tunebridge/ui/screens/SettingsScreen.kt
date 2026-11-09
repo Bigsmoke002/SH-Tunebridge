@@ -96,11 +96,11 @@ fun SettingsScreen(openPair: () -> Unit, openPc: (String) -> Unit, openPrivacy: 
                             if (syncing) return@TbButton
                             syncing = true
                             scope.launch {
-                                val res = runCatching { App.sync.syncAll() }.getOrDefault(emptyList())
+                                val res = runCatching { App.sync.syncAll(manual = true) }.getOrDefault(emptyList())
                                 val done = res.filter { !it.skipped }
                                 toast(when {
                                     res.isEmpty() -> "Kein PC gekoppelt"
-                                    done.isEmpty() -> "Kein gekoppelter PC im aktuellen Netz"
+                                    done.isEmpty() -> "Kein gekoppelter PC im aktuellen Netz (unterwegs: beim PC „Unterwegs abgleichen“ einschalten)"
                                     done.size == 1 -> syncText(done.first())
                                     else -> "Mit ${done.size} PCs abgeglichen"
                                 })
@@ -203,6 +203,7 @@ fun PrivacyScreen(back: () -> Unit) {
                 Triple(Ico.Sparkle, "Ähnliche Songs", "Vom gekoppelten PC (verschlüsselt, wie der Abgleich). Ist keiner erreichbar und hast du es erlaubt, direkt bei Deezer: Titel, Künstler bzw. Deezer-Nummer/ISRC des Songs – Deezer sieht deine IP-Adresse."),
                 Triple(Ico.Sync, "Updates (GitHub)", "Nur wenn „Automatisch nach Updates suchen“ an ist (höchstens einmal am Tag) oder du selbst suchst: GitHub sieht deine IP-Adresse. Installiert wird nur eine signierte, geprüfte Version – und erst, wenn du im Android-Installer bestätigst."),
                 Triple(Ico.Monitor, "Dein PC", "Abgleich direkt im eigenen Netz, ohne Server dazwischen – nur mit PCs, denen du hier und am PC zugestimmt hast, und nur über die Adressen, die du je PC auswählst. Gesendet wird nur, wenn das Handy gerade im Netz dieses PCs ist. Dafür liest die App – erst nach deiner Zustimmung – die eigenen Netzwerkkarten (IP-Adresse, Netz), ohne Standort-Berechtigung; widerrufbar unter Mehr › Datenschutz. Jede Nachricht ist mit AES-256-GCM verschlüsselt; der Schlüssel entsteht beim Koppeln und verlässt Handy und PC nie. Mix erstellen und Set-Planer rechnen ebenfalls dort: Das Handy schickt nur Suchbegriff, Künstler/Genre oder Playlist-Namen."),
+                Triple(Ico.Sync, "Unterwegs abgleichen", "Nur wenn du es je PC einschaltest (und am PC ebenfalls): Ist das Handy nicht im Netz des PCs, legt es den Abgleich auf shtunebridge.bs002.de ab und holt dort die Antwort des PCs. Inhalt wie im Heimnetz, Ende-zu-Ende verschlüsselt mit dem Schlüssel aus der Kopplung. Der Server sieht nur zufällige Kennungen, unlesbare Blöcke, das Datum; IP-Adresse und Zeitpunkt protokolliert die Server-Technik wie bei jeder Verbindung (höchstens 12 Monate). Ausschalten oder Entkoppeln löscht die Ablagen sofort, sonst nach einem Jahr ohne Nutzung."),
                 Triple(Ico.Share, "Teilen & Export", "Nur nach Tippen auf Teilen: Datei mit Titel, Künstler, Album, ISRC, Genre, Zeitpunkt und Link an die App, die du wählst – keine Cover, keine Musik."),
                 Triple(Ico.Shield, "Auf dem Handy", "Verlauf, Playlists und Einstellungen liegen nur in der App (nicht in Android-Sicherungen). App löschen = alles weg."),
                 Triple(Ico.X, "Was es nicht gibt", "Kein Konto, keine Werbung, keine Analyse- oder Absturz-Dienste, keine Google-Play-Dienste."),

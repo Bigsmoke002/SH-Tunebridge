@@ -43,6 +43,8 @@ Ziel-Domain `shtunebridge.bs002.de` wählbar):
   Siehe „Genre-Datenbank“.
 
 - *Playlists teilen* – nur verschlüsselte Blöcke, siehe „Playlists teilen“.
+- *Handy-Abgleich übers Internet* – nur verschlüsselte Blöcke und nur für Handys, bei denen du zusätzlich
+  „Unterwegs“ einschaltest, siehe „Android-App › Unterwegs abgleichen“.
 - *Öffentliches Playlist-Verzeichnis nutzen* – Stöbern sendet nur die Suchanfrage. Veröffentlicht wird nur, was
   du **einzeln und mit Bestätigung** freigibst; diese Angaben sind dann für alle sichtbar. Siehe
   „Öffentliches Playlist-Verzeichnis“.
@@ -95,6 +97,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Dein gekoppeltes Handy (Android-App, im eigenen Netz) | Ende-zu-Ende verschlüsselt: deine Erkennungen (Song, Zeitpunkt, Gerät, Genre, Links) und lokalen Playlists | nur wenn du ein Handy koppelst; direkt im WLAN/LAN bzw. VPN, kein Server dazwischen (siehe „Android-App“) |
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
 | Entwickler (`shtunebridge.bs002.de`) – Playlists teilen | nur Ende-zu-Ende-verschlüsselte Blöcke, zufällige Bereichs-Kennung, Prüfwert des Schreib-Schlüssels (technisch deine IP-Adresse) | beim Teilen, Aktualisieren und Ansehen von Freunde-Playlists, **nur mit Einwilligung** „Playlists teilen“ |
+| Entwickler (`shtunebridge.bs002.de`) – Handy-Abgleich unterwegs | nur Ende-zu-Ende-verschlüsselte Blöcke (Abgleich wie im Heimnetz), zwei zufällige Ablage-Kennungen je Handy, Prüfwert des Schreib-Schlüssels (technisch die IP-Adressen von PC und Handy) | PC etwa alle 6 Minuten, Handy beim Abgleich – **nur mit Einwilligung** „Handy-Abgleich übers Internet“ **und** je Handy auf PC und Handy eingeschaltet |
 | Entwickler (`shtunebridge.bs002.de`) – Öffentliches Playlist-Verzeichnis | Suchanfrage; beim Veröffentlichen Playlist-Name, Pseudonym, Genre, Beschreibung, Songliste, Kennung deiner Installation (technisch deine IP-Adresse) | beim Stöbern, Veröffentlichen, Melden, **nur mit Einwilligung** „Verzeichnis“ |
 | Entwickler (`shtunebridge.bs002.de`) – Gemeinschafts-Genre-Datenbank | nur die Anfrage (technisch deine IP-Adresse) | einmal am Tag, vorausgewählt und jederzeit abwählbar (erst nach dem Einrichtungsdialog) |
 
@@ -339,7 +342,8 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   deine IP-Adresse.
 - **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
   direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
-- **Dein PC:** siehe unten. Sonst nichts – keine Google-Play-Dienste, kein Firebase, keine Analyse-, Absturz-
+- **Dein PC:** siehe unten – im eigenen Netz direkt, unterwegs nur wenn du es einschaltest verschlüsselt über
+  `shtunebridge.bs002.de` („Unterwegs abgleichen“). Sonst nichts – keine Google-Play-Dienste, kein Firebase, keine Analyse-, Absturz-
   oder Werbe-SDKs, keine Telemetrie. Android-Sicherungen in die Cloud sind für die App abgeschaltet.
 
 **Koppeln und Abgleich mit dem PC:** Unter Einstellungen › Handy zeigt der PC einen QR-Code mit seinen Adressen
@@ -378,6 +382,27 @@ eigenen Netzwerkkarten des Handys (keine Standort- oder WLAN-Berechtigung) und s
 Handy gerade im selben Netz ist – in fremden WLANs wird nichts versucht. Die
 eigentliche App-Oberfläche bleibt nur auf deinem Rechner erreichbar. „Entfernen“ (PC) bzw. „Entkoppeln“ (Handy)
 löscht das Geräte-Geheimnis; bereits übertragene Songs bleiben auf beiden Geräten, bis du sie löschst.
+
+**Unterwegs abgleichen (Standard: aus):** Wer auch ohne gemeinsames Netz abgleichen will, schaltet es **auf beiden
+Seiten** ein: am PC unter Einstellungen › Handy beim jeweiligen Handy „Unterwegs“ (dabei wird die Einwilligung
+„Handy-Abgleich übers Internet“ für `shtunebridge.bs002.de` erfragt; am PC serverseitig erzwungen, getestet in
+`tests/test_phone_relay.py`), am Handy beim PC „Unterwegs abgleichen“ (mit Erklärung vorher). Ist das Handy dann
+nicht im Netz des PCs, legt es seine Abgleich-Anfrage in einer Ablage auf `shtunebridge.bs002.de` ab; der PC schaut
+etwa alle 6 Minuten nach, gleicht ab und legt die Antwort in einer zweiten Ablage zurück, die das Handy später abholt.
+- **Inhalt:** wie im Heimnetz (siehe oben), nur Playlists über 1500 Songs bleiben dem Heimnetz vorbehalten.
+- **Verschlüsselung:** AES-256-GCM; Ablage-Kennungen, Schreib-Schlüssel und Inhalts-Schlüssel leiten PC und Handy
+  per HKDF aus dem Geräte-Geheimnis der Kopplung ab – es verlässt die beiden Geräte nie. Der Server speichert je
+  Ablage nur die zufällige Kennung, einen Prüfwert (SHA-256) des Schreib-Schlüssels, den unlesbaren Block, eine
+  Versionsnummer und das Datum (auf den Tag genau). In der Ablage stehen keine IP-Adressen; Verbindungsdaten (IP-Adresse, Zeitpunkt,
+  Pfad mit der Ablage-Kennung) protokolliert die Technik vor dem Server wie bei jeder Anfrage, siehe
+  „Technik vor dem Server“ (höchstens 12 Monate). Kein Konto, keine Gerätenamen, keine Songs im Klartext.
+- **Schutz:** Jede Anfrage trägt Zeitstempel und Einmal-Kennung; der PC übernimmt jede Anfrage nur einmal und
+  verwirft Anfragen, die älter als 7 Tage sind.
+- **Wie oft:** Der PC fragt etwa alle 6 Minuten nach, das Handy automatisch höchstens alle 10 Minuten (dazu „Jetzt
+  abgleichen“). Meldet der Server „zu viele Anfragen“, pausieren beide.
+- **Löschen:** Ausschalten (PC oder Handy), „Entfernen“ bzw. „Entkoppeln“ löscht beide Ablagen sofort auf dem
+  Server; ungenutzte Ablagen löscht der Server nach einem Jahr.
+- **Rechtsgrundlage:** Einwilligung (Art. 6 Abs. 1 lit. a DSGVO), jederzeit widerrufbar.
 
 ## Playlists teilen (Ende-zu-Ende verschlüsselt, Standard: aus)
 

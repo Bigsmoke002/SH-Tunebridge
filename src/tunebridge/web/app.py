@@ -2966,6 +2966,12 @@ def phone_enabled(req: PhoneOnReq):
     return phone.status()
 
 
+@app.post("/api/phone/devices/{dev_id}/relay")
+def phone_relay(dev_id: str, req: PhoneOnReq):
+    from .. import phone
+    return _phone(phone.set_relay, dev_id, req.enabled)
+
+
 @app.delete("/api/phone/devices/{dev_id}")
 def phone_remove(dev_id: str):
     from .. import phone

@@ -48,6 +48,7 @@ import de.bs002.tunebridge.sync.PcSync
 import de.bs002.tunebridge.ui.Fmt
 import de.bs002.tunebridge.ui.components.BtnKind
 import de.bs002.tunebridge.ui.components.Hairline
+import de.bs002.tunebridge.ui.components.SettingRow
 import de.bs002.tunebridge.ui.components.Notice
 import de.bs002.tunebridge.ui.components.SectionLabel
 import de.bs002.tunebridge.ui.components.TbButton
@@ -109,7 +110,8 @@ fun SyncFacts(pcName: String, addrs: List<String>) {
         "Vom PC" to "Verlauf und Playlists von $pcName (Titel, Künstler, Album, Genre, Cover- und Hörproben-Adressen). Keine Konten, Schlüssel oder Einstellungen.",
         "Wann" to "Nach jeder Erkennung, beim Öffnen der App und bei „Jetzt abgleichen“ – aber nur, wenn das Handy gerade im Netz dieses PCs ist. „Automatisch abgleichen“ unter Mehr schaltet das Automatische ab.",
         "Wohin" to addrs.joinToString("\n") { "$it  ·  ${Nets.describe(it)}" },
-        "Wie" to "Direkt im eigenen Netz, Ende-zu-Ende verschlüsselt (AES-256-GCM). Kein Server dazwischen, nichts geht ins Internet.",
+        "Wie" to "Direkt im eigenen Netz, Ende-zu-Ende verschlüsselt (AES-256-GCM). Kein Server dazwischen, nichts geht ins Internet – " +
+            "außer du schaltest beim PC „Unterwegs abgleichen“ ein (dann verschlüsselt über shtunebridge.bs002.de, nur wenn der PC nicht im Netz ist).",
     )
     TbCard(Modifier.fillMaxWidth(), padding = 0.dp) {
         rows.forEachIndexed { i, (k, v) ->
@@ -265,6 +267,7 @@ fun PcScreen(pcId: String, back: () -> Unit, toast: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var syncing by remember { mutableStateOf(false) }
     var askUnpair by remember { mutableStateOf(false) }
+    var askRelay by remember { mutableStateOf(false) }
     if (link == null) {
         Column(Modifier.fillMaxSize()) { TopBack(back); Text("Nicht mehr gekoppelt.", style = TbType.body, color = Tb.text3, modifier = Modifier.padding(20.dp)) }
         return
@@ -286,10 +289,18 @@ fun PcScreen(pcId: String, back: () -> Unit, toast: (String) -> Unit) {
                     }
                 }, kind = BtnKind.Primary, icon = Ico.Sync, enabled = !syncing)
             }
+            SectionLabel("Unterwegs")
+            TbCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+                SettingRow("Unterwegs abgleichen",
+                    "Auch ohne gemeinsames Netz – verschlüsselt über shtunebridge.bs002.de. Am PC unter Einstellungen › Handy ebenfalls „Unterwegs“ einschalten.",
+                    link.relay) { on ->
+                    if (on) askRelay = true else scope.launch { App.sync.setRelay(link.pcId, false); toast("Unterwegs-Abgleich aus – Ablagen auf dem Server gelöscht") }
+                }
+            }
             SectionLabel("Playlists auf dem Handy")
             TbCard(Modifier.fillMaxWidth(), padding = 14.dp) {
                 ListsOnPhone(link) {
-                    if (!syncing && App.sync.reachable(link).isNotEmpty()) {
+                    if (!syncing && (App.sync.reachable(link).isNotEmpty() || link.relay)) {
                         syncing = true
                         scope.launch {
                             runCatching { App.sync.sync(link.pcId) }.onSuccess { toast(syncText(it)) }.onFailure { toast(it.message ?: "Abgleich fehlgeschlagen") }
@@ -316,22 +327,60 @@ fun PcScreen(pcId: String, back: () -> Unit, toast: (String) -> Unit) {
             Text("Das Handy gleicht dann nicht mehr mit diesem PC ab. Dein Verlauf bleibt auf dem Handy, die Playlists dieses PCs werden vom Handy entfernt. " +
                 "Am PC kannst du das Handy unter Einstellungen › Handy ebenfalls entfernen.", style = TbType.body, color = Tb.text2)
         },
-        confirmButton = { TbButton("Entkoppeln", { askUnpair = false; App.sync.unpair(link.pcId); toast("${link.pcName} entkoppelt"); back() }, kind = BtnKind.Danger) },
+        confirmButton = {
+            TbButton("Entkoppeln", {
+                askUnpair = false
+                scope.launch { App.sync.unpair(link.pcId); toast("${link.pcName} entkoppelt") }
+                back()
+            }, kind = BtnKind.Danger)
+        },
         dismissButton = { TbButton("Abbrechen", { askUnpair = false }, kind = BtnKind.Ghost) },
+    )
+    if (askRelay) AlertDialog(
+        onDismissRequest = { askRelay = false }, containerColor = Tb.bg2,
+        title = { Text("Unterwegs abgleichen?", style = TbType.title, color = Tb.text) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Ist das Handy nicht im Netz von ${link.pcName}, legt es seine Anfrage auf https://shtunebridge.bs002.de ab; der PC schaut etwa alle " +
+                    "6 Minuten nach und legt die Antwort dort zurück – unterwegs kommt der Abgleich also mit einigen Minuten Verzögerung an.", style = TbType.body, color = Tb.text2)
+                Spacer(Modifier.height(10.dp))
+                Text("• Inhalt wie im Heimnetz: Erkennungen, gelöschte Einträge, Playlist-Änderungen, Gerätename – vom PC Verlauf und ausgewählte Playlists (bis 1500 Songs). Nie Audio, Konten oder Schlüssel.\n" +
+                    "• Ende-zu-Ende verschlüsselt (AES-256-GCM) mit dem Schlüssel aus eurer Kopplung – er verlässt Handy und PC nie.\n" +
+                    "• Der Server sieht nur zufällige Kennungen, unlesbare Blöcke, das Datum. Wie bei jeder Verbindung protokolliert die Server-Technik IP-Adresse und Zeitpunkt (höchstens 12 Monate). Kein Konto.\n" +
+                    "• Ausschalten oder Entkoppeln löscht beide Ablagen sofort, sonst löscht der Server sie nach einem Jahr ohne Nutzung.",
+                    style = TbType.small, color = Tb.text2)
+            }
+        },
+        confirmButton = {
+            TbButton("Erlauben und einschalten", {
+                askRelay = false
+                scope.launch {
+                    App.sync.setRelay(link.pcId, true)
+                    toast("Unterwegs-Abgleich an – am PC beim Handy ebenfalls „Unterwegs“ einschalten")
+                }
+            }, kind = BtnKind.Primary)
+        },
+        dismissButton = { TbButton("Abbrechen", { askRelay = false }, kind = BtnKind.Ghost) },
     )
 }
 
 fun pcStatus(link: Repository.PcLink): String {
     val reach = App.sync.reachable(link)
     return when {
+        reach.isEmpty() && link.relay && link.lastSyncError != null -> link.lastSyncError
+        reach.isEmpty() && link.relay -> if (link.lastSync > 0) "Unterwegs: zuletzt abgeglichen ${Fmt.ago(link.lastSync)}" +
+            (if (link.lastVia == "internet") " übers Internet" else " im Heimnetz") + (if (link.relayRid != null) " · Anfrage wartet auf den PC" else "")
+            else "Unterwegs-Abgleich an – noch nicht abgeglichen"
         !Nets.allowed() -> "Netzwerk-Erkennung ist aus – erst erlauben, dann gleicht das Handy mit diesem PC ab."
         reach.isEmpty() -> "Nicht im Netz dieses PCs – Abgleich pausiert, bis das Handy wieder dort ist."
         link.lastSyncError != null -> link.lastSyncError
-        link.lastSync > 0 -> "Zuletzt abgeglichen ${Fmt.ago(link.lastSync)} über ${link.lastAddr ?: reach.first()}"
+        link.lastSync > 0 -> "Zuletzt abgeglichen ${Fmt.ago(link.lastSync)} über ${if (link.lastVia == "internet") "Internet" else link.lastAddr ?: reach.first()}"
         else -> "Gekoppelt – noch nicht abgeglichen"
     }
 }
 
 fun syncText(r: PcSync.Result): String =
-    if (r.sent == 0 && r.received == 0) "${r.pcName}: alles aktuell · ${r.playlists} Playlists"
+    if (r.queued && r.received == 0) "${r.pcName}: Anfrage übers Internet abgelegt – der PC antwortet in einigen Minuten, die App holt es dann ab"
+    else if (r.queued) "${r.pcName}: ${r.received} neu vom PC (übers Internet) · neue Anfrage abgelegt"
+    else if (r.sent == 0 && r.received == 0) "${r.pcName}: alles aktuell · ${r.playlists} Playlists"
     else "${r.pcName}: ${r.sent} an den PC geschickt, ${r.received} neu vom PC"

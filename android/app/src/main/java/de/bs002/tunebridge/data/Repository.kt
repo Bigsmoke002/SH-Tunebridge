@@ -63,6 +63,13 @@ class Repository(private val db: Db, private val context: android.content.Contex
         val lastAddr: String? = null,
         val lists: List<String>? = null,                 // welche PC-Playlists aufs Handy kommen (null = alle)
         val catalog: List<CatalogEntry> = emptyList(),   // alle Playlists des PCs (Name + Anzahl) – zum Auswählen
+        val relay: Boolean = false,                      // unterwegs übers Internet abgleichen (verschlüsselte Ablage)
+        val relayRid: String? = null,                    // abgelegte Anfrage, auf deren Antwort das Handy wartet
+        val relaySeq: Long = 0,
+        val relayOps: List<Long> = emptyList(),
+        val relayRev: Long = 0,
+        val relayAt: Double = 0.0,                       // wann die offene Anfrage abgelegt wurde
+        val lastVia: String? = null,                     // "netz" oder "internet"
     ) {
         /** Adressen, die das Handy anspricht – zuletzt erfolgreiche zuerst. */
         val targets: List<String>
@@ -305,6 +312,9 @@ class Repository(private val db: Db, private val context: android.content.Contex
     }
 
     // ------------------------------------------------------------------ Abgleich mit einem PC
+    /** Platzhalter-Adresse für Antworten, die übers Internet kamen. */
+    val RELAY = "internet"
+
     data class Outgoing(
         val recs: List<Recognition>, val deleted: List<String>, val ops: List<Pair<Long, Op>>, val needInfo: List<String>, val maxSeq: Long,
     ) {
@@ -370,7 +380,8 @@ class Repository(private val db: Db, private val context: android.content.Contex
         }
         updateLink(link.pcId) {
             it.copy(sentSeq = maxOf(it.sentSeq, sent.maxSeq), cursor = cursor, lastSync = System.currentTimeMillis() / 1000.0,
-                lastSyncError = null, lastAddr = addr, pcName = pcName ?: it.pcName, catalog = catalog ?: it.catalog,
+                lastSyncError = null, lastAddr = if (addr == RELAY) it.lastAddr else addr, pcName = pcName ?: it.pcName,
+                catalog = catalog?.takeIf { c -> c.isNotEmpty() } ?: it.catalog, lastVia = if (addr == RELAY) "internet" else "netz",
                 // Neue Adressen des PCs (z. B. neue IP vom Router) übernehmen; bei „Bestimmte/Nur diese“ bleibt die Auswahl.
                 addrs = addrs?.filter { a -> ':' in a }?.takeIf { l -> l.isNotEmpty() } ?: it.addrs)
         }

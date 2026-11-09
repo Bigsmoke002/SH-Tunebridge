@@ -4,6 +4,11 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Handy unterwegs abgleichen:** Handy und PC gleichen jetzt auch ohne gemeinsames WLAN/VPN ab – über eine
+  Ende-zu-Ende-verschlüsselte Ablage auf shtunebridge.bs002.de (dieselbe Technik wie „Playlists teilen“; der Server
+  sieht nur zufällige Kennungen und unlesbare Blöcke). Standard aus: am PC unter Einstellungen › Handy beim Handy
+  „Unterwegs“ einschalten (mit Einwilligung), in der App beim PC „Unterwegs abgleichen“. Der PC schaut etwa alle
+  6 Minuten nach; Ausschalten oder Entkoppeln löscht die Ablagen sofort. Playlists über 1500 Songs nur im Heimnetz.
 - **Android: Mix erstellen & Set-Planer:** Unter Playlists › „Mix“ einen Mix aus bis zu 5 Künstlern oder einem Genre
   bauen (Locker bis DJ-genau, 20–100 Songs); in jeder PC-Playlist plant das Regler-Symbol ein DJ-Set (Energie-Verlauf
   Aufbauen/Peak/Gleich/Runter). Gerechnet wird am gekoppelten PC (neue verschlüsselte Anfrage `/phone/v1/job`), das

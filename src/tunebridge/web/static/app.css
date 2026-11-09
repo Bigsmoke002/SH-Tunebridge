@@ -1915,8 +1915,9 @@ input[type=range].mx-range::-webkit-slider-thumb { width: 16px !important; heigh
   background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
 .phone-glyph svg { width: 20px; height: 20px; }
 .phone-list { margin-top: 14px; border-top: 1px solid var(--line); }
-.phone-row { display: grid; grid-template-columns: 10px 1fr auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
+.phone-row { display: grid; grid-template-columns: 10px 1fr auto auto; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--line); }
 .phone-row:last-child { border-bottom: 0; padding-bottom: 0; }
+.ph-relay { display: flex; align-items: center; gap: 8px; cursor: pointer; }
 .phone-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
 .phone-dot.on { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent); }
 .phone-name > div:first-child { font-weight: 550; }
