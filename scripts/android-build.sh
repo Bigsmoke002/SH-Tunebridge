@@ -5,7 +5,10 @@
 #   scripts/android-build.sh install         -> Debug-APK bauen und per adb aufs Handy
 set -euo pipefail
 cd "$(dirname "$0")/.."
-CACHE="${TUNEBRIDGE_ANDROID_CACHE:-/mnt/work/caches/tunebridge-android}"
+# Eigene Pfade (Cache, Schlüsselordner) in android/local.env – nicht im Repo, z. B.:
+#   TUNEBRIDGE_ANDROID_CACHE=/pfad/zum/cache   TUNEBRIDGE_ANDROID_KEYS=/pfad/zum/schluessel
+[[ -f android/local.env ]] && { set -a; . android/local.env; set +a; }
+CACHE="${TUNEBRIDGE_ANDROID_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/tunebridge-android}"
 mkdir -p "$CACHE/gradle" "$CACHE/home"
 docker image inspect tunebridge-android >/dev/null 2>&1 || docker build -t tunebridge-android android/docker
 install=0

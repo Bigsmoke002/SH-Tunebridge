@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # Einmalig: Release-Schlüssel der Android-App anlegen. Führst DU selbst aus (fragt Passwort und Namen ab):
-#   ./scripts/android-keystore.sh [Ordner]      Standard-Ordner: /mnt/work/keys/sh-tunebridge-android
+#   ./scripts/android-keystore.sh [Ordner]      Standard: TUNEBRIDGE_ANDROID_KEYS aus android/local.env,
+#                                               sonst ~/.local/share/sh-tunebridge-android-keys
 # Der Schlüssel liegt außerhalb des Repos und kommt nie in die CI. SOFORT offline sichern (z. B. USB-Stick + Ausdruck
 # der Passwörter): Geht er verloren, kann die App nie wieder aktualisiert werden – Android nimmt Updates nur mit
 # demselben Schlüssel an.
 set -euo pipefail
 cd "$(dirname "$0")/.."
-DIR="${1:-/mnt/work/keys/sh-tunebridge-android}"
+[[ -f android/local.env ]] && { set -a; . android/local.env; set +a; }
+DIR="${1:-${TUNEBRIDGE_ANDROID_KEYS:-${XDG_DATA_HOME:-$HOME/.local/share}/sh-tunebridge-android-keys}}"
 JKS="$DIR/sh-tunebridge-release.jks"
 [[ -e "$JKS" ]] && { echo "Gibt es schon: $JKS – nichts überschrieben."; exit 1; }
 mkdir -p "$DIR" && chmod 700 "$DIR"
@@ -26,4 +28,5 @@ docker run --rm -it -u "$(id -u):$(id -g)" -v "$DIR:/keys:ro" tunebridge-android
   keytool -list -v -keystore /keys/sh-tunebridge-release.jks -alias sh-tunebridge | grep -E "SHA256:" || true
 echo
 echo "Fertig: $JKS"
-echo "Jetzt offline sichern! Danach Releases mit: TUNEBRIDGE_ANDROID_KEYS=$DIR ./scripts/publish-android.sh X.Y.Z"
+grep -q "^TUNEBRIDGE_ANDROID_KEYS=" android/local.env 2>/dev/null || echo "TUNEBRIDGE_ANDROID_KEYS=$DIR" >> android/local.env
+echo "Jetzt offline sichern! Danach Releases mit: ./scripts/publish-android.sh X.Y.Z"

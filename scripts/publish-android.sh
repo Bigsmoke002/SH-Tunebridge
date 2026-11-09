@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Android-App für einen signierten Release-Tag bauen, APK-Manifest mit dem Release-Schlüssel signieren und an das
 # GitHub-Release hängen. Die App lädt Updates nur, wenn das Manifest gültig signiert ist und SHA-256 passt.
-#   TUNEBRIDGE_ANDROID_KEYS=/mnt/work/keys/sh-tunebridge-android ./scripts/publish-android.sh [X.Y.Z]
+#   ./scripts/publish-android.sh [X.Y.Z]     (Schlüsselordner: TUNEBRIDGE_ANDROID_KEYS, z. B. in android/local.env)
 #   ./scripts/publish-android.sh --test   -> nur das signierte Release-APK bauen (build/android/), nichts hochladen –
 #                                            für den Pflicht-Test auf einem echten Handy vor dem Veröffentlichen
 # Voraussetzungen: scripts/android-keystore.sh einmal ausgeführt, Docker, github-cli angemeldet, Stand genau auf dem Tag.
@@ -13,7 +13,8 @@ VER="${1:-$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -1)}"
 TAG="v$VER"
 REPO="Bigsmoke002/SH-Tunebridge"
 NS="sh-tunebridge-release"
-TUNEBRIDGE_ANDROID_KEYS="${TUNEBRIDGE_ANDROID_KEYS:-/mnt/work/keys/sh-tunebridge-android}"
+[[ -f android/local.env ]] && { set -a; . android/local.env; set +a; }
+TUNEBRIDGE_ANDROID_KEYS="${TUNEBRIDGE_ANDROID_KEYS:-${XDG_DATA_HOME:-$HOME/.local/share}/sh-tunebridge-android-keys}"
 [[ -f "$TUNEBRIDGE_ANDROID_KEYS/sh-tunebridge-release.jks" ]] || { echo "App-Schlüssel nicht gefunden in $TUNEBRIDGE_ANDROID_KEYS"; exit 1; }
 [[ -f android/keystore.properties ]] || { echo "android/keystore.properties fehlt – erst scripts/android-keystore.sh"; exit 1; }
 if (( ! TEST )); then
@@ -24,6 +25,7 @@ git worktree remove --force "$WT" 2>/dev/null || rm -rf "$WT"
 git worktree add -q --detach "$WT" "$TAG"
 trap 'git -C "$ROOT" worktree remove --force "$WT" 2>/dev/null || true' EXIT
 cp android/keystore.properties "$WT/android/"
+[[ -f android/local.env ]] && cp android/local.env "$WT/android/"
 command -v gh >/dev/null && gh auth status >/dev/null 2>&1 || { echo "github-cli fehlt oder ist nicht angemeldet."; exit 1; }
 fi
 
