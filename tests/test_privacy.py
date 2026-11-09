@@ -117,3 +117,47 @@ def test_voice_chat_apps_never_offered(monkeypatch):
     monkeypatch.setattr(capture, "pipewire_ok", lambda: True)
     monkeypatch.setattr(capture.subprocess, "run", lambda *a, **k: type("R", (), {"stdout": json.dumps(dump)})())
     assert [a.name for a in capture.apps()] == ["app:firefox", "app:spotify"]
+
+
+# ------------------------------------------------------------------ Netzwerke erkennen (Handy-Abgleich)
+def _fake_adapters(monkeypatch):
+    import types
+
+    import ifaddr
+    calls = []
+
+    def get_adapters():
+        calls.append(1)
+        ip = types.SimpleNamespace(ip="192.168.1.20", network_prefix=24)
+        return [types.SimpleNamespace(name="eth0", nice_name="eth0", ips=[ip])]
+    monkeypatch.setattr(ifaddr, "get_adapters", get_adapters)
+    return calls
+
+
+def test_networks_not_read_without_consent(monkeypatch):
+    from tunebridge import phone
+    monkeypatch.setattr(phone, "ensure_server", lambda force=False: None)
+    calls = _fake_adapters(monkeypatch)
+    phone._nets_cache.update(t=0.0, v=[])
+    assert phone._load()["net_consent"] is False                 # Standard: keine Zustimmung
+    assert phone.networks(fresh=True) == [] and phone.addresses() == []
+    assert calls == []                                            # Netzwerkkarten gar nicht ausgelesen
+    with pytest.raises(phone.PhoneError) as e:
+        phone.start_pairing()
+    assert e.value.status == 403
+    assert not phone._allowed("192.168.1.50")                     # Handy-Anfragen abgewiesen
+    st = phone.set_net_consent(True)
+    assert st["net_consent"] is True and st["addresses"] == ["192.168.1.20:8766"] and calls
+    st = phone.set_net_consent(False)                             # Widerruf wirkt sofort
+    assert st["net_consent"] is False and st["networks"] == [] and st["pairing"] is None
+
+
+def test_net_consent_api(client, monkeypatch):
+    from tunebridge import phone
+    monkeypatch.setattr(phone, "ensure_server", lambda force=False: None)
+    _fake_adapters(monkeypatch)
+    c = client[0] if isinstance(client, tuple) else client
+    assert c.post("/api/phone/pair").status_code == 403
+    assert c.post("/api/phone/net-consent", json={"ok": True}).json()["net_consent"] is True
+    assert c.post("/api/phone/pair").status_code == 200
+    assert c.post("/api/phone/net-consent", json={"ok": False}).json()["networks"] == []

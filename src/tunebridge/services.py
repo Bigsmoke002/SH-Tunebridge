@@ -35,6 +35,7 @@ SERVICES = [
     ("lastfm", "Last.fm", "profile", False),
     ("apple", "Apple Music", "file", False),
     ("soundcloud", "SoundCloud", "account", False),
+    ("shazam", "Shazam", "file", False),
 ]
 NOTES = {
     "spotify": "Eigene Playlists und Lieblingssongs. Sortierte Playlists können direkt in Spotify angelegt werden.",
@@ -45,6 +46,9 @@ NOTES = {
     "lastfm": "Öffentliches Profil: deine Loved Tracks. Last.fm sammelt auch, was du bei Spotify/YouTube hörst.",
     "apple": "Apple erlaubt den Zugriff nur mit kostenpflichtigem Entwicklerkonto. Lösung: in der Musik-App "
              "die Mediathek exportieren und hier laden – alle Playlists auf einmal.",
+    "shazam": "Deine Shazams aus der App: Shazam bietet keine Anmeldung für fremde Apps. Lösung: die "
+              "Android-App von SH-Tunebridge erkennt selbst und gleicht mit dem PC ab; ältere Shazam-CSV-Dateien "
+              "(bzw. eine Datenkopie von Shazam) lassen sich hier laden – sortieren, sichern und übertragen wie jede Playlist.",
     "soundcloud": "Mit deiner eigenen SoundCloud-App anmelden (offizielle API, dafür braucht dein Konto Artist Pro): "
                   "deine Playlists und Likes. Ohne App: einzelne Songs über „Link einfügen“.",
 }

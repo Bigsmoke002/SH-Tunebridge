@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import math
+import os
 import sys
 import threading
 import time
@@ -543,6 +544,10 @@ def main(port: int = 8765) -> None:
                 app.quit()
             return
         st["fails"] = 0
+        mine = os.environ.get("TUNEBRIDGE_BOOT")
+        if mine and cfg.get("boot") and cfg["boot"] != mine:   # App wurde neu gestartet -> der neue Begleiter übernimmt
+            app.quit()
+            return
         st["source"] = cfg.get("source") or "desktop"
         if cfg.get("accent") and QColor(cfg["accent"]) != st["accent"]:
             st["accent"] = QColor(cfg["accent"])

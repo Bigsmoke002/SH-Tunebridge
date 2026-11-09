@@ -141,3 +141,32 @@ def test_import_api():
     assert c.get("/api/services/spotify/playlists").json()[1]["name"] == "Hardtekk Bretter"
     assert c.post("/api/services/tidal/import", content=b"x").status_code == 400
     assert c.delete("/api/services/spotify/import").json()["ok"]
+
+
+def test_shazam_csv():
+    from tunebridge import dataexport
+    csv = ("Shazam Library\n"
+           "Index,TagTime,Title,Artist,URL,TrackKey\n"
+           "1,2025-03-01T10:00:00Z,Neu,Band A,https://www.shazam.com/track/111/neu,111\n"
+           "2,2024-05-02T10:00:00Z,Alt,Band B,https://www.shazam.com/track/222/alt,222\n"
+           "3,2024-01-02T10:00:00Z,Neu,Band A,https://www.shazam.com/track/111/neu,111\n").encode()
+    res = dataexport.parse("shazamlibrary.csv", csv)
+    assert res["service"] == "shazam"
+    names = [p["name"] for p in res["playlists"]]
+    assert names == ["Meine Shazams", "Shazams 2025", "Shazams 2024"]
+    alle = res["playlists"][0]["tracks"]
+    assert [t.title for t in alle] == ["Neu", "Alt"] and alle[0].ids == {"shazam": "111"}
+    assert [t.title for t in res["playlists"][2]["tracks"]] == ["Alt"]
+
+
+def test_shazam_csv_falscher_dienst():
+    from tunebridge import dataexport
+    csv = b"Shazam Library\nIndex,TagTime,Title,Artist,URL,TrackKey\n1,2025-03-01,A,B,,1\n"
+    jid = dataexport.start("spotify", "shazamlibrary.csv", csv)
+    import time
+    for _ in range(50):
+        j = dataexport.job(jid)
+        if j["state"] in ("done", "error"):
+            break
+        time.sleep(0.05)
+    assert j["state"] == "error" and "Shazam" in j["error"]

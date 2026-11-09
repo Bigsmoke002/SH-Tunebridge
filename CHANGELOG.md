@@ -3,6 +3,55 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht (0.11.0)
+- **Weniger Shazam-Sperren:** Die Tempo-Suche (Slowed/Sped-up) läuft nie mehr automatisch – auch nicht bei
+  unsicheren Treffern. Sie kostete bis zu 3 zusätzliche Anfragen pro Scan; jetzt gibt es sie nur per Knopf.
+  Nach „Nichts erkannt“ zusätzlich „Länger aufnehmen (20 s)“: Shazam bekommt den mittleren Abschnitt – hilft bei
+  leisen Intros oder Gerede am Anfang, weiterhin nur eine Anfrage.
+- **Unsichere Treffer werden markiert:** Hat nur Shazam den Song gefunden und passt er nur mit Tempo-Abweichung,
+  fragt die App „Stimmt das?“. „Stimmt“ merkt sich die Stelle lokal (nächstes Mal ohne Shazam-Anfrage), „Falsch“
+  entfernt den Eintrag aus dem Verlauf. Auch sichere Treffer lassen sich direkt nach dem Erkennen als falsch verwerfen.
+- **Shazam-Bibliothek importieren:** Unter Dienste › Shazam eine Shazam-CSV (alte „shazamlibrary.csv“ oder eine
+  Datenkopie von Shazam) hineinziehen. Daraus werden „Meine Shazams“ (neueste zuerst, ohne Doppelte) und je Jahr eine Playlist – zum
+  Sortieren, Übernehmen und Übertragen wie jede andere Playlist. Eine Anmeldung mit dem Shazam-Konto gibt es nicht,
+  weil Shazam/Apple dafür keine Schnittstelle anbieten.
+- **Handy koppeln (neu, Android):** Einstellungen › Handy zeigt einen QR-Code. Die Android-App von SH-Tunebridge
+  scannt ihn und gleicht danach im eigenen WLAN direkt mit dem PC ab – Erkennungen vom Handy landen im Verlauf
+  (Genre, BPM usw. ergänzt der PC), Playlists gehen in beide Richtungen. Ende-zu-Ende verschlüsselt, ohne Server
+  dazwischen; der PC öffnet dafür Port 8766 nur fürs eigene Netz und nur, solange ein Handy gekoppelt ist.
+- **Koppeln nur mit Zustimmung auf beiden Seiten:** Das Handy zeigt vorher, welche Adressen es benutzt und was wann
+  übertragen wird; danach zeigen Handy und PC dieselbe Prüfzahl, und am PC muss man „Zulassen“ klicken (mit
+  Gerätename, IP-Adresse und App-Version). Ohne Antwort wird nach 2 Minuten abgelehnt.
+- **Nur noch ein Tray-/Schwebe-Icon:** Wurde die App schnell neu gestartet (z. B. nach einem Update), lief der alte
+  Begleiter weiter und ein zweiter kam dazu. Jetzt beendet sich der alte von selbst.
+- **Netzwerke erkennen nur mit Zustimmung:** PC und Handy lesen ihre Netzwerkkarten erst aus, wenn du es erlaubst
+  (PC: Einstellungen › Handy, Handy: beim Koppeln). Ohne Zustimmung kein Handy-Zugang und kein Abgleich; widerrufbar.
+- **Shazams vom Handy am PC:** Was das Handy aus der Shazam-App übernimmt, steht am PC im Verlauf (Filter „Aus der
+  Shazam-App“) und als Playlists „Shazams vom Handy“ (plus je Jahr) unter Dienste › Shazam – zum Einsortieren nach Genre
+  und Übertragen wie jede andere Playlist. Eine Shazam-CSV bleibt daneben erhalten. Der Verlauf zeigt jetzt bis zu 3000 Songs.
+- **Willkommen am PC:** „Speichern“ ist erst klickbar, wenn die Datenschutzerklärung bestätigt ist (vorher ließ er sich
+  ohne Haken anklicken und meldete erst dann einen Fehler).
+- **Android: Handy-Ton erkennen:** Unter dem Erkennen-Kreis wählst du „Mikrofon“ oder „Handy-Ton“. Handy-Ton hört direkt,
+  was auf dem Handy spielt (auch mit Kopfhörern) – mit Hinweis vorab, System-Freigabe und sichtbarer Benachrichtigung.
+- **Android: Shazam-App wird gefunden:** „Verlauf aus der Shazam-App“ meldete auf neueren Android-Versionen fälschlich
+  „nicht installiert“.
+- **Android: Shazam-Datenbank wird gefunden:** Seit Android 11 sieht ein Root-Befehl im Bereich der App die Daten anderer
+  Apps nicht; gelesen wird jetzt im globalen Bereich (Magisk/KernelSU „--mount-master“, sonst nsenter).
+- **Android: Verlauf aus der Shazam-App (nur Root):** Auf gerooteten Handys übernimmt Mehr › Shazam-App die eigenen
+  Shazams (Titel, Künstler, Zeitpunkt – kein Standort, keine Signatur). Vorher einmal eine ausdrückliche Warnung
+  mit Bestätigung: nur für erfahrene Nutzer, Nutzung auf eigene Verantwortung.
+- **Android: Updates in der App:** Mehr › Über sucht bei GitHub nach neuen Versionen (auf Wunsch einmal am Tag
+  automatisch, Standard aus), prüft die Signatur des Manifests und die Prüfsumme des APK und übergibt es dann an den
+  Android-Installer. Releases baut `scripts/publish-android.sh`, den App-Schlüssel legt `scripts/android-keystore.sh` an.
+- **Android: schneller erkennen:** Kachel in den Schnelleinstellungen, Widget mit letztem Treffer und App-Verknüpfungen
+  („Erkennen“, „Handy-Ton“ – Symbol lange drücken).
+- **Android-CI:** eigener Ablauf „android“ (Tests + Debug-APK), die Desktop-CI bleibt unverändert.
+- **Beispiele neutral:** Netz-Beispiele zeigen allgemeine Adressen; VPNs heißen überall einfach „VPN“.
+- **Mehrere PCs:** Das Handy kann mit beliebig vielen PCs abgleichen; Playlists werden je PC gruppiert.
+- **Netze wählen:** Der PC erkennt seine Heim- und VPN-Netze (z. B. 192.168.178.0/24, 10.0.0.0/24, VPN) und
+  öffnet den Handy-Zugang nur dort, wo du willst – in allen, nur bestimmten oder nur dem Hauptnetz. Am Handy wählst
+  du je PC die Adressen; gesendet wird nur, wenn das Handy gerade im Netz dieses PCs ist.
+
 ## 0.10.2 – 2026-11-08
 - **Lange Dialoge scrollen:** Dialoge (z. B. „Fertig – 136 Playlists angelegt“) werden höchstens so hoch wie das
   Fenster; der Inhalt scrollt, Titel und Knöpfe bleiben sichtbar. Vorher ragte der OK-Knopf unten aus dem Fenster.

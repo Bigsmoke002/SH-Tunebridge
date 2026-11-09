@@ -1,0 +1,30 @@
+# Android-App: Tests + Debug-APK im selben Build-Container wie lokal (android/docker).
+# Bewusst getrennt von „build“, damit die Desktop-CI unberührt bleibt. Ohne Release-Schlüssel –
+# das signierte APK baut und veröffentlicht nur scripts/publish-android.sh auf dem eigenen Rechner.
+name: android
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - run: docker build -t tunebridge-android android/docker
+      - name: Tests und Debug-APK
+        run: |
+          mkdir -p "$RUNNER_TEMP/cache"
+          docker run --rm -u "$(id -u):$(id -g)" -e HOME=/cache/home -e GRADLE_USER_HOME=/cache/gradle \
+            -v "$PWD:/src" -v "$RUNNER_TEMP/cache:/cache" -w /src/android tunebridge-android \
+            gradle --no-daemon --console=plain testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

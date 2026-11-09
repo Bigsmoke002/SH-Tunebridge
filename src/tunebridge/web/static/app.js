@@ -64,6 +64,7 @@ const ICONS = {
   external: P("M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"),
   search: `<circle cx="11" cy="11" r="7"/>` + P("m20 20-3.5-3.5"),
   monitor: `<rect x="2" y="3" width="20" height="14" rx="2"/>` + P("M8 21h8", "M12 17v4"),
+  phone: `<rect x="6" y="2" width="12" height="20" rx="2.5"/>` + P("M11 18h2"),
   mic: `<rect x="9" y="2" width="6" height="12" rx="3"/>` + P("M19 10v1a7 7 0 0 1-14 0v-1", "M12 18v4"),
   volume: P("M11 5 6 9H2v6h4l5 4z", "M15.5 8.5a5 5 0 0 1 0 7", "M19 5a10 10 0 0 1 0 14"),
   disc: `<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>`,
@@ -143,6 +144,32 @@ function toast(msg, kind = "ok") {
 }
 
 
+/* ================================================================= Neue Oberfläche erkennen
+   Läuft die App weiter, während die Oberfläche (app.js/app.css) aktualisiert wurde, zeigt das Fenster sonst
+   bis zum Neustart die alte Version. Prüft beim Zurückholen des Fensters und alle 2 Minuten – nur lokal. */
+const AssetWatch = {
+  mine: (document.querySelector('script[src*="app.js"]')?.src.match(/[?&]v=([\w]+)/) || [])[1],
+  shown: false,
+  start() {
+    if (!this.mine) return;
+    const check = () => this.check();
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) check(); });
+    window.addEventListener("focus", check);
+    setInterval(check, 120000);
+  },
+  async check() {
+    if (this.shown) return;
+    const r = await api("/api/asset-version").catch(() => null);
+    if (!r?.v || r.v === this.mine) return;
+    this.shown = true;
+    const el = document.createElement("div");
+    el.className = "toast asset-toast";
+    el.innerHTML = `${icon("info")}<span>Neue Version der Oberfläche</span><button class="btn btn--sm btn--primary">Neu laden</button>`;
+    $("button", el).onclick = () => location.reload();
+    $("#toasts").append(el);
+  },
+};
+
 /* ================================================================= Zwischenablage & Rechtsklick-Menü
    Das App-Fenster (pywebview) hat kein eigenes Rechtsklick-Menü – deshalb ein eigenes für Eingabefelder,
    markierten Text und Links. Gelesen wird die Zwischenablage nur auf Klick („Einfügen“). */
@@ -209,6 +236,11 @@ if (window.pywebview || /QtWebEngine/.test(navigator.userAgent)) {
   });
   ["mousedown", "scroll", "blur", "resize"].forEach(ev => window.addEventListener(ev, e => { if (!e.target?.closest?.(".ctx")) CtxMenu.close(); }, true));
   document.addEventListener("keydown", e => { if (e.key === "Escape") CtxMenu.close(); });
+  // Strg+R / F5: Das Qt-Fenster lädt sonst nie neu (z. B. nach einem Update der Oberfläche)
+  document.addEventListener("keydown", e => {
+    if (e.key === "F5" || ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "r")) { e.preventDefault(); location.reload(); }
+  });
+  AssetWatch.start();
   // Strg+V / Umschalt+Einfg: Das Qt-Fenster fügt nicht immer selbst ein – kommt kein „paste“, holt die App den Text
   let pasted = false;
   document.addEventListener("paste", () => { pasted = true; }, true);
@@ -581,7 +613,10 @@ function detailHtml(r) {
   const extra = r.in_playlists.filter(p => !(r.suggestions || []).some(s => s.playlist === p))
     .map(p => sugRow({ playlist: p, score: null, reason: "bereits einsortiert" }, true)).join("");
 
-  return `
+  const fresh = r.id != null && location.hash.startsWith("#/listen") && !x.confirmed;
+  const unsure = r.id != null && x.unsure ? `<div class="notice unsure-box">${icon("info")}<div><b>Unsicherer Treffer.</b> Nur Shazam hat ihn gefunden – und nur mit Tempo-Abweichung. Das passiert bei Slowed-/Sped-up-Versionen oder wenn ein ähnlicher Song gemeint ist. Stimmt das?
+      <div class="btn-row"><button class="btn btn--sm btn--primary" data-verdict="1" title="Merkt sich diese Stelle lokal – nächstes Mal ohne Shazam-Anfrage">${icon("check")}Stimmt</button><button class="btn btn--sm btn--ghost" data-verdict="0" title="Aus dem Verlauf entfernen">Falsch</button></div></div></div>` : "";
+  return `${unsure}
   <div class="track-hero">
     ${coverHtml(t)}
     <div style="min-width:0">
@@ -597,6 +632,7 @@ function detailHtml(r) {
         <button class="btn btn--sm btn--ghost" data-role="aianalyze" title="Song von der gewählten KI einschätzen lassen">${icon("sparkle")}KI-Analyse</button>
         ${r.id != null || r.key ? `<button class="btn btn--sm btn--ghost" data-role="setgenre" title="Genre selbst festlegen – gilt sofort für diesen Song und verbessert die Erkennung">${icon("pencil")}Genre festlegen</button>` : ""}
         ${x.local && location.hash.startsWith("#/listen") ? `<button class="btn btn--sm btn--ghost" data-role="recheck" title="Nochmal aufnehmen und bei Shazam prüfen">${icon("wave")}Online prüfen</button>` : ""}
+        ${fresh && !x.unsure ? `<button class="btn btn--sm btn--ghost" data-verdict="0" title="Falsch erkannt: aus dem Verlauf entfernen">Falsch erkannt?</button>` : ""}
       </div>
     </div>
   </div>
@@ -819,6 +855,22 @@ function bindDetail(root, r, onChange) {
   };
   const rc = $("[data-role=recheck]", root);
   if (rc) rc.onclick = () => listenOnce({ force: true });
+  $$("[data-verdict]", root).forEach(b => b.onclick = async () => {
+    const ok = b.dataset.verdict === "1";
+    try {
+      const nr = await api(`/api/recognition/${r.id}/verdict`, { method: "POST", body: { ok } });
+      if (ok) { toast(nr.learned ? "Gemerkt – nächstes Mal erkennt die App diese Stelle ohne Shazam" : "Bestätigt"); onChange(nr); return; }
+      toast("Verworfen – aus dem Verlauf entfernt");
+      const L = S.listen;
+      if (L.current?.id === r.id) {
+        L.current = null; L.lastKey = null;
+        L.msg = ["Falsch erkannt – verworfen", "Nochmal versuchen, gern an einer anderen Stelle des Songs"];
+        L.tempoOffer = true; L.longOffer = L.seconds < 20;
+        renderListenResult(); renderListenState();
+      } else closeDrawer();
+      refreshMeta();
+    } catch (e) { toast(e.message, "err"); }
+  });
   const bb = $("[data-role=buy]", root);
   if (bb) {   // Kauf-Links entstehen lokal (keine Online-Abfrage) – deshalb gleich anzeigen
     const q = r.id != null ? `id=${r.id}` : new URLSearchParams({ artist: r.track.artists[0] || "", title: r.track.title });
@@ -1292,13 +1344,16 @@ function renderListenState() {
   if (!st) return;
   $("#orb").classList.toggle("busy", L.busy);
   if (L.busy) st.innerHTML = `<strong>${L.phase === "rec" ? "Höre zu …" : "Erkenne …"}</strong><span>${
-    L.phase === "rec3" ? "prüfe auch Slowed/Sped-up-Version (max. 25 s)" : L.auto && L.running ? "Dauer-Modus aktiv – Klick stoppt" : "einen Moment"}</span>`;
+    L.phase === "rec3" && L.tempoRun ? "prüfe auch Slowed/Sped-up-Version (max. 25 s)" : L.auto && L.running ? "Dauer-Modus aktiv – Klick stoppt" : "einen Moment"}</span>`;
   else if (L.auto && L.running) st.innerHTML = `<strong>Dauer-Modus aktiv</strong><span>${esc(L.msg ? L.msg[0] + (L.msg[1] ? " · " + L.msg[1] : "") : "")} · Klick stoppt</span>`;
   else if (L.msg) {
-    st.innerHTML = `<strong>${esc(L.msg[0])}</strong><span>${esc(L.msg[1] || "")}</span>${L.tempoOffer ? `<button class="btn btn--sm" id="tempoBtn" style="margin-top:10px;align-self:center"
-      title="Nimmt neu auf und fragt Shazam zusätzlich mit 2–3 umgerechneten Tempi – kostet mehr Anfragen">Als Slowed/Sped-up suchen</button>` : ""}`;
+    st.innerHTML = `<strong>${esc(L.msg[0])}</strong><span>${esc(L.msg[1] || "")}</span>${L.tempoOffer || L.longOffer ? `<div class="btn-row" style="margin-top:10px;justify-content:center">
+      ${L.longOffer ? `<button class="btn btn--sm" id="longBtn" title="Nimmt 20 Sekunden auf und schickt Shazam den mittleren Abschnitt – hilft, wenn der Anfang ein leises Intro oder Gerede war. Weiterhin nur eine Shazam-Anfrage.">Länger aufnehmen (20 s)</button>` : ""}
+      ${L.tempoOffer ? `<button class="btn btn--sm btn--ghost" id="tempoBtn" title="Nimmt neu auf und fragt Shazam zusätzlich mit 2–3 umgerechneten Tempi – kostet mehr Anfragen">Als Slowed/Sped-up suchen</button>` : ""}</div>` : ""}`;
     const tb = $("#tempoBtn", st);
     if (tb) tb.onclick = () => listenOnce({ tempo: true });
+    const lb = $("#longBtn", st);
+    if (lb) lb.onclick = () => listenOnce({ seconds: 20 });
   }
   else st.innerHTML = `<strong>Bereit</strong><span>${L.auto ? "Klicken startet den Dauer-Modus" : "Zum Erkennen klicken"}</span>`;
 }
@@ -1423,17 +1478,20 @@ async function listenOnce(opts = {}) {
     L.msg = ["Shazam-Limit erreicht", `Nichts aufgenommen – wieder frei in ${Limits.wait("shazam")} s`]; renderListenState();
     return;
   }
-  L.busy = true; L.phase = "rec"; L.started = Date.now(); L.msg = null; L.tempoOffer = false;
+  L.busy = true; L.phase = "rec"; L.started = Date.now(); L.msg = null; L.tempoOffer = false; L.longOffer = false;
+  const secs = opts.seconds || L.seconds;
+  L.tempoRun = !!opts.tempo;
   let last = null;
   renderListenState(); ringProgress();
   const micMeter = L.mode === "mic";
   if (micMeter) Meter.start(L.source);
-  const t = setTimeout(() => { L.phase = "rec2"; renderListenState(); }, L.seconds * 1000 + 1500);
-  const t2 = setTimeout(() => { L.phase = "rec3"; renderListenState(); }, L.seconds * 1000 + 6500);
+  const t = setTimeout(() => { L.phase = "rec2"; renderListenState(); }, secs * 1000 + 1500);
+  const t2 = setTimeout(() => { L.phase = "rec3"; renderListenState(); }, secs * 1000 + 6500);
   try {
-    const r = await api("/api/listen", { method: "POST", body: { mode: L.mode, source: L.source, seconds: L.seconds, skip_key: L.auto ? L.lastKey : null, force: !!opts.force, auto: !!L.auto, tempo: !!opts.tempo } });
+    const r = await api("/api/listen", { method: "POST", body: { mode: L.mode, source: L.source, seconds: secs, skip_key: L.auto ? L.lastKey : null, force: !!opts.force, auto: !!L.auto, tempo: !!opts.tempo } });
     last = r;
-    L.tempoOffer = !L.auto && !r.found && !!r.tempo_offer;
+    L.tempoOffer = !L.auto && !r.same && !!r.tempo_offer;
+    L.longOffer = !L.auto && !r.found && !r.silent && !r.limited && secs < 20;
     if (!r.found && r.silent) L.msg = ["Kein Ton angekommen", `Pegel ${Math.round(r.level_db)} dB – anderes Gerät wählen oder „Gerät mit Signal finden“`];
     else if (r.limited || (!r.found && /Limit|antwortet nicht/.test(r.errors?.shazam || ""))) {
       L.msg = ["Shazam-Limit erreicht", (r.errors?.shazam || "").replace(/^\w+: /, "")];
@@ -1442,7 +1500,7 @@ async function listenOnce(opts = {}) {
     else if (r.same) L.msg = ["Läuft noch", L.current ? `${L.current.track.artists[0]} – ${L.current.track.title}` : ""];
     else {
       L.current = r; L.lastKey = r.key;
-      L.msg = [r.local ? "Lokal erkannt" : "Erkannt", `${r.track.artists.join(", ")} – ${r.track.title}${r.local ? " · keine Shazam-Anfrage" : r.cached ? " · Infos aus dem Speicher" : ""}`];
+      L.msg = [r.local ? "Lokal erkannt" : r.extra?.unsure ? "Erkannt – aber unsicher" : "Erkannt", `${r.track.artists.join(", ")} – ${r.track.title}${r.local ? " · keine Shazam-Anfrage" : r.cached ? " · Infos aus dem Speicher" : ""}`];
       renderListenResult(); refreshMeta();
       if (r.notice) toast(r.notice);
       if (location.hash !== "#/listen" && location.hash !== "") toast(`Erkannt: ${r.track.artists[0]} – ${r.track.title}`);
@@ -1463,9 +1521,12 @@ async function listenOnce(opts = {}) {
 /* ---------- Verlauf */
 Views.history = async (main) => {
   main.innerHTML = `<div class="page"><div class="page-head"><div><h1>Verlauf</h1><p>Alles, was erkannt wurde – auf allen Rechnern, die diese Daten nutzen.</p></div></div>${skeletonRows(6)}</div>`;
-  const items = await api("/api/history");
+  const items = await api("/api/history?limit=3000");
   const multiHost = new Set(items.map(i => i.host)).size > 1;
-  let q = "", gf = null;
+  let q = "", gf = null, of = "";
+  const origin = i => i.source === "shazam-app" ? "shazam" : (i.host || "").startsWith("Handy") ? "handy" : "pc";
+  const nOrig = k => items.filter(i => origin(i) === k).length;
+  const origins = [["", "Alle"], ["pc", "Am PC"], ["handy", "Am Handy erkannt"], ["shazam", "Aus der Shazam-App"]].filter(([k]) => !k || nOrig(k));
   const genres = [...new Map(items.filter(i => i.genre).map(i => [i.genre, i])).keys()];
   main.innerHTML = `<div class="page view-enter">
     <div class="page-head"><div><h1>Verlauf</h1><p>${items.length} erkannte Songs</p></div>
@@ -1473,13 +1534,23 @@ Views.history = async (main) => {
     <div id="hMixBox"></div>
     ${items.length ? `<div class="toolbar">
       <div class="input-icon">${icon("search")}<input class="input" id="hq" placeholder="Suchen …"></div>
+      ${origins.length > 2 ? `<div class="filter-chips" id="ho">${origins.map(([k, l]) => `<button class="${k === of ? "on" : ""}" data-o="${k}">${l}${k ? ` <span class="num">${nOrig(k)}</span>` : ""}</button>`).join("")}</div>` : ""}
       <div class="filter-chips" id="hf"><button class="on" data-g="">Alle</button>${genres.map(g => `<button data-g="${esc(g)}"><span class="dot" style="background:${genreColor(g)}"></span>${esc(g)}</button>`).join("")}</div>
     </div>
+    <div id="hShz"></div>
     <div class="rows" id="hrows"></div>` : `<div class="empty">${icon("clock")}<h3>Noch leer</h3><p>Erkannte Songs landen automatisch hier.</p></div>`}
   </div>`;
   if (!items.length) return;
   const draw = () => {
-    const f = items.filter(i => (!gf || i.genre === gf) && (!q || `${i.title} ${i.artists.join(" ")}`.toLowerCase().includes(q)));
+    const f = items.filter(i => (!gf || i.genre === gf) && (!of || origin(i) === of) && (!q || `${i.title} ${i.artists.join(" ")}`.toLowerCase().includes(q)));
+    const sh = $("#hShz");
+    if (sh) {
+      sh.innerHTML = of === "shazam" ? `<div class="dc-note">${icon("info")}<span>Diese Shazams hat dein Handy aus der Shazam-App übernommen. Sie stehen auch als Playlist
+        <b>„Shazams vom Handy“</b> unter Dienste › Shazam – zum Einsortieren nach Genre und Übertragen wie jede andere Playlist.</span>
+        <button class="btn btn--sm btn--primary" id="hShzGo">${icon("split")}Einsortieren</button></div>` : "";
+      hydrateIcons(sh);
+      $("#hShzGo")?.addEventListener("click", () => { location.hash = `#/services?svc=shazam&pl=h0&name=${enc("Shazams vom Handy")}`; });
+    }
     $("#hrows").innerHTML = `<div class="row row--history head"><div></div><div>Titel</div><div>Genre</div><div>BPM</div><div>Wann</div><div></div></div>` +
       f.map(i => `<div class="row row--history" data-id="${i.id}">
         <div class="thumb-wrap">${i.cover ? `<img class="thumb" src="${esc(i.cover)}" alt="" loading="lazy">` : `<div class="thumb"></div>`}
@@ -1495,6 +1566,7 @@ Views.history = async (main) => {
   };
   $("#hq").oninput = e => { q = e.target.value.toLowerCase(); draw(); };
   $("#hMix")?.addEventListener("click", () => mixSessions($("#hMixBox")));
+  $$("#ho button").forEach(b => b.onclick = () => { of = b.dataset.o; $$("#ho button").forEach(x => x.classList.toggle("on", x === b)); draw(); });
   $$("#hf button").forEach(b => b.onclick = () => { gf = b.dataset.g || null; $$("#hf button").forEach(x => x.classList.toggle("on", x === b)); draw(); });
   draw();
 };
@@ -2342,6 +2414,7 @@ Views.split = async (main, _, params) => {
 const PLATFORM_STYLE = {
   spotify: ["Spotify", "S", "#1ed760"], tidal: ["TIDAL", "T", "#d6dbe2"], ytmusic: ["YouTube Music", "YM", "#ff5a50"],
   youtube: ["YouTube", "YT", "#ff5a50"], soundcloud: ["SoundCloud", "SC", "#ff8a3d"], apple: ["Apple Music", "A", "#fa6a86"],
+  shazam: ["Shazam", "Sh", "#0a8cff"],
 };
 const SVC_NAME = id => String(id).startsWith("friend-") ? (Share.nicks[id] || "Freund") : id === "local" ? "SH-Tunebridge" : id === "link" ? "Link" : (PLATFORM_STYLE[id]?.[0] || id);
 const Transfer = { job: null };
@@ -2543,6 +2616,15 @@ const IMPORT = {
       { title: "Mediathek exportieren", html: "<b>Mac:</b> Musik-App › Menü <b>„Ablage“</b> › <b>„Mediathek“</b> › <b>„Mediathek exportieren …“</b> › speichern.<br><b>Windows:</b> iTunes › <b>„Datei“</b> › <b>„Mediathek“</b> › <b>„Mediathek exportieren …“</b>.<br><span class=\"muted\">Nur eine Playlist? Rechtsklick auf die Playlist › „Playlist exportieren …“ geht auch.</span>",
         sketch: sketch("Musik › Ablage", [`Ablage › ${hl("Mediathek")} › ${hl("Mediathek exportieren …")}`]) },
       { title: "Datei hier reinziehen", html: "Die gespeicherte <b>.xml</b>-Datei unten hineinziehen.", drop: true },
+    ],
+  },
+  shazam: {
+    name: "Shazam", wait: "einige Tage", accept: ".csv",
+    why: "Shazam lässt fremde Apps nicht ins Konto – eine Anmeldung hier wäre nur über Umwege möglich, die wir bewusst nicht gehen. Die frühere Seite „Meine Bibliothek“ mit CSV-Download hat Shazam abgeschaltet. Am einfachsten: <b>die Android-App von SH-Tunebridge</b> erkennt ab jetzt selbst und gleicht mit diesem PC ab (Einstellungen › Handy). Ältere CSV-Dateien lassen sich hier weiter laden.",
+    steps: [
+      { title: "Kopie deiner Daten bei Shazam anfordern", link: ["https://www.shazam.com/privacy", "shazam.com › Datenschutz öffnen"],
+        html: "Nach Art. 15/20 DSGVO steht dir eine Kopie deiner Shazams zu. Auf der Datenschutz-Seite von Shazam die Datenauskunft anfordern – mit dem Konto, mit dem die Shazam-App verknüpft ist (Apple-ID oder Google-Konto). Die Antwort dauert meist einige Tage, das Format bestimmt Shazam.<br><span class=\"muted\">Kommt die Datei als CSV, lässt sie sich unten direkt laden. Hast du noch eine alte <b>shazamlibrary.csv</b>, geht die auch.</span>" },
+      { title: "Datei hier reinziehen", html: "Die CSV-Datei (z. B. <b>shazamlibrary.csv</b>) unten hineinziehen. Daraus wird die Playlist <b>„Meine Shazams“</b> (neueste zuerst, ohne Doppelte) und – wenn deine Scans über mehrere Jahre gehen – je Jahr eine weitere. Danach kannst du sie sortieren, in eigene Playlists übernehmen oder zu Spotify &amp; Co. übertragen. Neu importieren geht jederzeit.", drop: true },
     ],
   },
 };
@@ -4409,6 +4491,10 @@ const Consent = {
         if (body.server.genredb) toast("Genre-Datenbank wird im Hintergrund geladen");
       },
     });
+    // „Speichern“ erst, wenn die Datenschutzerklärung bestätigt ist (vorher sichtbar gesperrt)
+    const priv = $('[data-c="privacy"]'), ok = $('#modal [data-m="ok"]');
+    const gate = () => { if (ok) { ok.disabled = !priv.checked; ok.title = priv.checked ? "" : "Erst die Datenschutzerklärung bestätigen"; } };
+    priv.addEventListener("change", gate); gate();
     const dom = $('[data-c="server.domain"]');
     const sync = () => {
       $(".cons-srv").classList.toggle("off", !dom.checked);
@@ -4432,7 +4518,7 @@ const Privacy = {
     const allowed = Consent.SERVER.filter(([id]) => c.server.domain && c.server[id]).map(([, l]) => l.replace(/ senden$/, ""));
     const P = d.prefs, raw = d.engines.filter(e => RAW_ENGINES[e]).map(e => RAW_ENGINES[e]).join(" / ") || "AudD / ACRCloud";
     const flow = [
-      ["Shazam", "Fingerabdruck der Aufnahme – kein hörbares Audio (bei Slowed/Sped-up bis zu 9 weitere)", "nur nach Klick auf „Erkennen“"],
+      ["Shazam", "Fingerabdruck der Aufnahme – kein hörbares Audio („Als Slowed/Sped-up suchen“ per Knopf: bis zu 3 weitere)", "nur nach Klick auf „Erkennen“"],
       [raw, "Aufnahme-Ausschnitt (Audio)", "nur mit deiner Zustimmung, siehe Schalter"],
       ["Deezer, iTunes-Suche, Last.fm, MusicBrainz", "Künstler + Titel (für Cover, Hörprobe, Genre, Mikro-Genre)", "nach einer Erkennung oder beim Sortieren"],
       ["Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud", "Abruf deiner Playlists und Likes, bei Spotify/TIDAL auf Wunsch neue Playlists anlegen", "unter „Dienste“ und beim automatischen Abgleich (nur verbundene Dienste)"],
@@ -4443,6 +4529,7 @@ const Privacy = {
       ["Genre-Datenbank", "deine Einordnungen bleiben lokal; Playlist-Namen werden nur lokal ausgewertet", c.server.genres ? "Beiträge: mit deiner Einwilligung" : "Beiträge: aus"],
       [`${c.domain} (Gemeinschafts-Genre-Datenbank)`, "nur die Anfrage – Datei ist signiert, enthält nur Song → Genre", c.server.genredb && c.privacy_at ? "einmal am Tag (abwählbar)" : "aus"],
       [`${c.domain} (Playlists teilen)`, "nur verschlüsselte Blöcke – Server kann sie nicht lesen", c.server.share ? "beim Teilen / Ansehen von Freunde-Playlists" : "aus"],
+      ["Dein gekoppeltes Handy (Android-App)", "Erkennungen und lokale Playlists – Ende-zu-Ende verschlüsselt, direkt im eigenen Netz, kein Server dazwischen", "nur wenn du unter Einstellungen › Handy das Erkennen der Netzwerke erlaubst, ein Handy koppelst und es am PC zulässt – nur in den dort gewählten Netzen"],
       ["Offizielle Player (YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer)", "IP-Adresse, Geräteinfos, ggf. Cookies des Anbieters", "erst nach deinem Klick auf „Player laden“"],
       ["Deezer / Apple (Cover, Hörproben)", "deine IP-Adresse beim Laden", "beim Anzeigen/Abspielen"],
       ["TIDAL, Spotify, YouTube, SoundCloud (Übertragen)", "Titel/Künstler zum Suchen, Name der neuen Playlist – YouTube braucht dafür dein extra Schreibrecht", "nur wenn verbunden und du überträgst"],
@@ -4828,8 +4915,187 @@ const DiscordUI = {
   },
 };
 
+/* ================================================================= Handy (Android-App) */
+const PhoneUI = {
+  timer: null,
+  async render(box) {
+    const d = await api("/api/phone").catch(e => ({ error: e.message }));
+    if (d.error) { box.innerHTML = `<div class="empty">${esc(d.error)}</div>`; return; }
+    const sec = (title, sub = "") => `<div class="section-title">${title}</div>${sub ? `<div class="cell-sub set-sub">${sub}</div>` : ""}`;
+    const online = x => x.last_seen && Date.now() / 1000 - x.last_seen < 900;
+    const mode = d.net.mode;
+    const listen = d.listening.length ? d.listening.map(a => `<code>${esc(a)}</code>`).join(" ") : `<span class="muted">geschlossen</span>`;
+    box.innerHTML = `
+      <div class="card phone-card">
+        <div class="phone-intro">
+          <div class="phone-glyph">${icon("phone")}</div>
+          <div><div class="lbl">${d.devices.length ? `${d.devices.length === 1 ? "Ein Handy" : `${d.devices.length} Handys`} gekoppelt` : "Noch kein Handy gekoppelt"}</div>
+            <div class="hint">In der App unter <b>Mehr › Mit PC koppeln</b> den QR-Code scannen. Handy und PC bestätigen beide, erst dann wird gekoppelt. Ein Handy kann mit mehreren PCs gekoppelt sein.</div></div>
+          <button class="btn btn--primary" id="phPair" ${d.enabled && d.net_consent ? "" : "disabled"}>${icon("plus")}Handy koppeln</button>
+        </div>
+        ${d.devices.length ? `<div class="phone-list">${d.devices.map(x => `
+          <div class="phone-row">
+            <div class="phone-dot ${online(x) ? "on" : ""}"></div>
+            <div class="phone-name"><div>${esc(x.name || "Handy")}</div>
+              <div class="cell-sub">Gekoppelt ${ago(x.added)} · zuletzt abgeglichen ${x.last_seen ? ago(x.last_seen) : "noch nie"}${x.ip ? ` · von ${esc(x.ip)}` : ""}${x.last_counts ? ` · ${x.last_counts.empfangen} empfangen, ${x.last_counts.gesendet} gesendet` : ""}${x.app ? ` · App ${esc(x.app)}` : ""}</div></div>
+            <button class="btn btn--ghost btn--sm" data-ph-del="${esc(x.id)}">Entfernen</button>
+          </div>`).join("")}</div>` : ""}
+      </div>
+
+      ${d.net_consent ? "" : `
+      <div class="card ph-consent">
+        <div class="ph-consent-head"><div class="phone-glyph">${icon("key")}</div><div><div class="lbl">Netzwerke dieses PCs erkennen?</div>
+          <div class="hint">Für den Handy-Abgleich braucht SH-Tunebridge deine Zustimmung, bevor es die Netzwerkkarten dieses PCs ausliest.</div></div></div>
+        <div class="ph-facts">
+          <div><span>Was</span><div>Die eigenen Netzwerkkarten dieses PCs: IP-Adressen, Netze (z. B. <code>192.168.178.0/24</code>, <code>10.0.0.0/24</code>, VPN), Name der Karte und welche Karte ins Internet geht.</div></div>
+          <div><span>Wozu</span><div>Damit der PC Handys nur in deinen Heimnetzen annimmt, du die Netze auswählen kannst und das Handy den PC findet (Adressen im QR-Code und verschlüsselt an gekoppelte Handys).</div></div>
+          <div><span>Nicht</span><div>Kein Durchsuchen des Netzes, keine anderen Geräte, keine WLAN-Namen, kein Standort. Nichts davon geht ins Internet oder an Dritte; gespeichert wird nur deine Auswahl.</div></div>
+          <div><span>Widerruf</span><div>Jederzeit hier unter „Netzwerke“. Danach liest die App nichts mehr aus und schließt den Handy-Zugang.</div></div>
+        </div>
+        <div class="ph-consent-btns"><button class="btn btn--primary" id="phConsent">${icon("check")}Erlauben</button></div>
+      </div>`}
+
+      <div class="set-row"><div><div class="lbl">Abgleich im Netz erlauben</div>
+        <div class="hint">Aus: Der PC nimmt keine Anfragen von Handys an, auch nicht von gekoppelten.</div></div><div></div>
+        <label class="switch"><input type="checkbox" id="phOn" ${d.enabled ? "checked" : ""}><span class="track"></span></label></div>
+
+      ${d.net_consent ? `${sec("Netzwerke", "Wo der PC Handys annimmt. Er lauscht nur auf seinen eigenen Adressen in den gewählten Netzen und nimmt nur Anfragen aus diesen Netzen an. Virtuelle Netze (Docker, VMs) werden nie verwendet.")}
+      <div class="ph-modes" role="radiogroup">
+        ${[["all", "Alle Heimnetze", "Jedes erkannte Heimnetz und VPN dieses PCs"],
+           ["some", "Nur bestimmte", "Unten auswählen, z. B. nur WLAN und VPN"],
+           ["primary", "Nur dieses Heimnetz", "Nur das Netz, über das der PC gerade ins Internet geht"]].map(([k, t, h]) => `
+          <label class="ph-mode ${mode === k ? "on" : ""}"><input type="radio" name="phMode" value="${k}" ${mode === k ? "checked" : ""}>
+            <div><div class="lbl">${t}</div><div class="hint">${h}</div></div></label>`).join("")}
+      </div>
+      <div class="ph-nets">
+        ${d.networks.length ? d.networks.map(n => `
+          <label class="ph-net ${n.active ? "active" : ""}">
+            <input type="checkbox" data-net="${esc(n.cidr)}" ${mode === "some" ? "" : "disabled"} ${(mode === "some" ? d.net.selected.includes(n.cidr) : n.active) ? "checked" : ""}>
+            <div class="ph-net-main"><div><b>${esc(n.label)}</b>${n.primary ? ` <span class="pill-mini">Haupt-Heimnetz</span>` : ""}</div>
+              <div class="cell-sub">Netz <code>${esc(n.cidr)}</code> · Karte ${esc(n.iface)} · dieser PC: <code>${esc(n.ip)}</code></div></div>
+            <span class="ph-net-state">${n.active ? "freigegeben" : "gesperrt"}</span>
+          </label>`).join("") : `<div class="empty">Kein Heimnetz gefunden – ist der PC mit WLAN oder Kabel verbunden?</div>`}
+        ${d.net.selected.filter(c => !d.networks.some(n => n.cidr === c)).map(c => `<div class="cell-sub ph-gone">Ausgewählt, aber gerade nicht verbunden: <code>${esc(c)}</code></div>`).join("")}
+      </div>
+      <div class="cell-sub ph-revoke">Du hast erlaubt, dass SH-Tunebridge die Netzwerkkarten dieses PCs ausliest (nur lokal). <a href="#" id="phRevoke">Zustimmung widerrufen</a></div>` : ""}
+
+      ${sec("Was passiert wann", "Damit du jederzeit weißt, was zwischen Handy und PC läuft.")}
+      <div class="ph-facts">
+        <div><span>Wo der PC lauscht</span><div>${listen}<div class="cell-sub">Port ${d.port}, eigener kleiner Server nur für Handys. Die App-Oberfläche selbst bleibt nur auf diesem PC (127.0.0.1).</div></div></div>
+        <div><span>Wann</span><div>Nur, solange ein Kopplungs-Code angezeigt wird oder mindestens ein Handy gekoppelt und der Abgleich erlaubt ist. Das Handy meldet sich nach jeder Erkennung, beim Öffnen der App und bei „Jetzt abgleichen“ – und nur, wenn es selbst in einem der freigegebenen Netze ist.</div></div>
+        <div><span>Vom Handy empfangen</span><div>Erkennungen am Handy (Song, Zeitpunkt, Shazam-Angaben, unsicher/bestätigt), gelöschte Einträge, Änderungen an Playlists, Gerätename und App-Version.</div></div>
+        <div><span>Ans Handy senden</span><div>Deine Erkennungen am PC und lokalen Playlists (Titel, Künstler, Album, ISRC, Länge, Genre, Cover- und Hörproben-Adresse, Dienst-Kennungen).</div></div>
+        <div><span>Nie</span><div>Konten, Tokens, API-Keys, Einstellungen, Audio.</div></div>
+        <div><span>Wie</span><div>Ende-zu-Ende verschlüsselt (AES-256-GCM), Schlüssel nur auf Handy und PC, Schutz gegen abgefangene und wiederholte Anfragen. Kein Server dazwischen.</div></div>
+      </div>
+      <div class="dc-note">${icon("info")}<span>Blockiert eine Firewall den Port, findet das Handy den PC nicht – unter Linux z. B. <code>sudo ufw allow from ${esc((d.networks.find(n => n.primary) || d.networks[0] || { cidr: "192.168.0.0/16" }).cidr)} to any port ${d.port} proto tcp</code>.</span></div>`;
+    hydrateIcons(box);
+    $("#phPair", box).onclick = () => this.pair(box);
+    const consent = async ok => {
+      try { await api("/api/phone/net-consent", { method: "POST", body: { ok } }); } catch (err) { toast(err.message, "err"); }
+      this.render(box);
+    };
+    if ($("#phConsent", box)) $("#phConsent", box).onclick = () => consent(true);
+    if ($("#phRevoke", box)) $("#phRevoke", box).onclick = e => {
+      e.preventDefault();
+      modal({ title: "Zustimmung widerrufen?", text: "SH-Tunebridge liest dann die Netzwerkkarten dieses PCs nicht mehr aus und schließt den Handy-Zugang. Gekoppelte Handys bleiben eingetragen, gleichen aber erst wieder ab, wenn du erneut zustimmst.",
+        confirm: "Widerrufen", danger: true, onConfirm: () => consent(false) });
+    };
+    $("#phOn", box).onchange = async e => { try { await api("/api/phone/enabled", { method: "POST", body: { enabled: e.target.checked } }); this.render(box); } catch (err) { toast(err.message, "err"); } };
+    const saveNet = async (m, sel) => {
+      try { await api("/api/phone/network", { method: "POST", body: { mode: m, selected: sel } }); }
+      catch (err) { toast(err.message, "err"); }
+      this.render(box);
+    };
+    $$("input[name=phMode]", box).forEach(r => r.onchange = () => {
+      const m = r.value;
+      const sel = m === "some" ? (d.net.selected.length ? d.net.selected : d.networks.filter(n => n.active).map(n => n.cidr)) : d.net.selected;
+      saveNet(m, sel);
+    });
+    $$("[data-net]", box).forEach(c => c.onchange = () => saveNet("some", $$("[data-net]:checked", box).map(x => x.dataset.net)));
+    $$("[data-ph-del]", box).forEach(b => b.onclick = () => modal({
+      title: "Handy entfernen?", text: "Das Handy kann danach nicht mehr mit diesem PC abgleichen, bis du es neu koppelst. Bereits übertragene Songs bleiben auf beiden Geräten.",
+      confirm: "Entfernen", danger: true,
+      onConfirm: async () => { await api(`/api/phone/devices/${encodeURIComponent(b.dataset.phDel)}`, { method: "DELETE" }); this.render(box); },
+    }));
+  },
+  async pair(box) {
+    let p;
+    try { p = await api("/api/phone/pair", { method: "POST" }); } catch (e) { return toast(e.message, "err"); }
+    const stop = () => { clearInterval(this.timer); this.timer = null; };
+    let shownReq = null;
+    modal({
+      title: "Handy koppeln", confirm: "Schließen", cancel: "Abbrechen", sticky: true, wide: true,
+      body: `<div class="pair">
+        <div class="pair-qr">${p.qr}</div>
+        <div class="pair-side">
+          <ol class="pair-steps">
+            <li>SH-Tunebridge auf dem Handy öffnen</li>
+            <li><b>Mehr › Mit PC koppeln</b> tippen</li>
+            <li>Diesen Code scannen und am Handy bestätigen</li>
+            <li>Hier am PC „Zulassen“ klicken</li>
+          </ol>
+          <div class="cell-sub">Oder von Hand eingeben:</div>
+          <div class="pair-code">${esc(p.code)}</div>
+          <div class="cell-sub pair-addr">Der PC ist erreichbar unter: ${p.addresses.map(a => `<span>${esc(a)}</span>`).join("")}</div>
+          <div class="pair-state" id="pairState"><span class="spin"></span>Warte auf das Handy … <span id="pairLeft"></span></div>
+        </div></div>
+        <div id="pairAsk"></div>`,
+      onConfirm: () => { stop(); if ($("#pairAsk")?.dataset.open) api("/api/phone/pair/cancel", { method: "POST" }).catch(() => {}); this.render(box); },
+      onCancel: () => { stop(); api("/api/phone/pair/cancel", { method: "POST" }).catch(() => {}); this.render(box); },
+    });
+    const ask = r => {
+      const el = $("#pairAsk"); if (!el) return;
+      el.dataset.open = "1";
+      el.innerHTML = `<div class="pair-ask">
+        <div class="pair-ask-head">${icon("phone")}<div><b>${esc(r.name)}</b> möchte sich koppeln
+          <div class="cell-sub">von ${esc(r.ip || "?")}${r.app ? ` · App ${esc(r.app)}` : ""}</div></div>
+          <div class="pair-check"><span>Prüfzahl</span><b>${esc(r.check.slice(0, 2))} ${esc(r.check.slice(2))}</b></div></div>
+        <p>Steht auf dem Handy <b>dieselbe Prüfzahl</b>? Nur dann zulassen. Danach darf dieses Handy Erkennungen und Playlist-Änderungen an diesen PC schicken und bekommt deinen Verlauf und deine Playlists. Entfernen geht jederzeit hier unter „Handy“.</p>
+        <div class="pair-ask-btns"><button class="btn btn--ghost" data-dec="0">Ablehnen</button><button class="btn btn--primary" data-dec="1">${icon("check")}Zulassen</button></div>
+      </div>`;
+      hydrateIcons(el);
+      $$("[data-dec]", el).forEach(b => b.onclick = async () => {
+        $$("[data-dec]", el).forEach(x => x.disabled = true);
+        try { await api("/api/phone/pair/decide", { method: "POST", body: { ok: b.dataset.dec === "1" } }); }
+        catch (e) { toast(e.message, "err"); }
+        delete el.dataset.open;
+        if (b.dataset.dec !== "1") { el.innerHTML = ""; $("#pairState").innerHTML = "Abgelehnt – das Handy wurde nicht gekoppelt."; stop(); }
+        else el.innerHTML = "";
+      });
+    };
+    const tick = async () => {
+      if (!$("#pairState")) return stop();
+      const st = await api("/api/phone").catch(() => null);
+      const pr = st?.pairing;
+      const left = Math.max(0, Math.round((pr?.expires || p.expires) - Date.now() / 1000));
+      const showLeft = () => { const el = $("#pairLeft"); if (el) el.textContent = `(noch ${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")})`; };
+      queueMicrotask(showLeft);
+      if (pr?.paired) {
+        stop();
+        const name = st.devices.find(x => x.id === pr.paired)?.name || "Handy";
+        $("#pairAsk").innerHTML = "";
+        $("#pairState").innerHTML = `${icon("check")}<b>${esc(name)}</b> ist gekoppelt.`;
+        $("#pairState").classList.add("ok"); hydrateIcons($("#pairState"));
+        $(".pair-qr").classList.add("done");
+      } else if (pr?.request) {
+        if (shownReq !== pr.request.at) { shownReq = pr.request.at; ask(pr.request); }
+        $("#pairState").innerHTML = `<span class="spin"></span>Anfrage vom Handy – bitte unten bestätigen <span id="pairLeft"></span>`;
+      } else if (!pr) {
+        stop();
+        if (shownReq) $("#pairAsk").innerHTML = "";
+        if (!$("#pairState").textContent.startsWith("Abgelehnt")) $("#pairState").innerHTML = "Code abgelaufen – bitte noch einmal „Handy koppeln“.";
+      } else if (shownReq) {
+        shownReq = null; $("#pairAsk").innerHTML = "";        // Handy hat aufgegeben (z. B. Zeit abgelaufen)
+        $("#pairState").innerHTML = `<span class="spin"></span>Warte auf das Handy … <span id="pairLeft"></span>`;
+      }
+    };
+    this.timer = setInterval(tick, 1200); tick();
+  },
+};
+
 const SETTING_GROUPS = [
-  ["Allgemein", [["allgemein", "Version & Rechner", "sliders"], ["darstellung", "Darstellung", "palette"], ["dienste", "Konten & Dienste", "key"], ["discord", "Discord-Status", "chat"]]],
+  ["Allgemein", [["allgemein", "Version & Rechner", "sliders"], ["darstellung", "Darstellung", "palette"], ["dienste", "Konten & Dienste", "key"], ["discord", "Discord-Status", "chat"], ["handy", "Handy", "phone"]]],
   ["Analyse", [["ki", "KI & API-Keys", "sparkle"], ["genres", "Genres", "disc"], ["erkennung", "Erkennung", "wave"]]],
   ["Daten", [["sicherung", "Sicherung", "archive"], ["gemeinschaft", "Gemeinschaft", "share"], ["datenschutz", "Datenschutz", "info"], ["traffic", "Datenverbrauch", "transfer"], ["speicher", "Speicher & Cache", "archive"],
              ["nichterkannt", "Nicht erkannt", "search"], ["debug", "Debug-Protokoll", "pencil"]]],
@@ -4874,6 +5140,7 @@ Views.settings = async (main) => {
     gemeinschaft: () => `${sec("Gemeinschafts-Genre-Datenbank", "Je mehr Installationen ihre Genres beitragen, desto besser wird die gemeinsame Datenbank – und davon profitiert die Erkennung bei allen. Übernommen wird ein Genre erst, wenn mehrere Installationen unabhängig dasselbe melden.")}<div id="communityBox"></div>`,
     sicherung: () => `<div class="cell-sub set-sub">Alles steckt in einer SQLite-Datenbank – hier sicherst du sie und holst sie auf einem neuen Rechner zurück.</div><div id="backupBox"></div>`,
     traffic: () => `${sec("Datenverbrauch", "Wie viel SH-Tunebridge über das Internet lädt und sendet – gerade, heute und insgesamt, aufgeteilt nach Dienst.")}<div id="trafficBox"></div>`,
+    handy: () => `${sec("Handy", "Die Android-App von SH-Tunebridge mit diesem PC verbinden: Erkennungen vom Handy landen hier im Verlauf, deine Playlists und Genres gehen aufs Handy. Direkt im eigenen WLAN – ohne Server dazwischen.")}<div id="phoneBox"></div>`,
     discord: () => `${sec("Discord-Status", "Zeig deinen Freunden in Discord, was gerade läuft – du bestimmst genau, was zu sehen ist.")}<div id="discordBox"></div>`,
     speicher: () => `${sec("Speicher &amp; Cache", "Was SH-Tunebridge auf deinem Rechner ablegt – und wie viele Online-Abfragen das schon erspart hat.")}<div id="storageBox"></div>`,
     nichterkannt: () => `${sec("Nicht erkannt", "Songs ohne Treffer oder ohne Genre – zum Nachtragen und um die Erkennung zu verbessern.")}<div id="missBox"></div>`,
@@ -4904,6 +5171,7 @@ Views.settings = async (main) => {
   if (tab === "traffic") Traffic.render($("#trafficBox"));
   if (tab === "sicherung") await Views.backup($("#backupBox"));
   if (tab === "discord") DiscordUI.render($("#discordBox"));
+  if (tab === "handy") PhoneUI.render($("#phoneBox"));
   if (tab === "nichterkannt") Misses.render($("#missBox"));
   if (tab === "debug") Debug.render($("#debugBox"));
   $("#setSearch", main).onclick = () => GSearch.open("", "settings");
@@ -5222,7 +5490,7 @@ Share.copy = async (fid, pid, name) => { await refreshMeta(); plMergeTo(`friend-
 
 const SVC_STYLE = {
   spotify: ["S", "#1ed760"], tidal: ["T", "#d6dbe2"], youtube: ["YT", "#ff5a50"], deezer: ["D", "#a238ff"],
-  lastfm: ["fm", "#d51007"], apple: ["A", "#fa6a86"], soundcloud: ["SC", "#ff8a3d"],
+  lastfm: ["fm", "#d51007"], apple: ["A", "#fa6a86"], soundcloud: ["SC", "#ff8a3d"], shazam: ["Sh", "#0a8cff"],
 };
 const svcStyle = sid => SVC_STYLE[sid] || (String(sid).startsWith("friend-") ? ["♪", "#8b8cf8"] : ["?", "#888"]);
 const SORT_LEVELS = [
@@ -5281,7 +5549,7 @@ Views.services = async (main, _, params) => {
       : s.ready ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button><button class="btn btn--sm btn--ghost" data-profile="${s.id}">Profil ändern</button>`
       : `<button class="btn btn--sm" data-profile="${s.id}">${icon("key")}Profil verknüpfen</button>`;
     else if (s.kind === "file") act = s.import ? `<button class="btn btn--sm btn--primary" data-open="${s.id}">${icon("stack")}Playlists</button>${impBtns}`
-      : `<button class="btn btn--sm btn--primary" data-imp="${s.id}">${icon("upload")}Mediathek importieren</button>`;
+      : `<button class="btn btn--sm btn--primary" data-imp="${s.id}">${icon("upload")}${s.id === "shazam" ? "Shazams importieren" : "Mediathek importieren"}</button>`;
     return `<div class="card platform svc-card ${off ? "planned" : ""}"><div class="p-logo" style="--pc:${c}">${m}</div>
       <div><h4>${esc(s.name)} ${badge}</h4><p>${esc(s.note)}</p>${s.error && !s.ready ? `<p class="svc-err">${icon("info")}${esc(s.error)}</p>` : ""}<div class="btn-row">${act}</div></div></div>`;
   };
@@ -5705,6 +5973,7 @@ const SETTINGS_INDEX = [
   ["dienste", "YouTube-Login", "youtube oauth client"],
   ["dienste", "SoundCloud-Login", "soundcloud client"],
   ["discord", "Discord-Status", "discord rich presence status freunde"],
+  ["handy", "Handy koppeln", "handy android smartphone app koppeln qr abgleich wlan"],
   ["discord", "Application ID", "discord application id"],
   ["ki", "KI-Anbieter", "ki claude openai gemini codex ollama lm studio llama"],
   ["ki", "Lokales LLM", "llm llama.cpp modell lokal server"],

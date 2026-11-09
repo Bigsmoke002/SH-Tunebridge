@@ -90,11 +90,11 @@ def parse_key(key: str) -> dict:
 
 
 # ------------------------------------------------------------------ Verschlüsseln
-def seal(key: bytes, aad: str, obj: dict) -> str:
+def seal(key: bytes, aad: str, obj: dict, limit: int | None = MAX_BLOB) -> str:
     data = zlib.compress(json.dumps(obj, ensure_ascii=False, separators=(",", ":")).encode(), 9)
     nonce = os.urandom(12)
     blob = nonce + AESGCM(key).encrypt(nonce, data, aad.encode())
-    if len(blob) > MAX_BLOB:
+    if limit and len(blob) > limit:
         raise ShareError("Zu viele Songs zum Teilen (max. etwa 200 KB verschlüsselt) – bitte weniger Playlists")
     return base64.b64encode(blob).decode()
 

@@ -136,6 +136,11 @@ def _asset_version() -> str:
     return h.hexdigest()[:10]
 
 
+@app.get("/api/asset-version")
+def asset_version():
+    return {"v": _asset_version()}
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     v = _asset_version()
@@ -278,15 +283,15 @@ async def listen(req: ListenReq):
         if variants.suspicious(res.best):
             from .. import ratelimit
             free = ratelimit.free("shazam")
-            tries = 0 if shazam_paused() else (min(variants.MAX_TRIES, free) if req.tempo else variants.tries_allowed(free))
+            tries = 0 if shazam_paused() else min(variants.MAX_TRIES, free)
             if req.auto:
                 # Dauer-Modus: keine Tempo-Suche – ein unbekannter Song würde sonst jede Runde das Budget aufbrauchen
                 dbg.event("erkennen", "Dauer-Modus: Tempo-Suche ausgelassen")
-            elif res.best is None and not req.tempo:
-                # Gar kein Treffer: nicht automatisch 3 weitere Anfragen hinterherschicken (Shazam sperrt sonst schnell).
-                # Die Tempo-Suche gibt es dann per Knopf („Als Slowed/Sped-up suchen“).
+            elif not req.tempo:
+                # Nie automatisch 2–3 weitere Anfragen hinterherschicken (Shazam sperrt sonst schnell) – weder ohne
+                # Treffer noch bei unsicherem Treffer. Die Tempo-Suche gibt es per Knopf („Als Slowed/Sped-up suchen“).
                 tempo_offer = True
-                dbg.event("erkennen", "Kein Treffer – Tempo-Suche nur auf Wunsch")
+                dbg.event("erkennen", "Kein/unsicherer Treffer – Tempo-Suche nur auf Wunsch")
             elif not tries:
                 notice = "Tempo-Suche (Slowed/Sped-up) diesmal ausgelassen – spart Shazam-Anfragen"
                 dbg.problem("erkennen", notice, frei=ratelimit.free("shazam"))
@@ -320,11 +325,15 @@ async def listen(req: ListenReq):
     extra["agreement"] = 1 if variant is best else res.agreement
     extra["alternatives"] = [f"{', '.join(r.artists)} – {r.title} ({r.engine})"
                              for r in hits if not r.same_song(best)]
-    # Sicheren Treffer lokal merken -> nächstes Mal ggf. ohne Shazam
-    if hashes and (variant is best or not variants.suspicious(best)):
+    # Unsicher = nur ein Dienst und der passt nur mit Tempo-Abweichung -> Nutzer fragen („Stimmt“ / „Falsch“)
+    unsure = variant is not best and variants.suspicious(best) and res.agreement < 2
+    if unsure:
+        extra["unsure"] = True
+    # Sicheren Treffer lokal merken -> nächstes Mal ggf. ohne Shazam (unsichere erst nach „Stimmt“)
+    fp_args = (songcache.primary_key(best), best.speed, hashes, None if variant is best else best.offset) if hashes else None
+    if fp_args and not unsure:
         try:
-            await asyncio.to_thread(localfp.remember, songcache.primary_key(best), best.speed, hashes,
-                                    None if variant is best else best.offset)
+            await asyncio.to_thread(localfp.remember, *fp_args)
         except Exception as e:
             dbg.error("lokal", "Fingerabdruck nicht gespeichert", e)
     if not track.genre and cons["misses"]:
@@ -340,9 +349,57 @@ async def listen(req: ListenReq):
     if req.skip_key and req.skip_key == store.track_key(track):
         return {"found": True, "same": True, "left": left, "cached": bool(extra.get("cached"))}
     rid = store.add_recognition(req.source, best.engine, res.agreement, track, extra)
+    if unsure:
+        _unsure_keep(rid, fp_args)
     _discord_song(track, extra)
-    return {"found": True, "errors": res.errors, "notice": notice, "left": left,
+    return {"found": True, "errors": res.errors, "notice": notice, "left": left, "tempo_offer": tempo_offer and unsure,
             "cached": bool(extra.get("cached")), **_payload(rid)}
+
+
+# Fingerabdrücke unsicherer Treffer: nur im Arbeitsspeicher, bis der Nutzer „Stimmt“ sagt (dann lokal merken)
+_UNSURE: dict[int, tuple[float, tuple | None]] = {}
+_UNSURE_MAX, _UNSURE_TTL = 30, 3600.0
+
+
+def _unsure_keep(rid: int, fp_args: tuple | None) -> None:
+    now = time.time()
+    for k in [k for k, (ts, _) in _UNSURE.items() if now - ts > _UNSURE_TTL]:
+        _UNSURE.pop(k, None)
+    while len(_UNSURE) >= _UNSURE_MAX:
+        _UNSURE.pop(next(iter(_UNSURE)))
+    _UNSURE[rid] = (now, fp_args)
+
+
+class VerdictReq(BaseModel):
+    ok: bool
+
+
+@app.post("/api/recognition/{rid}/verdict")
+async def recognition_verdict(rid: int, req: VerdictReq):
+    """Rückmeldung zu einer Erkennung: „Stimmt“ merkt den Fingerabdruck lokal (nächstes Mal ohne Shazam),
+    „Falsch“ entfernt den Eintrag aus dem Verlauf und vergisst den Fingerabdruck."""
+    from ..recognize import localfp
+    got = store.get_recognition(rid)
+    if not got:
+        raise HTTPException(404, "Erkennung nicht gefunden")
+    track, extra = got
+    _, fp_args = _UNSURE.pop(rid, (0.0, None))
+    if not req.ok:
+        store.delete_recognition(rid)
+        dbg.event("erkennen", "Als falsch markiert – aus dem Verlauf entfernt", song=f"{track.artist} – {track.title}",
+                  motor=extra.get("engines"))
+        return {"ok": True, "deleted": True}
+    learned = False
+    if fp_args:
+        try:
+            await asyncio.to_thread(localfp.remember, *fp_args)
+            learned = True
+        except Exception as e:  # noqa: BLE001
+            dbg.error("lokal", "Fingerabdruck nicht gespeichert", e)
+    extra.pop("unsure", None)
+    extra["confirmed"] = True
+    store.update_recognition(rid, asdict(track), extra)
+    return {"ok": True, "learned": learned, **_payload(rid)}
 
 
 @app.websocket("/ws/hold")
@@ -399,7 +456,7 @@ def history(limit: int = 200):
              "cover": h["track"].get("cover") or h["extra"].get("cover"),
              "preview_url": h["track"].get("preview_url") or h["extra"].get("preview_url"),
              "isrc": h["track"].get("isrc"), "ids": h["track"].get("ids") or {},
-             "bpm": h["extra"].get("bpm")} for h in store.history(limit)]
+             "bpm": h["extra"].get("bpm")} for h in store.history(max(1, min(limit, 5000)))]
 
 
 # ------------------------------------------------------------------ Mix-Tracklists (Verlauf)
@@ -1853,6 +1910,12 @@ def companion_available() -> tuple[bool, str]:
     return True, ""
 
 
+# Kennung dieses App-Starts: ein Begleiter von einem früheren Start (z. B. schneller Neustart oder Update)
+# merkt daran, dass er nicht mehr dazugehört, und beendet sich – so läuft immer nur einer.
+import secrets as _secrets
+APP_BOOT = _secrets.token_hex(8)
+
+
 def companion_ensure(port: int | None = None) -> None:
     """Begleit-Prozess starten, wenn Tray oder Schwebe-Icon an ist und er noch nicht läuft.
     (Ausschalten erledigt er selbst: er fragt alle 2,5 s die Einstellungen ab und beendet sich.)"""
@@ -1873,7 +1936,8 @@ def _companion_start(cfg: dict, port: int | None) -> None:
         return
     port = port or int(os.environ.get("TUNEBRIDGE_PORT", "8765"))
     env = {k: v for k, v in os.environ.items() if not k.startswith("QTWEBENGINE")}
-    env["TUNEBRIDGE_COMPANION_CFG"] = json.dumps(cfg)   # sofort anzeigen, nicht erst nach der ersten Abfrage
+    env["TUNEBRIDGE_COMPANION_CFG"] = json.dumps(cfg)
+    env["TUNEBRIDGE_BOOT"] = APP_BOOT   # sofort anzeigen, nicht erst nach der ersten Abfrage
     if sys.platform.startswith("linux") and env.get("WAYLAND_DISPLAY") and env.get("DISPLAY"):
         env["QT_QPA_PLATFORM"] = "xcb"     # XWayland: „immer im Vordergrund“ + freie Position sind erlaubt
     cmd = [sys.executable, "companion", "--port", str(port)] if getattr(sys, "frozen", False) else \
@@ -1909,7 +1973,7 @@ def companion_get():
     p = _companion["proc"]
     return {**_comp_cfg(), "accent": look.get("accent", "#6cc8a8"), "available": ok, "why": why,
             "running": bool(p is not None and p.poll() is None),
-            "desktop": bool(WINDOW_HOOKS), "source": _prefs().get("device_desktop") or "desktop"}
+            "desktop": bool(WINDOW_HOOKS), "source": _prefs().get("device_desktop") or "desktop", "boot": APP_BOOT}
 
 
 VIZ_STYLES = ("bars", "wave", "rgb")   # Anzeige beim Zuhören: Spektrum · 3-Band-Welle · RGB-Welle
@@ -2817,6 +2881,96 @@ async def _outbox_loop():
     except Exception:
         pass
     asyncio.get_running_loop().create_task(outbox.loop())
+
+
+@app.on_event("startup")
+async def _phone_loop():
+    from .. import phone
+
+    async def run():
+        from .. import dataexport     # Shazams vom Handy einmal beim Start als Playlists bereitstellen
+        await asyncio.to_thread(lambda: store.recognitions_by_source("shazam-app", 1) and dataexport.refresh_phone_shazams())
+        while True:          # Handy-Zugang nur offen, solange er gebraucht wird
+            await asyncio.to_thread(phone.watchdog)
+            await asyncio.sleep(30)
+    asyncio.get_running_loop().create_task(run())
+
+
+def _phone(fn, *a):
+    from ..phone import PhoneError
+    try:
+        return fn(*a)
+    except PhoneError as e:
+        raise HTTPException(e.status, str(e))
+
+
+class PhoneOnReq(BaseModel):
+    enabled: bool
+
+
+@app.get("/api/phone")
+def phone_status():
+    from .. import phone
+    return phone.status()
+
+
+@app.post("/api/phone/pair")
+def phone_pair():
+    from .. import phone
+    p = _phone(phone.start_pairing)
+    return {**p, "qr": phone.qr_svg(p["uri"])}
+
+
+@app.post("/api/phone/pair/cancel")
+def phone_pair_cancel():
+    from .. import phone
+    phone.cancel_pairing()
+    return phone.status()
+
+
+class PhoneDecideReq(BaseModel):
+    ok: bool
+
+
+class PhoneNetReq(BaseModel):
+    mode: str
+    selected: list[str] = []
+
+
+@app.post("/api/phone/pair/decide")
+def phone_pair_decide(req: PhoneDecideReq):
+    from .. import phone
+    return _phone(phone.decide, req.ok)
+
+
+class PhoneConsentReq(BaseModel):
+    ok: bool
+
+
+@app.post("/api/phone/net-consent")
+def phone_net_consent(req: PhoneConsentReq):
+    from .. import phone
+    return _phone(phone.set_net_consent, req.ok)
+
+
+@app.post("/api/phone/network")
+def phone_network(req: PhoneNetReq):
+    from .. import phone
+    return _phone(phone.set_network, req.mode, req.selected)
+
+
+@app.post("/api/phone/enabled")
+def phone_enabled(req: PhoneOnReq):
+    from .. import phone
+    phone.set_enabled(req.enabled)
+    return phone.status()
+
+
+@app.delete("/api/phone/devices/{dev_id}")
+def phone_remove(dev_id: str):
+    from .. import phone
+    phone.remove_device(dev_id)
+    return phone.status()
 
 
 @app.get("/api/misses/server")

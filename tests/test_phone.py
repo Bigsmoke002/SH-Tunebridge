@@ -1,0 +1,337 @@
+"""Handy koppeln und abgleichen: das Handy wird hier mit derselben Verschlüsselung nachgespielt wie in der
+Android-App (android/…/sync/PcSync.kt)."""
+import base64
+import os
+import threading
+import time
+import uuid
+from urllib.parse import parse_qs, urlparse
+
+import pytest
+
+from tunebridge import phone, store
+from tunebridge.models import Track
+from tunebridge.share import seal, unseal
+
+
+NETS = [
+    {"cidr": "192.168.1.0/24", "ip": "192.168.1.20", "iface": "wlan0", "kind": "lan", "label": "Heimnetz · WLAN", "primary": True},
+    {"cidr": "10.8.0.0/24", "ip": "10.8.0.5", "iface": "eth1", "kind": "lan", "label": "Heimnetz · Kabel", "primary": False},
+    {"cidr": "100.64.0.0/10", "ip": "100.100.1.2", "iface": "wg0", "kind": "vpn", "label": "VPN", "primary": False},
+]
+
+
+@pytest.fixture(autouse=True)
+def _no_net(monkeypatch):
+    monkeypatch.setattr(phone, "ensure_server", lambda force=False: None)
+    monkeypatch.setattr(phone, "_enrich_later", lambda uids: None)
+    monkeypatch.setattr(phone, "networks", lambda fresh=False: [dict(n) for n in NETS])
+    phone.set_net_consent(True)
+    phone._pairing = None
+    phone._seen.clear()
+
+
+def _request(body, client="192.168.1.50", decide=True):
+    """Kopplungsanfrage wie vom Handy; der PC entscheidet (decide=None: niemand klickt)."""
+    out = {}
+
+    def run():
+        try:
+            out["ans"] = phone.handle_pair(body, client)
+        except phone.PhoneError as e:
+            out["err"] = e
+    t = threading.Thread(target=run)
+    t.start()
+    for _ in range(300):
+        p = phone.status()["pairing"]
+        if (p and p["request"]) or not t.is_alive():
+            break
+        time.sleep(0.01)
+    if decide is not None and t.is_alive():
+        out["shown"] = phone.status()["pairing"]["request"]
+        phone.decide(decide)
+    t.join(5)
+    if "err" in out:
+        out["err"].shown = out.get("shown")
+        raise out["err"]
+    out["ans"]["shown"] = out.get("shown")
+    return out["ans"]
+
+
+def _pair(dev="a1b2c3d4", code=None):
+    p = phone.start_pairing()
+    q = parse_qs(urlparse(p["uri"]).query)
+    c = phone._norm_code(code or q["c"][0])
+    kp = phone._kdf(c.encode(), "pair")
+    secret = os.urandom(32)
+    box = seal(kp, f"pair:{dev}", {"name": "Galaxy S23 Ultra", "secret": base64.b64encode(secret).decode(), "app": "0.11.0"})
+    ans = _request({"v": 1, "id": dev, "box": box})
+    return dev, secret, unseal(kp, f"pair-ok:{dev}", ans["box"])
+
+
+def _sync(dev, secret, **payload):
+    ks = phone._kdf(secret, "sync")
+    rid = uuid.uuid4().hex
+    req = {"ts": int(time.time() * 1000), "rid": rid, "device": {"name": "S23", "app": "0.11.0"}, "cursor": 0,
+           "recs": [], "deleted": [], "ops": [], "need_info": [], **payload}
+    ans = phone.handle_sync({"v": 1, "id": dev, "box": seal(ks, f"sync:{dev}", req)})
+    return unseal(ks, f"sync-ok:{dev}:{rid}", ans["box"])
+
+
+def _rec(uid, title="Song", ts=None):
+    return {"uid": uid, "ts": ts or time.time(), "host": "Handy · SM-S918B", "source": "mikrofon", "engine": "shazam",
+            "track": {"title": title, "artists": ["Künstler"]}, "extra": {"agreement": 1}}
+
+
+def test_invite_and_pair():
+    p = phone.start_pairing()
+    assert p["uri"].startswith("shtb://pair?v=1&a=192.168.1.20:8766,10.8.0.5:8766,100.100.1.2:8766&c=")
+    assert "&p=" in p["uri"]
+    assert len(p["code"]) == 24 and p["code"].count("-") == 4
+    svg = phone.qr_svg(p["uri"])
+    assert svg.startswith("<svg") and "viewBox=" in svg and ' width="' not in svg.split(">")[0]   # skaliert, nie abgeschnitten
+    phone._pairing = None
+    dev, _, ok = _pair()
+    assert ok["pc_name"] and ok["pc_id"]
+    assert ok["addrs"] == ["192.168.1.20:8766", "10.8.0.5:8766", "100.100.1.2:8766"]   # auch bei eingetipptem Code
+    st = phone.status()
+    assert [d["name"] for d in st["devices"]] == ["Galaxy S23 Ultra"]
+    assert "secret" not in st["devices"][0]
+
+
+def test_code_is_one_time_and_typed_code_works():
+    p = phone.start_pairing()
+    typed = p["code"].lower()                       # Eingabe von Hand: Kleinschreibung, Bindestriche
+    kp = phone._kdf(phone._norm_code(typed).encode(), "pair")
+    box = seal(kp, "pair:dev1", {"name": "X", "secret": base64.b64encode(os.urandom(32)).decode()})
+    _request({"id": "dev1", "box": box})
+    with pytest.raises(phone.PhoneError):            # zweites Mal mit demselben Code: abgelehnt
+        phone.handle_pair({"id": "dev2", "box": seal(kp, "pair:dev2", {"name": "Y", "secret": "x"})})
+
+
+def test_wrong_code_and_try_limit():
+    phone.start_pairing()
+    wrong = phone._kdf(b"A" * 20, "pair")
+    for _ in range(phone.PAIR_TRIES):
+        with pytest.raises(phone.PhoneError) as e:
+            phone.handle_pair({"id": "dev", "box": seal(wrong, "pair:dev", {"secret": ""})})
+        assert e.value.status == 403
+    with pytest.raises(phone.PhoneError) as e:
+        phone.handle_pair({"id": "dev", "box": "x"})
+    assert e.value.status == 429 and phone._pairing is None
+
+
+def test_expired_code_rejected():
+    p = phone.start_pairing()
+    phone._pairing["expires"] = time.time() - 1
+    kp = phone._kdf(phone._norm_code(p["code"]).encode(), "pair")
+    with pytest.raises(phone.PhoneError):
+        phone.handle_pair({"id": "dev", "box": seal(kp, "pair:dev", {"secret": base64.b64encode(os.urandom(32)).decode()})})
+
+
+def test_sync_imports_phone_recognitions_once_and_returns_pc_ones():
+    dev, secret, _ = _pair()
+    store.add_recognition("mikrofon", "shazam", 2, Track(title="Vom PC", artists=["A"], genre="Techno"), {"bpm": 128})
+    ans = _sync(dev, secret, recs=[_rec("android-1", "Vom Handy")])
+    assert [r["track"]["title"] for r in ans["recs"]] == ["Vom PC"]     # eigene Handy-Songs nicht zurück
+    assert "192.168.1.20:8766" in ans["addrs"]                           # neue PC-IP erreicht das Handy
+    assert ans["recs"][0]["extra"] == {"bpm": 128}
+    titles = [r["track"]["title"] for r in store.history()]
+    assert sorted(titles) == ["Vom Handy", "Vom PC"]
+    h = next(r for r in store.history() if r["uid"] == "android-1")
+    assert h["host"] == "Handy · Galaxy S23 Ultra" and h["extra"]["handy"] is True
+    _sync(dev, secret, recs=[_rec("android-1", "Vom Handy")], cursor=ans["cursor"])
+    assert len(store.history()) == 2                                     # kein Doppelter
+    again = _sync(dev, secret, cursor=ans["cursor"])
+    assert again["recs"] == [] and again["cursor"] == ans["cursor"]
+
+
+def test_sync_only_accepts_android_uids_and_deletes():
+    dev, secret, _ = _pair()
+    pc = store.add_recognition("mikrofon", "shazam", 1, Track(title="PC", artists=["A"]), {})
+    pc_uid = store.history()[0]["uid"]
+    _sync(dev, secret, recs=[_rec(pc_uid, "Überschrieben?")], deleted=[pc_uid])
+    assert [r["id"] for r in store.history()] == [pc]                    # PC-Einträge kann das Handy nicht anfassen
+    _sync(dev, secret, recs=[_rec("android-9")])
+    _sync(dev, secret, deleted=["android-9"])
+    assert [r["id"] for r in store.history()] == [pc]
+
+
+def test_playlist_ops_and_playlists_back():
+    dev, secret, _ = _pair()
+    t = {"title": "Song", "artists": ["Künstler"], "isrc": "DEX123"}
+    ans = _sync(dev, secret, ops=[{"op": "add", "playlist": "Unterwegs", "track": t}])
+    assert ans["playlists"][0]["name"] == "Unterwegs" and ans["playlists"][0]["tracks"][0]["isrc"] == "DEX123"
+    ans = _sync(dev, secret, ops=[{"op": "remove", "playlist": "Unterwegs", "track": t}])
+    assert ans["playlists"][0]["tracks"] == []
+
+
+def test_confirm_on_phone_keeps_pc_details():
+    dev, secret, _ = _pair()
+    _sync(dev, secret, recs=[{**_rec("android-2"), "extra": {"unsure": True}}])
+    r = store.recognitions_by_uid(["android-2"])[0]
+    store.update_recognition(r["id"], {**r["track"], "genre": "House"}, {**r["extra"], "genre_source": "lastfm"})
+    ans = _sync(dev, secret, recs=[{**_rec("android-2"), "extra": {"unsure": False, "confirmed": True}}],
+                need_info=["android-2"])
+    x = store.recognitions_by_uid(["android-2"])[0]["extra"]
+    assert x["confirmed"] is True and x["unsure"] is False and x["genre_source"] == "lastfm"
+    assert ans["updates"][0]["track"]["genre"] == "House"
+
+
+def test_replay_and_clock_and_wrong_key():
+    dev, secret, _ = _pair()
+    ks = phone._kdf(secret, "sync")
+    req = {"ts": int(time.time() * 1000), "rid": "r1", "cursor": 0}
+    body = {"id": dev, "box": seal(ks, f"sync:{dev}", req)}
+    phone.handle_sync(body)
+    with pytest.raises(phone.PhoneError) as e:
+        phone.handle_sync(body)
+    assert e.value.status == 409
+    old = {"id": dev, "box": seal(ks, f"sync:{dev}", {"ts": int((time.time() - 3600) * 1000), "rid": "r2"})}
+    with pytest.raises(phone.PhoneError):
+        phone.handle_sync(old)
+    with pytest.raises(phone.PhoneError):
+        phone.handle_sync({"id": dev, "box": seal(os.urandom(32), f"sync:{dev}", {"ts": 0, "rid": "r3"})})
+    phone.remove_device(dev)
+    with pytest.raises(phone.PhoneError) as e:
+        _sync(dev, secret)
+    assert e.value.status == 403
+
+
+def test_only_chosen_networks():
+    assert phone._allowed("192.168.1.40") and phone._allowed("10.8.0.9") and phone._allowed("100.99.1.2")
+    assert not phone._allowed("192.168.178.40")                      # privat, aber kein Netz dieses PCs
+    assert not phone._allowed("127.0.0.1") and not phone._allowed("8.8.8.8")
+    assert not phone._allowed("testclient") and not phone._allowed(None)
+    phone.set_network("primary")
+    assert phone.addresses() == ["192.168.1.20:8766"]
+    assert phone._allowed("192.168.1.40") and not phone._allowed("100.99.1.2") and not phone._allowed("10.8.0.9")
+    phone.set_network("some", ["10.8.0.0/24", "100.64.0.0/10"])
+    assert phone.addresses() == ["10.8.0.5:8766", "100.100.1.2:8766"]
+    assert not phone._allowed("192.168.1.40") and phone._allowed("100.99.1.2")
+    st = phone.status()
+    assert [n["active"] for n in st["networks"]] == [False, True, True]
+    with pytest.raises(phone.PhoneError):
+        phone.set_network("some", [])
+    with pytest.raises(phone.PhoneError):
+        phone.set_network("some", ["kein-netz"])
+    with pytest.raises(phone.PhoneError):
+        phone.set_network("irgendwo")
+
+
+def test_no_network_selected_no_pairing():
+    phone.set_network("some", ["172.31.0.0/16"])
+    with pytest.raises(phone.PhoneError):
+        phone.start_pairing()
+
+
+def test_pc_shows_request_with_check_number_and_must_allow():
+    p = phone.start_pairing()
+    kp = phone._kdf(phone._norm_code(p["code"]).encode(), "pair")
+    box = seal(kp, "pair:dev7", {"name": "Pixel 9", "secret": base64.b64encode(os.urandom(32)).decode(), "app": "0.11.0"})
+    ans = _request({"id": "dev7", "box": box}, client="192.168.1.77")
+    shown = ans["shown"]
+    assert shown["name"] == "Pixel 9" and shown["ip"] == "192.168.1.77" and shown["app"] == "0.11.0"
+    assert shown["check"] == phone.confirm_code(p["code"], "dev7") and len(shown["check"]) == 4
+    assert [d["ip"] for d in phone.status()["devices"]] == ["192.168.1.77"]
+
+
+def test_pc_rejects():
+    p = phone.start_pairing()
+    kp = phone._kdf(phone._norm_code(p["code"]).encode(), "pair")
+    box = seal(kp, "pair:dev8", {"name": "Fremdes Handy", "secret": base64.b64encode(os.urandom(32)).decode()})
+    with pytest.raises(phone.PhoneError) as e:
+        _request({"id": "dev8", "box": box}, decide=False)
+    assert e.value.status == 403 and "abgelehnt" in str(e.value)
+    assert phone.status()["devices"] == [] and phone.status()["pairing"] is None    # Code verbraucht
+
+
+def test_no_answer_on_pc_times_out(monkeypatch):
+    monkeypatch.setattr(phone, "CONFIRM_SECONDS", 0.2)
+    p = phone.start_pairing()
+    kp = phone._kdf(phone._norm_code(p["code"]).encode(), "pair")
+    box = seal(kp, "pair:dev9", {"name": "X", "secret": base64.b64encode(os.urandom(32)).decode()})
+    with pytest.raises(phone.PhoneError) as e:
+        _request({"id": "dev9", "box": box}, decide=None)
+    assert e.value.status == 408 and phone.status()["devices"] == []
+
+
+def test_cancel_on_pc_ends_waiting_request():
+    p = phone.start_pairing()
+    kp = phone._kdf(phone._norm_code(p["code"]).encode(), "pair")
+    box = seal(kp, "pair:devA", {"name": "X", "secret": base64.b64encode(os.urandom(32)).decode()})
+    out = {}
+
+    def run():
+        try:
+            phone.handle_pair({"id": "devA", "box": box}, "192.168.1.5")
+        except phone.PhoneError as e:
+            out["e"] = e
+    t = threading.Thread(target=run)
+    t.start()
+    for _ in range(300):
+        if (phone.status()["pairing"] or {}).get("request"):
+            break
+        time.sleep(0.01)
+    phone.cancel_pairing()
+    t.join(5)
+    assert out["e"].status == 403
+
+
+def test_http_endpoints(monkeypatch):
+    from fastapi.testclient import TestClient
+    c = TestClient(phone._make_app())
+    assert c.get("/phone/v1/hello").status_code == 403                  # „testclient“ ist keine private Adresse
+    monkeypatch.setattr(phone, "_allowed", lambda h, nets=None: True)
+    assert c.get("/phone/v1/hello").json()["app"] == "SH-Tunebridge"
+    r = c.post("/phone/v1/pair", json={"id": "dev", "box": "x"})
+    assert r.status_code == 403 and "Kopplungs-Code" in r.json()["detail"]
+    assert c.post("/phone/v1/sync", content=b"{kaputt").status_code == 400
+
+
+def test_api_pair_shows_qr(monkeypatch):
+    from fastapi.testclient import TestClient
+    from tunebridge.web.app import app
+    with TestClient(app) as c:
+        p = c.post("/api/phone/pair").json()
+        assert p["qr"].startswith("<svg") and p["uri"].startswith("shtb://pair")
+        assert c.get("/api/phone").json()["pairing"]
+        assert c.post("/api/phone/pair/cancel").json()["pairing"] is None
+
+
+def test_repairing_same_phone_replaces_old_entry():
+    _pair(dev="alt1")
+    _pair(dev="neu2")
+    assert [d["id"] for d in phone.status()["devices"]] == ["neu2"]
+
+
+def test_status_after_pairing_window_closed():
+    _pair()
+    assert phone.status()["pairing"]["paired"]            # Oberfläche sieht „gekoppelt“
+    assert phone.status()["pairing"]["request"] is None
+    phone._pairing["expires"] = time.time() - 1          # 20 s später, Aufräumen noch nicht gelaufen
+    assert phone.status()["pairing"] is None
+
+
+def test_shazams_from_phone_become_sortable_playlists_next_to_csv():
+    from tunebridge import dataexport
+    dataexport.save("shazam", {"playlists": [{"name": "Meine Shazams", "tracks": [Track(title="Aus CSV", artists=["X"])]}],
+                               "liked": []}, "shazamlibrary.csv")
+    dev, secret, _ = _pair()
+    old = time.mktime((2025, 6, 1, 12, 0, 0, 0, 0, -1))
+    recs = [{**_rec("android-shz-1", "Neu"), "source": "shazam-app", "extra": {"shazam_key": "123"}},
+            {**_rec("android-shz-2", "Alt", ts=old), "source": "shazam-app"},
+            {**_rec("android-shz-3", "Neu"), "source": "shazam-app"},            # doppelt -> nur einmal
+            _rec("android-9", "Mikro")]                                           # normale Erkennung -> nicht dabei
+    _sync(dev, secret, recs=recs)
+    names = [p["name"] for p in dataexport.playlists("shazam")]
+    assert names[:3] == ["Shazams vom Handy", f"Shazams vom Handy {time.strftime('%Y')}", "Shazams vom Handy 2025"]
+    assert "Meine Shazams" in names                                               # CSV bleibt
+    name, tracks = dataexport.load("shazam", "h0")
+    assert [t.title for t in tracks] == ["Neu", "Alt"] and tracks[0].ids == {"shazam": "123"}
+    _sync(dev, secret, deleted=["android-shz-1", "android-shz-3"])
+    _, tracks = dataexport.load("shazam", "h0")
+    assert [t.title for t in tracks] == ["Alt"]
+    dataexport.save("shazam", {"playlists": [{"name": "Meine Shazams", "tracks": [Track(title="CSV neu", artists=["Y"])]}],
+                               "liked": []}, "neu.csv")                          # neue CSV: Handy-Liste bleibt
+    assert "Shazams vom Handy" in [p["name"] for p in dataexport.playlists("shazam")]

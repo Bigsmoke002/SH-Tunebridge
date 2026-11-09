@@ -4,6 +4,8 @@ Jede und jeder hat nach DSGVO Art. 15/20 Anspruch auf eine Kopie der eigenen Dat
 * Spotify:  Konto › Datenschutz › „Daten herunterladen“ (Kontodaten) -> ZIP mit Playlist*.json + YourLibrary.json
 * YouTube / YouTube Music: Google Takeout (nur „YouTube und YouTube Music“, Playlists + Musikbibliothek) -> ZIP mit CSV
 * Apple Music: Musik-App › Datei › Bibliothek › „Bibliothek exportieren …“ -> Mediathek.xml (alle Playlists)
+* Shazam: shazam.com › „Meine Bibliothek“ › „CSV herunterladen“ -> shazamlibrary.csv (alle Shazams mit Zeitpunkt)
+  Shazam/Apple bieten keine Schnittstelle zum Anmelden – fremde App-Tokens abgreifen ist tabu, daher die Datei.
 * außerdem einzelne Dateien wie bisher (Exportify-CSV, .m3u, Apple-Playlist-XML/-TXT)
 
 Gelesen werden nur Playlist-Namen, Titel, Künstler, Album, ISRC/Video-ID. Der Rest des Exports (Hörverlauf,
@@ -32,7 +34,7 @@ MAX_TOTAL = 400 * 1024 * 1024           # Schutz vor „ZIP-Bomben“
 MAX_PLAYLISTS = 500
 MAX_TRACKS_TOTAL = 30_000
 _KEY = "svc_import:"
-IMPORT_SERVICES = ("spotify", "youtube", "apple")
+IMPORT_SERVICES = ("spotify", "youtube", "apple", "shazam")
 _LIKED = "__liked__"
 
 
@@ -128,6 +130,54 @@ def _takeout_csv(name: str, text: str, out: dict, pending: list) -> bool:
     return True
 
 
+def _shazam_csv(text: str, out: dict) -> bool:
+    """Shazam-Bibliothek (shazam.com › Meine Bibliothek › CSV): erste Zeile „Shazam Library“, dann
+    Index,TagTime,Title,Artist,URL,TrackKey. -> Playlist „Meine Shazams“ (neueste zuerst, ohne Doppelte)
+    und je Jahr eine eigene Playlist, wenn die Scans über mehrere Jahre gehen."""
+    rows = playlistfile._rows(text, ",")
+    if not rows:
+        return False
+    first = [c.strip().lower().lstrip("\ufeff") for c in rows[0]]
+    start = next((i for i, r in enumerate(rows[:3])
+                  if {"tagtime", "trackkey"} & {c.strip().lower().lstrip("\ufeff") for c in r}), None)
+    if start is None and not (first and first[0] == "shazam library"):
+        return False
+    if start is None:
+        return True                                     # nur Kopfzeile, keine Songs
+    h = [c.strip().lower().lstrip("\ufeff") for c in rows[start]]
+    col = lambda *names: next((h.index(n) for n in names if n in h), None)  # noqa: E731
+    ti, ai, wi, ui, ki = col("title"), col("artist"), col("tagtime", "date"), col("url"), col("trackkey")
+    if ti is None:
+        return False
+    from .matching import normalize
+    scans = []
+    for r in rows[start + 1:]:
+        g = (lambda i: r[i].strip() if i is not None and i < len(r) else "")
+        t = _t(g(ti), g(ai))
+        if t:
+            m = re.search(r"/track/(\d+)", g(ui))
+            if (key := g(ki) or (m and m[1])):
+                t.ids = {"shazam": key}
+            scans.append((g(wi), t))
+    if scans and all(re.match(r"\d{4}-\d\d", w) for w, _ in scans):
+        scans.sort(key=lambda x: x[0], reverse=True)      # ISO-Zeitpunkte: neueste zuerst (sonst Reihenfolge der Datei)
+    seen, all_, by_year = set(), [], {}
+    for when, t in scans:
+        k = (normalize(t.artists[0] if t.artists else ""), normalize(t.title))
+        if k in seen:
+            continue
+        seen.add(k)
+        all_.append(t)
+        if (y := re.search(r"\b(19|20)\d\d\b", when)):
+            by_year.setdefault(y[0], []).append(t)
+    if all_:
+        out["playlists"].append({"name": "Meine Shazams", "tracks": all_})
+        if len(by_year) > 1:
+            out["playlists"] += [{"name": f"Shazams {y}", "tracks": by_year[y]} for y in sorted(by_year, reverse=True)]
+    out["shazam_scans"] = len(scans)
+    return True
+
+
 def _pl_name(stem: str) -> str:
     return re.sub(r"[-_ ]+(videos|Videos|video)$", "", stem).strip() or stem
 
@@ -186,7 +236,10 @@ def _read_one(name: str, raw: bytes, out: dict, pending: list) -> None:
         if _spotify_json(name, d, out):
             out["service"] = out.get("service") or "spotify"
     elif low.endswith(".csv"):
-        if _takeout_csv(name, playlistfile._text(raw), out, pending):
+        text = playlistfile._text(raw)
+        if _shazam_csv(text, out):
+            out["service"] = out.get("service") or "shazam"
+        elif _takeout_csv(name, text, out, pending):
             out["service"] = out.get("service") or "youtube"
     elif low.endswith(".xml"):
         if _apple_library(raw, out):
@@ -215,7 +268,7 @@ def parse(filename: str, data: bytes) -> dict:
     out["playlists"] = out["playlists"][:MAX_PLAYLISTS]
     if not (out["playlists"] or out["liked"] or out["pending"]):
         raise ExportError("In der Datei wurden keine Playlists gefunden. Erwartet: Spotify-Kontodaten (ZIP), "
-                          "Google Takeout mit YouTube (ZIP) oder die Apple-Music-Mediathek (XML).")
+                          "Google Takeout mit YouTube (ZIP), die Apple-Music-Mediathek (XML) oder die Shazam-Bibliothek (CSV).")
     return out
 
 
@@ -246,7 +299,54 @@ def save(sid: str, result: dict, filename: str) -> dict:
     liked = [_ser(t) for t in result["liked"][:max(0, MAX_TRACKS_TOTAL - n)]]
     doc = {"imported": time.time(), "file": (filename or "")[-120:], "playlists": lists, "liked": liked}
     store.meta_set(_KEY + sid, json.dumps(doc, ensure_ascii=False))
+    if sid == "shazam":
+        refresh_phone_shazams()                        # Shazams vom Handy bleiben neben der CSV erhalten
     return info(sid)
+
+
+PHONE_LIST = "Shazams vom Handy"
+
+
+def refresh_phone_shazams() -> int:
+    """Shazams, die ein Handy aus der Shazam-App übernommen und hergeschickt hat, als Playlists unter dem Import
+    „Shazam“ ablegen: „Shazams vom Handy“ (neueste zuerst, ohne Doppelte) und je Jahr eine, wenn es mehrere sind.
+    Playlists aus einer Shazam-CSV bleiben unangetastet. -> Anzahl Songs."""
+    from .matching import normalize
+    recs = store.recognitions_by_source("shazam-app")
+    seen: dict = {}
+    all_, by_year = [], {}
+    for r in recs:                                     # neueste zuerst
+        t = r["track"]
+        k = (normalize((t.get("artists") or [""])[0]), normalize(t.get("title") or ""))
+        key = (r.get("extra") or {}).get("shazam_key")
+        if not t.get("title"):
+            continue
+        if k in seen:                                  # doppelt: Shazam-Nummer trotzdem übernehmen
+            if key and "shazam" not in seen[k].setdefault("ids", {}):
+                seen[k]["ids"]["shazam"] = str(key)
+            continue
+        d = _ser(_t(t["title"], t.get("artists") or [], t.get("album"), t.get("isrc"),
+                    {**(t.get("ids") or {}), **({"shazam": str(key)} if key else {})}) or Track(title=t["title"]))
+        seen[k] = d
+        all_.append(d)
+        by_year.setdefault(time.strftime("%Y", time.localtime(r["ts"])), []).append(d)
+    doc = _doc("shazam") or {"imported": time.time(), "file": "", "playlists": [], "liked": []}
+    keep = [p for p in doc["playlists"] if not p.get("phone")]
+    mine = []
+    if all_:
+        mine.append({"id": "h0", "name": PHONE_LIST, "tracks": all_[:MAX_TRACKS_TOTAL], "phone": True})
+        if len(by_year) > 1:
+            mine += [{"id": f"h{y}", "name": f"{PHONE_LIST} {y}", "tracks": by_year[y], "phone": True} for y in sorted(by_year, reverse=True)]
+    if not keep and not mine and not doc["liked"]:
+        if _doc("shazam"):
+            remove("shazam")
+        return 0
+    doc["playlists"] = mine + keep
+    if not doc.get("file"):
+        doc["file"] = "vom Handy (Shazam-App)"
+    doc["imported"] = time.time()
+    store.meta_set(_KEY + "shazam", json.dumps(doc, ensure_ascii=False))
+    return len(all_)
 
 
 def _doc(sid: str) -> dict | None:
@@ -327,7 +427,7 @@ def _run(job: dict, sid: str, filename: str, data: bytes) -> None:
         del data
         found = res.get("service")
         if found and found != sid:
-            names = {"spotify": "Spotify", "youtube": "YouTube (Google Takeout)", "apple": "Apple Music"}
+            names = {"spotify": "Spotify", "youtube": "YouTube (Google Takeout)", "apple": "Apple Music", "shazam": "Shazam"}
             raise ExportError(f"Das ist ein Export von {names.get(found, found)} – bitte dort importieren")
         if res["pending"]:
             job["state"] = "titles"

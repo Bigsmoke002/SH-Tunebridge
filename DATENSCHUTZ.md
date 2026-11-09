@@ -66,7 +66,7 @@ Automatisch gesendet wird nur, was nach deiner Einwilligung entsteht (etwa alle 
 - Darstellung: Farben und ein eigenes Hintergrundbild (verkleinert, im Datenordner unter `appearance/`)
 - Automatischer Abgleich: Einstellungen, Prüfsummen schon gesehener Songs (keine Titel) und die Liste „Neu für dich“
 - Deine Entscheidungen zu eingebetteten Playern („immer laden“ je Anbieter, im Speicher des App-Fensters)
-- Importierte Datenexporte (Spotify, YouTube, Apple Music): nur Playlist-Namen und Songs (Titel, Künstler, Album,
+- Importierte Datenexporte (Spotify, YouTube, Apple Music, Shazam): nur Playlist-Namen und Songs (Titel, Künstler, Album,
   ISRC/Video-ID) – „Import löschen“ entfernt sie sofort; die hochgeladene Datei selbst wird nicht gespeichert
 - Deine Genre-Einordnungen (Song → Genre, Herkunft) und – wenn erlaubt – die geladene Gemeinschafts-Genre-Datenbank
 - Selbst gelernte Genres: unbekannte Last.fm-Tags deiner Songs und wie oft sie vorkamen. „Vorschlagen“
@@ -79,7 +79,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 
 | Empfänger | Daten | Wann |
 |---|---|---|
-| Shazam (Apple) | Fingerabdruck der Aufnahme – **kein hörbares Audio** | nur nach Klick auf „Erkennen“ (im Dauer-Modus bis zum nächsten Klick). Bei einem unsicheren Treffer – oder wenn du nach „Nichts erkannt“ auf „Als Slowed/Sped-up suchen“ klickst – bis zu 3 weitere Fingerabdrücke der lokal im Tempo umgerechneten Aufnahme |
+| Shazam (Apple) | Fingerabdruck der Aufnahme – **kein hörbares Audio** | nur nach Klick auf „Erkennen“ (im Dauer-Modus bis zum nächsten Klick). Nur wenn du nach „Nichts erkannt“ oder einem unsicheren Treffer auf „Als Slowed/Sped-up suchen“ klickst: bis zu 3 weitere Fingerabdrücke der lokal im Tempo umgerechneten Aufnahme (nie automatisch) |
 | AudD, ACRCloud | Aufnahme-Ausschnitt (Audio) | **nur mit deiner Zustimmung**, getrennt für Desktop und Mikrofon |
 | Deezer, iTunes-Suche, Last.fm, MusicBrainz | Künstler und Titel (ggf. ISRC); zur Genre-Prüfung die Kennung des schon gefundenen Künstlers | nach einer Erkennung, beim Link-Einfügen, Sortieren und automatischen Abgleich (Cover, Hörprobe, Genre, Mikro-Genre) |
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
@@ -92,6 +92,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | GitHub | deine IP-Adresse | Update-Prüfung (stündlich) |
 | Hugging Face, GitHub | deine IP-Adresse | einmalig beim Download von Modell/Laufzeit |
 | Microsoft (nur Windows) | deine IP-Adresse | nur wenn WebView2 fehlt und du der Installation zustimmst (Setup oder Dialog beim Start) |
+| Dein gekoppeltes Handy (Android-App, im eigenen Netz) | Ende-zu-Ende verschlüsselt: deine Erkennungen (Song, Zeitpunkt, Gerät, Genre, Links) und lokalen Playlists | nur wenn du ein Handy koppelst; direkt im WLAN/LAN bzw. VPN, kein Server dazwischen (siehe „Android-App“) |
 | Entwickler (`shtunebridge.bs002.de`) | die Kategorien, die du erlaubt hast (siehe oben) + technisch deine IP-Adresse | **nur mit Einwilligung** |
 | Entwickler (`shtunebridge.bs002.de`) – Playlists teilen | nur Ende-zu-Ende-verschlüsselte Blöcke, zufällige Bereichs-Kennung, Prüfwert des Schreib-Schlüssels (technisch deine IP-Adresse) | beim Teilen, Aktualisieren und Ansehen von Freunde-Playlists, **nur mit Einwilligung** „Playlists teilen“ |
 | Entwickler (`shtunebridge.bs002.de`) – Öffentliches Playlist-Verzeichnis | Suchanfrage; beim Veröffentlichen Playlist-Name, Pseudonym, Genre, Beschreibung, Songliste, Kennung deiner Installation (technisch deine IP-Adresse) | beim Stöbern, Veröffentlichen, Melden, **nur mit Einwilligung** „Verzeichnis“ |
@@ -137,7 +138,10 @@ iTunes ~20/min, Shazam vorsichtig 12/min). Blockt ein Dienst trotzdem, pausiert 
   erneut (frisch nachgeschlagen wird nach 30 Tagen oder auf „Infos neu laden“).
 - **Lokale Fingerabdrücke:** Nach einer sicheren Erkennung merkt sich die App Frequenz-Merkmale
   (Hashes) der Aufnahme – kein Ton, daraus lässt sich nichts anhören. Läuft dieselbe Stelle
-  wieder, erkennt die App den Song ohne Shazam-Anfrage.
+  wieder, erkennt die App den Song ohne Shazam-Anfrage. Bei einem **unsicheren Treffer** fragt die
+  App nach („Stimmt“ / „Falsch“): Die Hashes bleiben bis dahin nur im Arbeitsspeicher (höchstens
+  eine Stunde) und werden erst nach „Stimmt“ gespeichert; „Falsch“ verwirft sie und löscht den
+  Eintrag aus dem Verlauf. Nichts davon wird gesendet.
 - **Dauer-Modus:** Nach einem Treffer wartet die App, solange derselbe Song läuft, und hört dabei
   nur lokal auf Pausen und Klangwechsel (Pegel/Frequenzbänder im Arbeitsspeicher, nichts wird
   gespeichert oder gesendet). Zusätzlich liest sie über die Linux-Mediensteuerung (MPRIS), ob dein
@@ -244,14 +248,106 @@ Status sofort.
 ## Datenexporte der Dienste importieren (ohne Login)
 
 Statt dich anzumelden, kannst du bei Spotify („Daten herunterladen“ → Kontodaten), Google (Takeout → YouTube:
-Playlists und Musikbibliothek) oder in der Musik-App von Apple („Mediathek exportieren“) eine Kopie deiner Daten
-anfordern – das ist dein Recht nach Art. 15 und 20 DSGVO – und die Datei in SH-Tunebridge laden.
+Playlists und Musikbibliothek), in der Musik-App von Apple („Mediathek exportieren“) oder bei Shazam (Datenauskunft über shazam.com/privacy;
+ältere „shazamlibrary.csv“-Dateien gehen auch) eine Kopie deiner Daten anfordern – das ist dein Recht nach Art. 15
+und 20 DSGVO – und die Datei in SH-Tunebridge laden. Eine Anmeldung mit dem Shazam-Konto gibt es bewusst nicht:
+Shazam/Apple bieten dafür keine Schnittstelle für fremde Apps. Aus der Shazam-Datei werden nur Titel, Künstler,
+Shazam-Song-Nummer und das Jahr des Scans (für die Jahres-Playlists) gelesen; die genauen Zeitpunkte werden nicht gespeichert.
 Ausgewertet wird **nur auf deinem Rechner**: SH-Tunebridge liest daraus nur Playlist-Namen und Songs (Titel,
 Künstler, Album, ISRC bzw. Video-ID). Alles andere im Export – z. B. Hörverlauf, Suchanfragen, Zahlungs- oder
 Kontodaten – wird nicht gelesen und nicht gespeichert, die Datei selbst wird nach dem Einlesen verworfen.
 Einzige Netzanfrage: Bei Google Takeout stehen in Playlists nur Video-Nummern. Die Titel dazu fragt SH-Tunebridge
 einzeln bei YouTube ab (öffentliches oEmbed, ohne Konto und ohne Key); YouTube sieht dabei die Video-Nummer und
 deine IP-Adresse. Nichts davon geht an den Entwickler.
+
+## Android-App und Handy-Abgleich (Standard: aus)
+
+Die Android-App von SH-Tunebridge erkennt Songs selbst und gleicht auf Wunsch mit deinem PC ab.
+
+**Berechtigungen der App** (nur diese):
+- **Internet** – für Shazam, Cover und den Abgleich mit dem PC.
+- **Mikrofon** – wird erst beim ersten Tipp auf „Erkennen“ erfragt; aufgenommen wird nur, solange der Ring läuft
+  (Standard 10 s). Die Aufnahme bleibt im Arbeitsspeicher, wird nie gespeichert und nicht hochgeladen. Hinweis zu
+  § 201 StGB wie am PC (siehe „Mikrofon – bitte beachten“).
+- **Kamera** – nur beim Koppeln mit dem PC (Mehr › Mit PC koppeln), um den QR-Code zu lesen. Bilder werden nicht gespeichert.
+- **Vordergrund-Dienst „Bildschirm teilen“ + Benachrichtigungen** – nur für „Handy-Ton“: Statt des Mikrofons hört die
+  App direkt, was auf dem Handy abgespielt wird (Android-Funktion AudioPlaybackCapture). Android fragt dafür jedes Mal
+  im System-Dialog nach; vorher erklärt ein Hinweis, was passiert. Genutzt wird nur der Ton (Medien und Spiele),
+  kein Bild; Telefonate gibt Android nie heraus, und Apps, die das Mithören sperren (z. B. Kopierschutz), bleiben
+  gesperrt – das wird nicht umgangen. Gehört wird wie beim Mikrofon nur nach dem Tippen, nur im Arbeitsspeicher; an
+  Shazam geht nur der Fingerabdruck. Solange die Freigabe besteht, läuft ein Dienst mit Benachrichtigung („Beenden“);
+  nach 15 Minuten ohne Erkennen endet sie von selbst.
+- **Andere Apps sehen** – nur die Frage, ob die Shazam-App installiert ist (für „Verlauf aus der Shazam-App“).
+- **Apps installieren** („Unbekannte Apps installieren“) – nur damit die App ein selbst geladenes Update an den
+  Android-Installer übergeben kann. Android fragt dafür einmal nach; installiert wird erst, wenn du im Installer
+  bestätigst. Ohne diese Erlaubnis funktioniert alles andere genauso.
+
+**Schnellzugriffe:** Kachel in den Schnelleinstellungen, Startbildschirm-Widget und App-Verknüpfungen
+(„Erkennen“, „Handy-Ton“) öffnen nur die App und starten das Erkennen wie ein Tipp auf den Kreis – mit denselben
+Hinweisen und Rückfragen. Das Widget zeigt den letzten Treffer, gespeichert nur auf dem Handy.
+
+**Updates (Standard: aus):** Ist „Automatisch nach Updates suchen“ an (Willkommen oder Mehr › Über), fragt die App
+höchstens einmal am Tag beim Öffnen bei GitHub (`api.github.com`, Microsoft) nach neuen Versionen; von Hand geht das
+mit „Nach Updates suchen“. GitHub sieht dabei die IP-Adresse und „SH-Tunebridge-Android“ als Programmkennung, sonst
+nichts. Ein Update wird nur angeboten, wenn sein Manifest mit dem Release-Schlüssel signiert ist (geprüft mit der
+Bibliothek Bouncy Castle, MIT-Lizenz); das geladene APK wird mit Größe und SHA-256 aus dem Manifest verglichen und
+sonst verworfen. Android nimmt das Update zusätzlich nur an, wenn es mit demselben App-Schlüssel signiert ist.
+Die Entwicklerversion sucht nie nach Updates.
+
+**Verlauf aus der Shazam-App (nur mit Root, Standard: aus):** Auf gerooteten Handys kann die App unter
+Mehr › Shazam-App deinen eigenen Shazam-Verlauf übernehmen. Vorher erscheint einmal eine ausdrückliche Warnung
+(Root-Risiken, nur für erfahrene Nutzer, Nutzung auf eigene Verantwortung), die du bestätigen musst; danach fragt
+dein Root-Manager selbst nach. Die App kopiert die Datenbank der Shazam-App kurz in ihren eigenen Cache, liest
+daraus **nur** Song-Nummer, Titel, Künstler und Zeitpunkt und löscht die Kopie sofort. Nicht gelesen werden der
+dort gespeicherte Standort, die Audio-Signatur sowie Konto- und Anmeldedaten; an der Shazam-App wird nichts
+verändert. Fehlen Titel oder Künstler, fragt die App sie wie beim Teilen bei Shazam nach (Song-Nummer, IP-Adresse).
+Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgeglichen.
+
+**Was die App sendet:**
+- **Shazam (Apple):** wie am PC nur den Fingerabdruck der Aufnahme – kein hörbares Audio –, dazu Sprache/Land
+  und technisch deine IP-Adresse. Teilst du einen Shazam-Link an die App, fragt sie bei Shazam die Song-Angaben
+  zu dieser Song-Nummer ab.
+- **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
+  direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
+- **Dein PC:** siehe unten. Sonst nichts – keine Google-Play-Dienste, kein Firebase, keine Analyse-, Absturz-
+  oder Werbe-SDKs, keine Telemetrie. Android-Sicherungen in die Cloud sind für die App abgeschaltet.
+
+**Koppeln und Abgleich mit dem PC:** Unter Einstellungen › Handy zeigt der PC einen QR-Code mit seinen Adressen
+im eigenen Netz und einem Einmal-Code (100 Bit, 5 Minuten gültig, höchstens 8 Versuche, nur einmal nutzbar).
+Gekoppelt wird nur mit **Zustimmung auf beiden Geräten**: Das Handy zeigt vorher, welche Adressen es benutzt und
+was wann übertragen wird; danach zeigen Handy und PC dieselbe vierstellige Prüfzahl, und der PC fragt mit Gerätename,
+IP-Adresse und App-Version nach („Zulassen“/„Ablehnen“, ohne Antwort nach 2 Minuten abgelehnt). Ein Handy kann mit
+**mehreren PCs** gekoppelt sein; jede Kopplung hat ihr eigenes Geheimnis, Playlists bleiben dem jeweiligen PC zugeordnet.
+Damit schickt das Handy verschlüsselt ein zufälliges Geräte-Geheimnis, das nur auf diesen beiden Geräten liegt
+(am PC in `data/tokens/phone.json`, nur für dich lesbar). Jeder Abgleich ist mit AES-256-GCM verschlüsselt und
+mit Zeitstempel und Einmal-Kennung gegen Wiederholung geschützt. Übertragen werden:
+- vom Handy zum PC: die Erkennungen am Handy (Song, Zeitpunkt, Gerätename, Shazam-Angaben, ob unsicher/bestätigt),
+  gelöschte Einträge und Änderungen an Playlists;
+- vom PC zum Handy: deine Erkennungen am PC und deine lokalen Playlists (Titel, Künstler, Album, ISRC, Länge,
+  Genre, Cover-Adresse, Hörprobe-Adresse, Dienst-Kennungen) – keine Konten, Tokens oder Schlüssel.
+
+Songs vom Handy reichert der PC wie eigene Erkennungen an (Genre, BPM … über die Dienste in der Tabelle oben).
+Der PC nimmt Handy-Anfragen nur auf einem eigenen Port (8766) an und nur, solange ein Kopplungs-Code offen ist oder
+ein Handy gekoppelt und der Abgleich eingeschaltet ist. **Welche Netze**, legst du unter Einstellungen › Handy fest:
+alle erkannten Heimnetze und VPNs (z. B. 192.168.178.0/24, 10.0.0.0/24, VPN), nur bestimmte oder nur das
+Hauptnetz. Der PC lauscht dann ausschließlich auf seinen Adressen in diesen Netzen und nimmt nur Anfragen aus ihnen
+an; virtuelle Netze (Docker, VMs) werden nie geöffnet. Erkannt werden die Netze aus den eigenen Netzwerkkarten des
+PCs – dafür wird nichts gesendet. Der PC teilt dem gekoppelten Handy beim Abgleich seine aktuellen Adressen mit
+(verschlüsselt), damit eine neue IP vom Router ankommt.
+
+**Netzwerke erkennen nur mit Zustimmung (PC und Handy):** Bevor SH-Tunebridge die eigenen Netzwerkkarten ausliest
+(IP-Adressen, Netze wie 192.168.178.0/24, Name der Karte, beim PC auch welche Karte ins Internet geht), fragt es
+ausdrücklich – am PC unter Einstellungen › Handy, am Handy beim ersten Koppeln. Ohne Zustimmung wird nichts
+ausgelesen, der PC öffnet keinen Handy-Zugang, und das Handy gleicht nicht ab; am PC ist das auch serverseitig
+erzwungen (getestet in `tests/test_privacy.py`). Es wird kein Netz durchsucht, keine anderen Geräte, keine
+WLAN-Namen, kein Standort; die Angaben bleiben auf dem Gerät. Widerruf jederzeit: PC unter Einstellungen › Handy ›
+Netzwerke, Handy unter Mehr › Datenschutz › „Netzwerke erkennen“.
+
+**Netze am Handy:** Je PC wählst du „Alle“, „Bestimmte“ oder „Nur diese“ Adressen. Die App liest dafür nur die
+eigenen Netzwerkkarten des Handys (keine Standort- oder WLAN-Berechtigung) und spricht einen PC nur an, wenn das
+Handy gerade im selben Netz ist – in fremden WLANs wird nichts versucht. Die
+eigentliche App-Oberfläche bleibt nur auf deinem Rechner erreichbar. „Entfernen“ (PC) bzw. „Entkoppeln“ (Handy)
+löscht das Geräte-Geheimnis; bereits übertragene Songs bleiben auf beiden Geräten, bis du sie löschst.
 
 ## Playlists teilen (Ende-zu-Ende verschlüsselt, Standard: aus)
 

@@ -268,6 +268,13 @@ def add_recognition(source: str, engine: str, agreement: int, track: Track, extr
         return cur.lastrowid
 
 
+def recognitions_by_source(source: str, limit: int = 30_000) -> list[dict]:
+    """Erkennungen einer Herkunft (z. B. „shazam-app“), neueste zuerst."""
+    with _conn() as c:
+        rows = c.execute("SELECT * FROM recognitions WHERE source=? ORDER BY ts DESC LIMIT ?", (source, limit)).fetchall()
+    return [{**dict(r), "track": json.loads(r["track"]), "extra": json.loads(r["extra"])} for r in rows]
+
+
 def history(limit: int = 50) -> list[dict]:
     with _conn() as c:
         rows = c.execute("SELECT * FROM recognitions ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
@@ -286,6 +293,67 @@ def clear_cache(ns_prefix: str | None = None) -> int:
         if ns_prefix:
             return c.execute("DELETE FROM cache WHERE ns LIKE ?", (ns_prefix + "%",)).rowcount
         return c.execute("DELETE FROM cache").rowcount
+
+
+def delete_recognition(rid: int) -> bool:
+    """Einen Eintrag aus dem Erkennungsverlauf löschen (z. B. „Falsch erkannt“). Playlists bleiben."""
+    with _conn() as c:
+        return c.execute("DELETE FROM recognitions WHERE id=?", (rid,)).rowcount > 0
+
+
+def _rec(r) -> dict:
+    return {**dict(r), "track": json.loads(r["track"]), "extra": json.loads(r["extra"] or "{}")}
+
+
+def import_recognition(uid: str, ts: float, host: str, source: str, engine: str, agreement: int,
+                       track: Track, extra: dict) -> bool:
+    """Erkennung von einem anderen Gerät übernehmen (z. B. Handy). True = neu, False = gab es schon (gleiche uid)."""
+    with _conn() as c:
+        cur = c.execute("INSERT OR IGNORE INTO recognitions(uid,ts,host,source,engine,agreement,track,extra) "
+                        "VALUES(?,?,?,?,?,?,?,?)",
+                        (uid, ts, host, source, engine, agreement, json.dumps(asdict(track), ensure_ascii=False),
+                         json.dumps(extra, ensure_ascii=False)))
+        return cur.rowcount == 1
+
+
+def update_recognition_extra_by_uid(uid: str, extra: dict) -> None:
+    """Zusatzangaben ergänzen (z. B. „Stimmt“ am Handy) – Vorhandenes vom PC (Genre-Quelle, BPM …) bleibt."""
+    with _conn() as c:
+        r = c.execute("SELECT extra FROM recognitions WHERE uid=?", (uid,)).fetchone()
+        if r:
+            old = json.loads(r["extra"] or "{}")
+            c.execute("UPDATE recognitions SET extra=? WHERE uid=?",
+                      (json.dumps({**extra, **old, **{k: extra[k] for k in ("confirmed", "unsure") if k in extra}},
+                                  ensure_ascii=False), uid))
+
+
+def delete_recognition_uid(uid: str) -> bool:
+    with _conn() as c:
+        return c.execute("DELETE FROM recognitions WHERE uid=?", (uid,)).rowcount > 0
+
+
+def recognitions_since(ts: float, limit: int = 500, exclude_prefix: str | None = None) -> list[dict]:
+    """Erkennungen nach Zeitpunkt ts, älteste zuerst (zum portionsweisen Abgleichen)."""
+    q, args = "SELECT * FROM recognitions WHERE ts > ?", [ts]
+    if exclude_prefix:
+        q += " AND uid NOT LIKE ?"
+        args.append(exclude_prefix.replace("%", "") + "%")
+    with _conn() as c:
+        rows = c.execute(q + " ORDER BY ts LIMIT ?", (*args, limit)).fetchall()
+    return [_rec(r) for r in rows]
+
+
+def recognitions_by_uid(uids: list[str]) -> list[dict]:
+    if not uids:
+        return []
+    with _conn() as c:
+        rows = c.execute(f"SELECT * FROM recognitions WHERE uid IN ({','.join('?' * len(uids))})", uids).fetchall()
+    return [_rec(r) for r in rows]
+
+
+def playlist_names() -> list[str]:
+    with _conn() as c:
+        return [r[0] for r in c.execute("SELECT name FROM playlists ORDER BY name")]
 
 
 def all_recognitions() -> list[dict]:

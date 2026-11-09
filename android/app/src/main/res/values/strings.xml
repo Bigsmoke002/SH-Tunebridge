@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SH-Tunebridge</string>
+    <string name="widget_desc">Mit einem Tipp erkennen – Mikrofon oder Handy-Ton</string>
+    <string name="tile_label">Song erkennen</string>
+</resources>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ins Internet nur HTTPS. Unverschlüsseltes HTTP ist nötig, weil der PC im WLAN keine Zertifikate hat –
+     dort ist jede Nachricht selbst mit AES-256-GCM verschlüsselt (siehe sync/PcSync.kt). -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">shazam.com</domain>
+        <domain includeSubdomains="true">mzstatic.com</domain>
+        <domain includeSubdomains="true">apple.com</domain>
+    </domain-config>
+</network-security-config>
