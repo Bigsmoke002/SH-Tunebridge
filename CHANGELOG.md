@@ -4,6 +4,10 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Mix erstellen & Set-Planer:** Unter Playlists › „Mix“ einen Mix aus bis zu 5 Künstlern oder einem Genre
+  bauen (Locker bis DJ-genau, 20–100 Songs); in jeder PC-Playlist plant das Regler-Symbol ein DJ-Set (Energie-Verlauf
+  Aufbauen/Peak/Gleich/Runter). Gerechnet wird am gekoppelten PC (neue verschlüsselte Anfrage `/phone/v1/job`), das
+  Handy zeigt Fortschritt und Ergebnis mit BPM/Tonart, spielt es ab, teilt es oder speichert es als PC-Playlist.
 - **Android: Dauer-Erkennen:** Unter dem Kreis „Dauer-Erkennen …“ – die App hört alle 1, 2 oder 5 Minuten kurz zu
   (Mikrofon oder Handy-Ton), 30 Minuten bis 4 Stunden lang, und sammelt die Songs (z. B. Party, Radio). Derselbe Song
   kommt nur einmal in den Verlauf; ohne Internet wird gemerkt. Läuft nur mit sichtbarer Benachrichtigung zum Beenden.

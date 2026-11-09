@@ -375,3 +375,60 @@ def test_phone_can_choose_which_playlists_it_gets():
     assert {c["name"] for c in some["catalog"]} >= {"Techno", "Chill"}      # Übersicht bleibt vollständig
     none = _sync(dev, secret, lists=[])
     assert none["playlists"] == []
+
+
+def _job(dev, secret, rid, **req):
+    ks = phone._kdf(secret, "sync")
+    req = {"ts": int(time.time() * 1000), "rid": rid, **req}
+    return unseal(ks, f"job-ok:{dev}:{rid}", phone.handle_job({"id": dev, "box": seal(ks, f"job:{dev}", req)})["box"])
+
+
+def test_phone_set_planner_runs_on_pc_and_saves(monkeypatch):
+    from tunebridge import audiofeat, store
+    from tunebridge.models import Track
+    feats = {"A": (120, "8A", 0.3), "B": (124, "9A", 0.8), "C": (122, "8A", 0.5)}
+    monkeypatch.setattr(audiofeat, "features", lambda t: dict(zip(("bpm", "camelot", "energy"), feats[t.title])))
+    for n in "ABC":
+        store.add_to_playlist("Party", Track(title=n, artists=["X"]))
+    dev, secret, _ = _pair()
+    g = _job(dev, secret, "g1", act="genres")
+    assert g["genres"] and {c["id"] for c in g["curves"]} >= {"peak", "aufbau"}
+    jid = _job(dev, secret, "j1", act="set-start", playlist="Party", curve="aufbau")["job"]
+    for k in range(50):
+        st = _job(dev, secret, f"s{k}", act="status", kind="set", job=jid)
+        if st["state"] == "done":
+            break
+        time.sleep(0.05)
+    assert st["state"] == "done" and sorted(st["order"]) == [0, 1, 2] and st["curve"] == "aufbau"
+    assert {it["title"] for it in st["items"]} == {"A", "B", "C"} and st["items"][0]["bpm"]
+    _job(dev, secret, "sv", act="save", kind="set", job=jid, idx=st["order"], name="Party (Set)")
+    saved = next(p for p in store.local_playlists() if p.name == "Party (Set)")
+    assert [t.title for t in saved.tracks] == [st["items"][i]["title"] for i in st["order"]]
+    with pytest.raises(phone.PhoneError):                       # Name schon vergeben -> verständlicher Fehler
+        _job(dev, secret, "sv2", act="save", kind="set", job=jid, idx=st["order"], name="Party (Set)")
+
+
+def test_phone_job_needs_its_own_seal_and_no_replay():
+    dev, secret, _ = _pair()
+    ks = phone._kdf(secret, "sync")
+    req = {"ts": int(time.time() * 1000), "rid": "x1", "act": "genres"}
+    with pytest.raises(phone.PhoneError):                       # mit dem Kontext „similar“ versiegelt -> passt nicht
+        phone.handle_job({"id": dev, "box": seal(ks, f"similar:{dev}", req)})
+    body = {"id": dev, "box": seal(ks, f"job:{dev}", {**req, "rid": "x2"})}
+    phone.handle_job(body)
+    with pytest.raises(phone.PhoneError) as e:
+        phone.handle_job(body)
+    assert e.value.status == 409
+
+
+def test_phone_mix_start_validates(monkeypatch):
+    from tunebridge import mixgen
+    monkeypatch.setattr(mixgen, "_run", lambda job: job.update(state="done", items=[{"title": "S", "artists": ["Y"], "artist": "Y"}],
+                                                                 order=[0], reserve=[]))
+    dev, secret, _ = _pair()
+    with pytest.raises(phone.PhoneError):
+        _job(dev, secret, "m0", act="mix-start", seeds=[], opts={})
+    jid = _job(dev, secret, "m1", act="mix-start", seeds=[{"id": 27, "name": "Daft Punk"}], opts={"level": "locker", "count": 10})["job"]
+    time.sleep(0.05)
+    st = _job(dev, secret, "m2", act="status", kind="mix", job=jid)
+    assert st["state"] == "done" and st["items"][0]["title"] == "S" and st["order"] == [0]

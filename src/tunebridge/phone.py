@@ -474,6 +474,95 @@ def handle_similar(body: dict, client: str | None = None) -> dict:
     return {"box": seal(key, f"similar-ok:{dev_id}:{rid}", {"items": items}, limit=None)}
 
 
+def _items_out(items: list[dict]) -> list[dict]:
+    keep = ("title", "artists", "album", "cover", "duration_ms", "isrc", "ids", "preview_url", "bpm", "camelot", "key", "energy",
+            "genre", "subgenre")
+    out = []
+    for it in items:
+        d = {k: it.get(k) for k in keep if it.get(k) not in (None, "", [], {})}
+        if d.get("ids"):
+            d["ids"] = {str(k): str(v) for k, v in d["ids"].items() if v is not None}
+        for k in ("bpm", "energy"):
+            if isinstance(d.get(k), float):
+                d[k] = round(d[k], 2)
+        out.append(d)
+    return out
+
+
+def _job_status(kind: str, jid: str) -> dict:
+    from . import mixgen, setplan
+    if kind == "mix":
+        j = mixgen.job(jid)
+        out = {"state": j["state"], "phase": j.get("phase"), "done": j.get("done", 0), "total": j.get("total", 0),
+               "note": j.get("note") or "", "error": j.get("error")}
+        if j["state"] == "done":
+            out.update(items=_items_out(j["items"]), order=j.get("order") or [], reserve=j.get("reserve") or [])
+        return out
+    j = setplan.job(jid)
+    out = {"state": j["state"], "done": j.get("done", 0), "total": j.get("total", 0), "error": j.get("error"),
+           "cut": j.get("cut", 0)}
+    if j["state"] == "done":
+        curve = j.get("curve") or "peak"
+        idx = setplan.order(j["items"], curve)
+        d = setplan.describe(j["items"], idx, curve)
+        out.update(items=_items_out(j["items"]), order=idx, harmonisch=d["harmonisch"], bekannt=d["bekannt"],
+                   minuten=d["minuten"], curve=curve)
+    return out
+
+
+def handle_job(body: dict, client: str | None = None) -> dict:
+    """Mix erstellen und Set-Planer vom Handy aus – der PC rechnet (Tempo/Tonart aus Hörproben, Künstler-/Genre-Suche)
+    wie bei sich selbst; das Handy fragt den Stand ab und kann das Ergebnis als PC-Playlist speichern.
+    Gleiche Verschlüsselung wie der Abgleich; jede Anfrage einmalig (rid)."""
+    from . import mixgen, ratelimit, setplan
+    dev_id = str(body.get("id") or "")[:32]
+    d = _device(dev_id)
+    key = _kdf(base64.b64decode(d["secret"]), "sync")
+    try:
+        req = unseal(key, f"job:{dev_id}", str(body.get("box") or ""))
+    except ShareError:
+        raise PhoneError("Anfrage ließ sich nicht prüfen – bitte neu koppeln", 403) from None
+    rid = str(req.get("rid") or "")[:64]
+    _replay_check(int(req.get("ts") or 0), rid)
+    act = str(req.get("act") or "")
+    kind = "mix" if req.get("kind") == "mix" else "set"
+    jid = str(req.get("job") or "")[:20]
+    try:
+        if act == "artists":
+            out = {"artists": [{"id": a["id"], "name": a["name"], "fans": a["fans"]}
+                               for a in mixgen.search_artists(str(req.get("q") or ""), 8)]}
+        elif act == "genres":
+            from .genres.taxonomy import TAXONOMY
+            out = {"genres": [{"genre": g, "subs": [s for s in subs if s != "_"]} for g, subs in TAXONOMY.items()],
+                   "levels": [{"id": k, "name": v["name"], "hint": v["hint"]} for k, v in mixgen.LEVELS.items()],
+                   "curves": [{"id": k, "name": v[0], "hint": v[1]} for k, v in setplan.CURVES.items()]}
+        elif act == "mix-start":
+            opts = req.get("opts") if isinstance(req.get("opts"), dict) else {}
+            out = {"job": mixgen.start(req.get("seeds") if isinstance(req.get("seeds"), list) else None, opts,
+                                       req.get("genre") if isinstance(req.get("genre"), dict) else None)}
+        elif act == "set-start":
+            jid = setplan.start(str(req.get("playlist") or "")[:200])
+            curve = req.get("curve") if req.get("curve") in setplan.CURVES else "peak"
+            setplan.job(jid)["curve"] = curve
+            out = {"job": jid}
+        elif act == "status":
+            out = _job_status(kind, jid)
+        elif act == "cancel":
+            (mixgen.job(jid) if kind == "mix" else setplan.job(jid))["cancel"] = True
+            out = {"ok": True}
+        elif act == "save":
+            idx = [int(i) for i in (req.get("idx") or []) if isinstance(i, int)]
+            name = str(req.get("name") or "")
+            out = mixgen.save(jid, idx, name) if kind == "mix" else setplan.save(jid, idx, name)
+        else:
+            raise PhoneError("Unbekannte Anfrage")
+    except ratelimit.LimitReached as e:
+        raise PhoneError(f"{e} – bitte gleich nochmal versuchen", 429) from None
+    except ValueError as e:
+        raise PhoneError(str(e)) from None
+    return {"box": seal(key, f"job-ok:{dev_id}:{rid}", out, limit=None)}
+
+
 # ------------------------------------------------------------------ Abgleich: Daten übernehmen und zurückgeben
 _TRACK_FIELDS = {f for f in Track.__dataclass_fields__}
 
@@ -620,6 +709,11 @@ def _make_app():
     async def similar_songs(request: Request):
         import asyncio
         return await asyncio.to_thread(handle_similar, await body_of(request), _client(request))
+
+    @api.post("/phone/v1/job")
+    async def job(request: Request):
+        import asyncio
+        return await asyncio.to_thread(handle_job, await body_of(request), _client(request))
 
     @api.get("/phone/v1/hello")
     async def hello(request: Request):

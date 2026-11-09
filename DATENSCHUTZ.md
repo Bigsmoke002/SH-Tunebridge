@@ -329,6 +329,10 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   Zeit ab; dann fragt die App bei Deezer (`api.deezer.com`) nach der aktuellen Adresse – mit Deezer-Nummer, ISRC oder
   Künstler + Titel des Songs. Deezer/Apple sehen dabei deine IP-Adresse. Den ganzen Song gibt es nur in deiner
   Musik-App („Öffnen“).
+- **Mix erstellen & Set-Planer:** Rechnen am gekoppelten PC (verschlüsselt wie der Abgleich, nur im eigenen Netz/VPN).
+  Das Handy schickt nur den Suchbegriff bzw. die gewählten Künstler/Genres und Einstellungen oder den Namen der
+  Playlist; der PC fragt Deezer und misst Tempo/Tonart an den offiziellen Hörproben genau wie bei sich selbst (siehe
+  oben). Gespeichert wird das Ergebnis nur, wenn du „Speichern“ tippst – als Playlist am PC.
 - **Ähnliche Songs:** Kommen vom gekoppelten PC (verschlüsselt wie der Abgleich; der PC fragt Last.fm/Deezer wie bei
   sich selbst). Ist kein PC erreichbar, holt die App sie – nur wenn du es erlaubst („Ähnliche Songs ohne PC“, Standard:
   aus) – direkt bei Deezer: dafür gehen Titel und Künstler bzw. Deezer-Nummer/ISRC des Songs an Deezer, Deezer sieht

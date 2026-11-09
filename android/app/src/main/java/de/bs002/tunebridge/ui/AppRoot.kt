@@ -47,6 +47,8 @@ import de.bs002.tunebridge.App
 import de.bs002.tunebridge.ui.components.Hairline
 import de.bs002.tunebridge.ui.screens.HistoryScreen
 import de.bs002.tunebridge.ui.screens.StatsScreen
+import de.bs002.tunebridge.ui.screens.MixScreen
+import de.bs002.tunebridge.ui.screens.SetPlanScreen
 import de.bs002.tunebridge.ui.screens.ListenScreen
 import de.bs002.tunebridge.ui.screens.PairScreen
 import de.bs002.tunebridge.ui.screens.PcScreen
@@ -117,7 +119,8 @@ private fun Main(toast: (String) -> Unit) {
                     StatsScreen(back = { nav.popBackStack() }, openSong = { uid -> nav.navigate("song/${Uri.encode(uid)}") })
                 }
                 composable(Tab.Lists.route) {
-                    PlaylistsScreen(open = { pc, name -> nav.navigate("playlist/${Uri.encode(pc)}/${Uri.encode(name)}") }, openPc = { nav.navigate("pair") })
+                    PlaylistsScreen(open = { pc, name -> nav.navigate("playlist/${Uri.encode(pc)}/${Uri.encode(name)}") }, openPc = { nav.navigate("pair") },
+                        openMix = { nav.navigate("mix") })
                 }
                 composable(Tab.More.route) {
                     SettingsScreen(openPair = { nav.navigate("pair") }, openPc = { nav.navigate("pc/${Uri.encode(it)}") }, openPrivacy = { nav.navigate("privacy") }, toast = toast)
@@ -131,8 +134,13 @@ private fun Main(toast: (String) -> Unit) {
                 }
                 composable("playlist/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     PlaylistScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() },
-                        openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") })
+                        openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") },
+                        openSet = { nav.navigate("setplan/${Uri.encode(Uri.decode(it.arguments?.getString("pc").orEmpty()))}/${Uri.encode(Uri.decode(it.arguments?.getString("name").orEmpty()))}") })
                 }
+                composable("setplan/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    SetPlanScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() })
+                }
+                composable("mix", enterTransition = { slide() }, popExitTransition = { slideOut() }) { MixScreen(back = { nav.popBackStack() }) }
                 composable("similar", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     de.bs002.tunebridge.ui.screens.SimilarScreen(back = { nav.popBackStack() })
                 }

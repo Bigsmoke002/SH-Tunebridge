@@ -236,6 +236,30 @@ class PcSync(private val repo: Repository) {
             null
         }
 
+    /** Erster erreichbarer PC (für Mix/Set-Planer). */
+    fun firstReachable(): Repository.PcLink? =
+        if (!Nets.allowed()) null else Nets.current().let { nets -> repo.settings.value.pcs.firstOrNull { reachable(it, nets).isNotEmpty() } }
+
+    /**
+     * Auftrag an einen PC (Mix erstellen, Set-Planer): Anfrage [act] mit [fields], verschlüsselt wie der Abgleich.
+     * Der PC rechnet; das Handy fragt den Stand ab. Fehler des PCs kommen als [PairError] mit seinem Text.
+     */
+    suspend fun job(link: Repository.PcLink, act: String, fields: kotlinx.serialization.json.JsonObject = kotlinx.serialization.json.JsonObject(emptyMap())):
+        kotlinx.serialization.json.JsonObject = withContext(Dispatchers.IO) {
+        val addrs = reachable(link).ifEmpty { throw PairError("PC nicht erreichbar – gleiches Netz/VPN?") }
+        val rid = UUID.randomUUID().toString()
+        val payload = kotlinx.serialization.json.JsonObject(fields + mapOf(
+            "ts" to kotlinx.serialization.json.JsonPrimitive(System.currentTimeMillis()),
+            "rid" to kotlinx.serialization.json.JsonPrimitive(rid), "act" to kotlinx.serialization.json.JsonPrimitive(act))).toString()
+        val key = syncKey(link.secret)
+        val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "job:${link.deviceId}", payload)) }.toString()
+        val answer = anyAddr(listOfNotNull(link.lastAddr).filter { it in addrs }.ifEmpty { addrs }) { post(Http.lan, it, "/phone/v1/job", body) }.second
+        val box = repo.json.parseToJsonElement(answer).jsonObject["box"]?.jsonPrimitive?.content ?: throw PairError("Unerwartete Antwort vom PC")
+        val plain = runCatching { Crypto.unseal(key, "job-ok:${link.deviceId}:$rid", box) }
+            .getOrElse { throw PairError("Antwort des PCs ließ sich nicht prüfen – bitte neu koppeln") }
+        repo.json.parseToJsonElement(plain).jsonObject
+    }
+
     @Serializable
     private data class SimilarAnswer(val items: List<SimilarItem> = emptyList())
 

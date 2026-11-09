@@ -51,14 +51,16 @@ import de.bs002.tunebridge.ui.theme.TbIcon
 import de.bs002.tunebridge.ui.theme.TbType
 
 @Composable
-fun PlaylistsScreen(open: (String, String) -> Unit, openPc: () -> Unit) {
+fun PlaylistsScreen(open: (String, String) -> Unit, openPc: () -> Unit, openMix: () -> Unit = {}) {
     val lists by App.repo.playlists.collectAsState()
     val pcs = App.repo.settings.collectAsState().value.pcs
     val paired = pcs.isNotEmpty()
     var q by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Playlists", if (lists.isEmpty()) null
-            else "${lists.size} ${if (pcs.size > 1) "von ${pcs.size} PCs" else "vom PC"} · ${Fmt.songs(lists.sumOf { it.tracks.size })}")
+            else "${lists.size} ${if (pcs.size > 1) "von ${pcs.size} PCs" else "vom PC"} · ${Fmt.songs(lists.sumOf { it.tracks.size })}") {
+            if (paired) TbButton("Mix", openMix, kind = BtnKind.Ghost, icon = Ico.Sparkle, small = true)
+        }
         if (lists.isEmpty()) {
             EmptyState(
                 Ico.Stack, if (paired) "Noch keine Playlists" else "Deine Playlists wohnen am PC",
@@ -118,7 +120,7 @@ private fun Mosaic(covers: List<String>, name: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}) {
+fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}, openSet: () -> Unit = {}) {
     val lists by App.repo.playlists.collectAsState()
     val p = lists.firstOrNull { it.pc == pc && it.name == name }
     val pcName = App.repo.settings.collectAsState().value.pcs.let { l -> if (l.size > 1) l.firstOrNull { it.pcId == pc }?.pcName else null }
@@ -129,6 +131,7 @@ fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Tra
         var share by remember { mutableStateOf(false) }
         if (share && p != null) ExportSheet(name, p.tracks.map { de.bs002.tunebridge.data.Export.Item(it) }) { share = false }
         ScreenHeader(name, p?.let { Fmt.songs(it.tracks.size) + (pcName?.let { n -> " · $n" } ?: "") }) {
+            if (p != null && p.tracks.size >= 3 && App.repo.link(pc) != null) de.bs002.tunebridge.ui.components.IconBtn(Ico.Sliders, "Set planen", openSet)
             if (p != null && p.tracks.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(de.bs002.tunebridge.ui.theme.Ico.Share, "Teilen / exportieren", { share = true })
             if (p != null && p.tracks.any { it.playable }) PlayButtons(p.tracks, name)
         }
