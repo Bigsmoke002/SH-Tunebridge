@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Rückblick:** Im Verlauf oben das Diagramm-Symbol – für 7 Tage, 30 Tage, 12 Monate oder alles: ein Satz
+  zum Zeitraum, Anzahl Songs/Künstler, aktive Tage und längste Serie, Genre-Verteilung, meiste Künstler, öfter
+  erkannte Songs, Wochentage und Tageszeiten, Quellen. Alles wird nur auf dem Handy berechnet.
 - **Android: Favoriten, Suche & Filter im Verlauf:** Herz im Song markiert Favoriten (im Verlauf mit ♥). Über der
   Liste filtern nach Favoriten, Zeitraum (heute, 7/30 Tage, 12 Monate), Quelle (Mikrofon, Handy-Ton, vom PC, geteilt
   & Import) und Genre; die Suche findet jetzt auch Album und Genre. Abspielen/Zufällig nimmt die gefilterte Liste.

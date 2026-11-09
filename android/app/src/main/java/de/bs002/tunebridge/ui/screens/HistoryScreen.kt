@@ -48,7 +48,7 @@ import de.bs002.tunebridge.ui.theme.TbIcon
 import de.bs002.tunebridge.ui.theme.TbType
 
 @Composable
-fun HistoryScreen(openSong: (String) -> Unit) {
+fun HistoryScreen(openSong: (String) -> Unit, openStats: () -> Unit = {}) {
     val all by App.repo.history.collectAsState()
     var q by rememberSaveable { mutableStateOf("") }
     var favOnly by rememberSaveable { mutableStateOf(false) }
@@ -72,6 +72,7 @@ fun HistoryScreen(openSong: (String) -> Unit) {
 
     Column(Modifier.fillMaxSize()) {
         ScreenHeader("Verlauf", if (all.isEmpty()) null else if (list.size != all.size) "${list.size} von ${Fmt.songs(all.size)}" else Fmt.songs(all.size)) {
+            if (all.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(Ico.Chart, "Rückblick", openStats)
             if (list.any { it.track.playable }) PlayButtons(list.map { it.track }, "Verlauf")
         }
         if (all.isEmpty()) {

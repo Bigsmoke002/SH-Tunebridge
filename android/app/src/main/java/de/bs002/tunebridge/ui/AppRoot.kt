@@ -46,6 +46,7 @@ import androidx.navigation.compose.rememberNavController
 import de.bs002.tunebridge.App
 import de.bs002.tunebridge.ui.components.Hairline
 import de.bs002.tunebridge.ui.screens.HistoryScreen
+import de.bs002.tunebridge.ui.screens.StatsScreen
 import de.bs002.tunebridge.ui.screens.ListenScreen
 import de.bs002.tunebridge.ui.screens.PairScreen
 import de.bs002.tunebridge.ui.screens.PcScreen
@@ -111,7 +112,10 @@ private fun Main(toast: (String) -> Unit) {
                 enterTransition = { fadeIn() }, exitTransition = { fadeOut() },
             ) {
                 composable(Tab.Listen.route) { ListenScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }, openPc = { nav.go(Tab.More) }) }
-                composable(Tab.History.route) { HistoryScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }) }
+                composable(Tab.History.route) { HistoryScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }, openStats = { nav.navigate("stats") }) }
+                composable("stats", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    StatsScreen(back = { nav.popBackStack() }, openSong = { uid -> nav.navigate("song/${Uri.encode(uid)}") })
+                }
                 composable(Tab.Lists.route) {
                     PlaylistsScreen(open = { pc, name -> nav.navigate("playlist/${Uri.encode(pc)}/${Uri.encode(name)}") }, openPc = { nav.navigate("pair") })
                 }
