@@ -86,6 +86,7 @@ class Repository(private val db: Db, private val context: android.content.Contex
         val lastUpdateCheck: Double = 0.0,
         val similarDirect: Boolean = false, // ähnliche Songs ohne PC direkt bei Deezer holen (Einwilligung)
         val externalMic: Boolean = false, // angeschlossenes Mikrofon (USB/Headset) statt des eingebauten nehmen
+        val offlineQueue: Boolean = true, // ohne Internet den Fingerabdruck (kein Ton) merken und später nachfragen
         val seconds: Int = 10,
         val pcs: List<PcLink> = emptyList(),
         // bis Version 1 (ein einziger PC) – nur noch zum Übernehmen gelesen
@@ -165,13 +166,37 @@ class Repository(private val db: Db, private val context: android.content.Contex
 
     fun refresh() = io.launch { reload() }
 
-    fun add(track: Track, source: String, extra: JsonObject): Recognition {
-        val rec = Recognition(uid = "android-" + UUID.randomUUID().toString(), ts = System.currentTimeMillis() / 1000.0,
+    fun add(track: Track, source: String, extra: JsonObject, ts: Double = System.currentTimeMillis() / 1000.0): Recognition {
+        val rec = Recognition(uid = "android-" + UUID.randomUUID().toString(), ts = ts,
             host = host, source = source, engine = "shazam", track = track, extra = extra)
         val id = db.writableDatabase.insert("recognitions", null, values(rec).apply { put("seq", db.nextSeq()) })
         reload()
         return rec.copy(id = id)
     }
+
+    // ---- Offline gemerkte Fingerabdrücke (kein Ton) – warten auf Internet ----
+
+    /** Ein offline gemerkter Fingerabdruck: Zahlenwerte wie an Shazam, keine Aufnahme. */
+    @kotlinx.serialization.Serializable
+    data class PendingTag(val id: String, val ts: Double, val uri: String, val samplems: Int, val system: Boolean, val level: Float)
+
+    private val _pending = MutableStateFlow(loadPending())
+    val pending: StateFlow<List<PendingTag>> = _pending.asStateFlow()
+
+    private fun loadPending(): List<PendingTag> =
+        db.meta("pending")?.let { runCatching { json.decodeFromString<List<PendingTag>>(it) }.getOrNull() } ?: emptyList()
+
+    @Synchronized
+    private fun savePending(change: (List<PendingTag>) -> List<PendingTag>) {
+        val cutoff = System.currentTimeMillis() / 1000.0 - PENDING_DAYS * 86400
+        val next = change(_pending.value).filter { it.ts >= cutoff }.takeLast(PENDING_MAX)
+        _pending.value = next
+        db.meta("pending", if (next.isEmpty()) null else json.encodeToString(next))
+    }
+
+    fun addPending(t: PendingTag) = savePending { it + t }
+    fun removePending(id: String) = savePending { l -> l.filterNot { it.id == id } }
+    fun clearPending() = savePending { emptyList() }
 
     /** Alle bekannten uids mit diesem Anfang – auch gelöschte, damit Gelöschtes nicht wiederkommt. */
     fun knownUids(prefix: String): Set<String> =
@@ -350,3 +375,7 @@ class Repository(private val db: Db, private val context: android.content.Contex
             .getOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.take(60)
             ?: "${Build.MANUFACTURER.replaceFirstChar { it.uppercase() }} ${Build.MODEL}"
 }
+
+/** Offline gemerkte Fingerabdrücke: höchstens so viele, so lange. */
+private const val PENDING_MAX = 50
+private const val PENDING_DAYS = 30

@@ -126,6 +126,11 @@ fun SettingsScreen(openPair: () -> Unit, openPc: (String) -> Unit, openPrivacy: 
                 Segmented(listOf(10, 15, 20), s.seconds, { "$it s" }) { v -> App.repo.updateSettings { it.copy(seconds = v) } }
                 Spacer(Modifier.height(10.dp))
                 Hairline()
+                SettingRow("Offline merken", "Ohne Internet nur den Fingerabdruck (Zahlenwerte, kein Ton) speichern und später bei Shazam " +
+                    "nachfragen – höchstens 50, höchstens 30 Tage. Aus: ohne Internet kein Erkennen.", s.offlineQueue) { v ->
+                    App.repo.updateSettings { it.copy(offlineQueue = v) }
+                }
+                Hairline()
                 SettingRow("Angeschlossenes Mikrofon nehmen", "USB-Soundkarte oder Headset als Mikrofon. Aus: immer das Mikrofon des Handys – " +
                     "sonst nähme Android den (oft stummen) Eingang der Soundkarte.", s.externalMic) { v ->
                     App.repo.updateSettings { it.copy(externalMic = v) }
@@ -191,9 +196,9 @@ fun PrivacyScreen(back: () -> Unit) {
         ScreenHeader("Datenschutz")
         Column(Modifier.padding(horizontal = 20.dp)) {
             listOf(
-                Triple(Ico.Mic, "Mikrofon", "Nur nach Tippen auf den Kreis, standardmäßig 10 Sekunden. Der Ton bleibt im Arbeitsspeicher und wird sofort verworfen – nie gespeichert, nie gesendet."),
+                Triple(Ico.Mic, "Mikrofon", "Nur nach Tippen auf den Kreis, standardmäßig 10 Sekunden. Der Ton bleibt im Arbeitsspeicher und wird sofort verworfen – nie gespeichert, nie gesendet. Ohne Internet merkt sich die App (abschaltbar) nur den Fingerabdruck, bis Shazam erreichbar ist."),
                 Triple(Ico.Wave, "Shazam (Apple)", "Bekommt einen Fingerabdruck der Aufnahme (Zahlenwerte, kein Ton), Zeitzone und Spracheinstellung – und technisch bedingt deine IP-Adresse. Ohne Konto, ohne Werbe-ID."),
-                Triple(Ico.Disc, "Cover & Hörproben", "Cover nur, wenn eingeschaltet; Hörproben erst nach Tippen auf „Reinhören“ oder „Abspielen“. Beides kommt von Apple bzw. Deezer, die dabei deine IP-Adresse sehen. Ist eine Deezer-Adresse abgelaufen, fragt die App bei Deezer mit Song-Nummer, ISRC oder Künstler + Titel nach der aktuellen."),
+                Triple(Ico.Disc, "Cover & Hörproben", "Cover nur, wenn eingeschaltet; Hörproben erst nach Tippen auf „Reinhören“ oder „Abspielen“. Beides kommt von Apple bzw. Deezer, die dabei deine IP-Adresse sehen. Gesteuert wird der Player auch über Benachrichtigung, Sperrbildschirm und Kopfhörer-Tasten – das bleibt auf dem Handy. Ist eine Deezer-Adresse abgelaufen, fragt die App bei Deezer mit Song-Nummer, ISRC oder Künstler + Titel nach der aktuellen."),
                 Triple(Ico.Shield, "Shazam-App (nur Root)", "Nur wenn du es unter Mehr › Shazam-App startest und die Warnung bestätigst: Die App liest aus der Datenbank der Shazam-App nur Song-Nummer, Titel, Künstler und Zeitpunkt deiner Shazams – keinen Standort, keine Signatur, keine Kontodaten – und löscht die Kopie sofort."),
                 Triple(Ico.Sparkle, "Ähnliche Songs", "Vom gekoppelten PC (verschlüsselt, wie der Abgleich). Ist keiner erreichbar und hast du es erlaubt, direkt bei Deezer: Titel, Künstler bzw. Deezer-Nummer/ISRC des Songs – Deezer sieht deine IP-Adresse."),
                 Triple(Ico.Sync, "Updates (GitHub)", "Nur wenn „Automatisch nach Updates suchen“ an ist (höchstens einmal am Tag) oder du selbst suchst: GitHub sieht deine IP-Adresse. Installiert wird nur eine signierte, geprüfte Version – und erst, wenn du im Android-Installer bestätigst."),

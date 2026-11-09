@@ -269,6 +269,9 @@ Die Android-App von SH-Tunebridge erkennt Songs selbst und gleicht auf Wunsch mi
 - **Mikrofon** – wird erst beim ersten Tipp auf „Erkennen“ erfragt; aufgenommen wird nur, solange der Ring läuft
   (Standard 10 s). Die Aufnahme bleibt im Arbeitsspeicher, wird nie gespeichert und nicht hochgeladen. Hinweis zu
   § 201 StGB wie am PC (siehe „Mikrofon – bitte beachten“).
+  **Offline merken** (Mehr › Erkennen, Standard: an): Ist kein Internet da, speichert die App nur den Fingerabdruck
+  (dieselben Zahlenwerte, die sonst sofort an Shazam gingen – kein Ton, nicht in Ton zurückzuverwandeln) und fragt
+  Shazam, sobald wieder Netz da ist. Höchstens 50 Stück, höchstens 30 Tage; „Verwerfen“ löscht sie sofort.
 - **Kamera** – nur beim Koppeln mit dem PC (Mehr › Mit PC koppeln), um den QR-Code zu lesen. Bilder werden nicht gespeichert.
 - **Vordergrund-Dienst „Bildschirm teilen“ + Benachrichtigungen** – nur für „Handy-Ton“: Statt des Mikrofons hört die
   App direkt, was auf dem Handy abgespielt wird (Android-Funktion AudioPlaybackCapture). Android fragt dafür jedes Mal

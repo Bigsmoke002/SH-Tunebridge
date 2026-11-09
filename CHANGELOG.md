@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Offline erkennen:** Ohne Internet merkt sich die App nur den Fingerabdruck (kein Ton) und fragt bei
+  Shazam nach, sobald wieder Netz da ist – beim Öffnen, jede Minute solange die App offen ist, nach dem nächsten
+  Treffer oder per „Jetzt nachfragen“. Erkannte Songs landen mit der ursprünglichen Uhrzeit im Verlauf.
 - **Android: Player in Benachrichtigung und Sperrbildschirm:** Hörproben lassen sich dort mit Zurück, Pause, Weiter
   und Beenden steuern, mit Cover – auch über Kopfhörer-, Bluetooth- und Auto-Tasten. Kopfhörer abziehen pausiert,
   ein Anruf oder eine andere Musik-App ebenfalls.

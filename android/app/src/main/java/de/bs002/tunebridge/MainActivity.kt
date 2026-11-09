@@ -9,6 +9,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import de.bs002.tunebridge.net.Shazam
 import de.bs002.tunebridge.ui.AppRoot
 import de.bs002.tunebridge.ui.theme.TbTheme
@@ -28,7 +29,13 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         enableEdgeToEdge(SystemBarStyle.dark(Color.TRANSPARENT), SystemBarStyle.dark(Color.TRANSPARENT))
         super.onCreate(savedInstanceState)
-        setContent { TbTheme { AppRoot(messages.receiveAsFlow()) } }
+        setContent { TbTheme { AppRoot(kotlinx.coroutines.flow.merge(messages.receiveAsFlow(), App.listener.notices)) } }
+        // Solange die App offen ist: Gemerktes jede Minute erneut versuchen (nur wenn etwas wartet)
+        lifecycleScope.launch {
+            repeatOnLifecycle(androidx.lifecycle.Lifecycle.State.STARTED) {
+                while (true) { kotlinx.coroutines.delay(60_000); App.listener.retryPending() }
+            }
+        }
         handle(intent)
     }
 
@@ -40,6 +47,7 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         App.listener.autoSync()   // beim Öffnen still abgleichen, falls der PC erreichbar ist
+        App.listener.retryPending()   // offline Gemerktes nachfragen, falls jetzt Netz da ist
         lifecycleScope.launch { de.bs002.tunebridge.update.Updater.checkDaily() }   // nur wenn eingeschaltet, 1× am Tag
     }
 

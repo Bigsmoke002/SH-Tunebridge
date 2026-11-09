@@ -61,11 +61,14 @@ object Shazam {
         .header("Accept", "*/*")
         .header("Accept-Language", lang())
 
-    suspend fun recognize(sig: ShazamSignature): Hit? = withContext(Dispatchers.IO) {
+    suspend fun recognize(sig: ShazamSignature): Hit? = recognize(sig.toUri(), sig.durationMs)
+
+    /** Mit einem schon berechneten Fingerabdruck (z. B. offline gemerkt). */
+    suspend fun recognize(uri: String, samplems: Int): Hit? = withContext(Dispatchers.IO) {
         Throttle.acquire()
         val body = buildJsonObject {
             put("timezone", TimeZone.getDefault().id)
-            putJsonObject("signature") { put("uri", sig.toUri()); put("samplems", sig.durationMs) }
+            putJsonObject("signature") { put("uri", uri); put("samplems", samplems) }
             put("timestamp", System.currentTimeMillis())
             putJsonObject("context") {}
             putJsonObject("geolocation") {}

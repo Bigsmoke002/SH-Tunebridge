@@ -40,6 +40,8 @@ class Listener(context: Context, private val repo: Repository, private val sync:
         data class Silent(val levelDb: Float, val usbOut: Boolean = false, val bitPerfect: Boolean = false) : State
         data class Limited(val waitSeconds: Int, val message: String) : State
         data class Failed(val message: String) : State
+        /** Kein Internet: Fingerabdruck gemerkt, Shazam wird später gefragt. */
+        data class Queued(val count: Int) : State
     }
 
     private val appContext = context.applicationContext
@@ -76,30 +78,25 @@ class Listener(context: Context, private val repo: Repository, private val sync:
                 }
                 _state.value = State.Analysing
                 val sig = withContext(Dispatchers.Default) { ShazamSignature.from(ShazamSignature.middle(pcm)) }
-                val hit = Shazam.recognize(sig)
+                val hit = try {
+                    Shazam.recognize(sig)
+                } catch (e: IOException) {
+                    if (e is Shazam.Busy || !repo.settings.value.offlineQueue) throw e
+                    // Kein Netz: nur den Fingerabdruck merken (Zahlenwerte, kein Ton) und später nachfragen
+                    repo.addPending(Repository.PendingTag(java.util.UUID.randomUUID().toString(), System.currentTimeMillis() / 1000.0,
+                        sig.toUri(), sig.durationMs, system, level))
+                    _state.value = State.Queued(repo.pending.value.size)
+                    return@launch
+                }
                 if (hit == null) {
                     _state.value = State.NotFound(level)
                     return@launch
                 }
-                val unsure = (hit.skew ?: 0.0) > TRUSTED_SKEW
-                val extra = buildJsonObject {
-                    putJsonArray("engines") { add(JsonPrimitive("shazam")) }
-                    put("agreement", 1)
-                    putJsonObject("links") { hit.links.forEach { (k, v) -> put(k, v) } }
-                    hit.label?.let { put("label", it) }
-                    hit.year?.let { put("year", it) }
-                    hit.shazamKey?.let { put("shazam_key", it) }
-                    if (hit.genres.isNotEmpty()) put("shazam_genre", hit.genres.first())
-                    hit.skew?.let { put("skew", it) }
-                    put("level_db", level.toDouble())
-                    put("device", "handy")
-                    if (unsure) put("unsure", true)
-                    if (system) put("handy_ton", true)
-                }
-                val rec = repo.add(hit.track, if (system) "handy-ton" else "handy-mikrofon", extra)
-                _state.value = State.Found(rec, unsure)
+                val rec = save(hit, system, level)
+                _state.value = State.Found(rec, (hit.skew ?: 0.0) > TRUSTED_SKEW)
                 de.bs002.tunebridge.quick.ListenWidget.refresh(appContext)
                 autoSync()
+                retryPending()          // Netz ist offenbar da: Gemerktes gleich mit erledigen
             } catch (e: CancellationException) {
                 _state.value = State.Idle
                 throw e
@@ -109,6 +106,61 @@ class Listener(context: Context, private val repo: Repository, private val sync:
                 _state.value = State.Failed("Keine Verbindung zu Shazam – Internet prüfen")
             } catch (e: Exception) {
                 _state.value = State.Failed(e.message ?: "Unbekannter Fehler")
+            }
+        }
+    }
+
+    private fun save(hit: Shazam.Hit, system: Boolean, level: Float, ts: Double? = null, later: Boolean = false): Recognition {
+        val unsure = (hit.skew ?: 0.0) > TRUSTED_SKEW
+        val extra = buildJsonObject {
+            putJsonArray("engines") { add(JsonPrimitive("shazam")) }
+            put("agreement", 1)
+            putJsonObject("links") { hit.links.forEach { (k, v) -> put(k, v) } }
+            hit.label?.let { put("label", it) }
+            hit.year?.let { put("year", it) }
+            hit.shazamKey?.let { put("shazam_key", it) }
+            if (hit.genres.isNotEmpty()) put("shazam_genre", hit.genres.first())
+            hit.skew?.let { put("skew", it) }
+            put("level_db", level.toDouble())
+            put("device", "handy")
+            if (unsure) put("unsure", true)
+            if (system) put("handy_ton", true)
+            if (later) put("offline", true)     // offline gemerkt, später erkannt
+        }
+        val source = if (system) "handy-ton" else "handy-mikrofon"
+        return if (ts != null) repo.add(hit.track, source, extra, ts) else repo.add(hit.track, source, extra)
+    }
+
+    private val pendingLock = kotlinx.coroutines.sync.Mutex()
+    private val _notices = kotlinx.coroutines.flow.MutableSharedFlow<String>(extraBufferCapacity = 4)
+    /** Kurze Meldungen (z. B. „2 Songs nachträglich erkannt“). */
+    val notices: kotlinx.coroutines.flow.SharedFlow<String> = _notices
+
+    /** Offline gemerkte Fingerabdrücke jetzt bei Shazam nachfragen – einer nach dem anderen, Abbruch ohne Netz/bei Pause. */
+    fun retryPending(manual: Boolean = false) {
+        if (repo.pending.value.isEmpty() || pendingLock.isLocked) return
+        scope.launch {
+            pendingLock.lock()
+            var found = 0; var none = 0
+            try {
+                for (p in repo.pending.value.toList()) {
+                    val hit = try { Shazam.recognize(p.uri, p.samplems) } catch (e: IOException) {
+                        if (manual) _notices.tryEmit(if (e is Shazam.Busy) "Shazam macht eine Pause – später nochmal" else "Noch kein Internet – bleibt gemerkt")
+                        break
+                    }
+                    repo.removePending(p.id)
+                    if (hit == null) none++ else { save(hit, p.system, p.level, p.ts, later = true); found++ }
+                }
+            } finally { pendingLock.unlock() }
+            if (found + none > 0) {
+                if (_state.value is State.Queued) _state.value = State.Idle
+                val n = found + none
+                _notices.tryEmit(when {
+                    none == 0 -> if (found == 1) "1 gemerkter Song erkannt" else "$found gemerkte Songs erkannt"
+                    found == 0 -> if (n == 1) "Gemerkter Song: Shazam kennt ihn nicht" else "$n gemerkte Songs: Shazam kennt keinen davon"
+                    else -> "$found von $n gemerkten Songs erkannt"
+                })
+                if (found > 0) { de.bs002.tunebridge.quick.ListenWidget.refresh(appContext); autoSync() }
             }
         }
     }

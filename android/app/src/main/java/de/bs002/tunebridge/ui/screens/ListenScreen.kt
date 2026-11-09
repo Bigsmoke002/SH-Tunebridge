@@ -192,6 +192,18 @@ fun ListenScreen(openSong: (String) -> Unit, openPc: () -> Unit) {
         Spacer(Modifier.height(14.dp))
         Actions(state, onRetry = { go() }, onLonger = { go(20) }, openSong = openSong)
 
+        val pending by App.repo.pending.collectAsState()
+        if (pending.isNotEmpty()) {
+            Spacer(Modifier.height(14.dp))
+            Notice("${if (pending.size == 1) "1 Song wartet" else "${pending.size} Songs warten"} auf Internet – nur der Fingerabdruck ist " +
+                "gemerkt, kein Ton. Die App fragt von selbst nach, sobald Netz da ist.") {
+                Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TbButton("Jetzt nachfragen", { App.listener.retryPending(manual = true) }, kind = BtnKind.Primary, icon = Ico.Sync, small = true)
+                    TbButton("Verwerfen", { App.repo.clearPending() }, kind = BtnKind.Ghost, small = true)
+                }
+            }
+        }
+
         val recent = history.take(5).filter { (state as? Listener.State.Found)?.rec?.uid != it.uid }
         if (recent.isNotEmpty()) {
             SectionLabel("Zuletzt erkannt", Modifier.padding(top = 12.dp))
@@ -224,6 +236,8 @@ private fun StatusText(state: Listener.State, system: Boolean) {
             else "Pegel ${state.levelDb.toInt()} dB – näher an die Musik oder lauter machen"
         is Listener.State.Limited -> "Shazam macht eine Pause" to state.message
         is Listener.State.Failed -> "Hat nicht geklappt" to state.message
+        is Listener.State.Queued -> "Kein Internet – gemerkt" to
+            "Nur der Fingerabdruck (kein Ton) wartet auf dem Handy. Sobald Netz da ist, fragt die App bei Shazam nach."
     }
     AnimatedContent(title to sub, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "status") { (t, s) ->
         Column(Modifier.fillMaxWidth().heightIn(min = 44.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -244,7 +258,7 @@ private fun Actions(state: Listener.State, onRetry: () -> Unit, onLonger: () -> 
                 TbButton("Länger zuhören (20 s)", onLonger, kind = BtnKind.Ghost)
             }
             is Listener.State.Limited -> Countdown(state.waitSeconds)
-            is Listener.State.Failed, is Listener.State.Silent -> TbButton("Nochmal versuchen", onRetry, icon = Ico.Repeat)
+            is Listener.State.Failed, is Listener.State.Silent, is Listener.State.Queued -> TbButton("Nochmal versuchen", onRetry, icon = Ico.Repeat)
             else -> Spacer(Modifier.height(1.dp))
         }
     }
