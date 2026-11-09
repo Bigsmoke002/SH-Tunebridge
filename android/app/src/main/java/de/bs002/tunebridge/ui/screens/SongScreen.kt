@@ -45,6 +45,7 @@ import de.bs002.tunebridge.ui.components.BtnKind
 import de.bs002.tunebridge.ui.components.Cover
 import de.bs002.tunebridge.ui.components.GenreChip
 import de.bs002.tunebridge.ui.components.IconBtn
+import de.bs002.tunebridge.ui.favorite
 import de.bs002.tunebridge.ui.components.Notice
 import de.bs002.tunebridge.ui.components.Pill
 import de.bs002.tunebridge.ui.components.SectionLabel
@@ -92,7 +93,12 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {})
     val x = rec.extra
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
-        TopBack(back)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { TopBack(back) }
+            val fav = rec.favorite
+            IconBtn(if (fav) Ico.HeartFill else Ico.Heart, if (fav) "Aus Favoriten entfernen" else "Zu Favoriten",
+                { App.repo.setFavorite(rec, !fav) }, tint = if (fav) Tb.danger else Tb.text2, modifier = Modifier.padding(top = 8.dp, end = 12.dp))
+        }
         Column(Modifier.padding(horizontal = 20.dp)) {
             if (x.flag("unsure")) {
                 Notice("Unsicherer Treffer: nur mit Tempo-Abweichung gefunden. Stimmt das?") {

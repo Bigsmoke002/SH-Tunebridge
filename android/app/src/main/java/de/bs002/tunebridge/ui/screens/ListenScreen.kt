@@ -54,6 +54,7 @@ import de.bs002.tunebridge.Listener
 import de.bs002.tunebridge.R
 import de.bs002.tunebridge.data.Recognition
 import de.bs002.tunebridge.ui.Fmt
+import de.bs002.tunebridge.ui.favorite
 import de.bs002.tunebridge.ui.components.BtnKind
 import de.bs002.tunebridge.ui.components.Cover
 import de.bs002.tunebridge.ui.components.GenreChip
@@ -313,7 +314,10 @@ fun SongRow(rec: Recognition, onClick: () -> Unit, showDay: Boolean = false, sho
         Cover(rec.track.cover, 48.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            TrackLine(rec.track.title, rec.track.artist)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f, fill = false)) { TrackLine(rec.track.title, rec.track.artist) }
+                if (rec.favorite) { Spacer(Modifier.width(6.dp)); TbIcon(Ico.HeartFill, Tb.danger, 12.dp, Modifier.align(Alignment.Top).padding(top = 4.dp)) }
+            }
             if (genre != null || fromPc) Row(Modifier.padding(top = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (genre != null) {
                     Box(Modifier.size(6.dp).clip(CircleShape).background(de.bs002.tunebridge.ui.theme.GenreColors.of(genre)))

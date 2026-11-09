@@ -50,3 +50,4 @@ fun JsonObject.links(): Map<String, String> =
 
 /** Genre zum Anzeigen: das vom PC angereicherte, sonst Shazams grobe Angabe. */
 val Recognition.shownGenre: String? get() = track.genre ?: extra.str("shazam_genre")
+val Recognition.favorite: Boolean get() = (extra["favorite"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true"

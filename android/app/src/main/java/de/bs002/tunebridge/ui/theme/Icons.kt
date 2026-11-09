@@ -39,6 +39,8 @@ enum class Ico(val paths: List<String>, val circles: List<Triple<Float, Float, F
         rects = listOf(floatArrayOf(17f, 4f, 2.4f, 16f, 1f)), filled = true),
     Prev(listOf("M19 5.2v13.6a1 1 0 0 1-1.5.86l-10-6.8a1 1 0 0 1 0-1.72l10-6.8A1 1 0 0 1 19 5.2Z"),
         rects = listOf(floatArrayOf(4.6f, 4f, 2.4f, 16f, 1f)), filled = true),
+    Heart(listOf("M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z")),
+    HeartFill(listOf("M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"), filled = true),
     Trash(listOf("M3 6h18", "M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6", "m19 6-.8 13.2a2 2 0 0 1-2 1.8H7.8a2 2 0 0 1-2-1.8L5 6")),
     External(listOf("M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6")),
     Search(listOf("m20 20-3.5-3.5"), listOf(Triple(11f, 11f, 7f))),

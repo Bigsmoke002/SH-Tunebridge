@@ -240,6 +240,12 @@ class Repository(private val db: Db, private val context: android.content.Contex
 
     fun byUid(uid: String): Recognition? = _history.value.firstOrNull { it.uid == uid }
 
+    /** Favorit an/aus (steht in extra.favorite und geht beim Abgleich mit an den PC). */
+    fun setFavorite(rec: Recognition, on: Boolean) {
+        val e = rec.extra - "favorite"
+        updateExtra(rec.uid, JsonObject(if (on) e + ("favorite" to kotlinx.serialization.json.JsonPrimitive(true)) else e))
+    }
+
     fun updateExtra(uid: String, extra: JsonObject) {
         db.writableDatabase.update("recognitions", ContentValues().apply {
             put("extra", json.encodeToString(extra)); put("seq", db.nextSeq())
@@ -342,9 +348,12 @@ class Repository(private val db: Db, private val context: android.content.Contex
         try {
             sent.ops.forEach { w.delete("ops", "id=?", arrayOf(it.first.toString())) }
             recs.filterNot { it.uid.startsWith("android-") }.forEach { w.insertWithOnConflict("recognitions", null, values(it), SQLiteDatabase.CONFLICT_IGNORE) }
+            // Nur am Handy gepflegt (Favorit): bleibt erhalten, wenn der PC den Eintrag aktualisiert
+            val favs = _history.value.filter { (it.extra["favorite"] as? kotlinx.serialization.json.JsonPrimitive)?.content == "true" }.map { it.uid }.toSet()
             updates.forEach { u ->
+                val extra = if (u.uid in favs) JsonObject(u.extra + ("favorite" to kotlinx.serialization.json.JsonPrimitive(true))) else u.extra
                 w.update("recognitions", ContentValues().apply {
-                    put("track", json.encodeToString(u.track)); put("extra", json.encodeToString(u.extra))
+                    put("track", json.encodeToString(u.track)); put("extra", json.encodeToString(extra))
                 }, "uid=? AND deleted=0", arrayOf(u.uid))
             }
             if (playlists != null) {

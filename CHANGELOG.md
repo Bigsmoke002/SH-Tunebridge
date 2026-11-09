@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Favoriten, Suche & Filter im Verlauf:** Herz im Song markiert Favoriten (im Verlauf mit ♥). Über der
+  Liste filtern nach Favoriten, Zeitraum (heute, 7/30 Tage, 12 Monate), Quelle (Mikrofon, Handy-Ton, vom PC, geteilt
+  & Import) und Genre; die Suche findet jetzt auch Album und Genre. Abspielen/Zufällig nimmt die gefilterte Liste.
 - **Android: Offline erkennen:** Ohne Internet merkt sich die App nur den Fingerabdruck (kein Ton) und fragt bei
   Shazam nach, sobald wieder Netz da ist – beim Öffnen, jede Minute solange die App offen ist, nach dem nächsten
   Treffer oder per „Jetzt nachfragen“. Erkannte Songs landen mit der ursprünglichen Uhrzeit im Verlauf.
