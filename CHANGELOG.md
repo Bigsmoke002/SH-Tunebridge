@@ -3,6 +3,13 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht
+- **Android: USB-Soundkarte:** Als Mikrofon nimmt die App jetzt immer das eingebaute Mikrofon des Handys – Android
+  hatte sonst den (meist stummen) Eingang der Soundkarte genommen. Wer ein USB-/Headset-Mikrofon will, schaltet unter
+  Mehr › Erkennen „Angeschlossenes Mikrofon nehmen“ ein. Beim Handy-Ton erklärt die App, warum mit Soundkarte Stille
+  ankommen kann (Hi-Res/„bit-perfect“ geht am Handy vorbei) und was hilft; der Vorschlag „Handy-Ton nehmen“ kommt mit
+  Soundkarte nicht mehr.
+
 ## 0.12.0 – 2026-11-09
 - **Android: Musik auf dem eigenen Handy erkennen:** Läuft die Musik auf demselben Handy und ist „Mikrofon“ gewählt,
   schlägt die App „Handy-Ton“ vor – über das Mikrofon filtert Android den eigenen Lautsprecher oft heraus, dann kam

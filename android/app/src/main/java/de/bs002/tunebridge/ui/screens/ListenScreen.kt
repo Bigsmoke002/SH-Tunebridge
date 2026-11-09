@@ -98,7 +98,9 @@ fun ListenScreen(openSong: (String) -> Unit, openPc: () -> Unit) {
         val system = App.repo.settings.value.system
         // Musik läuft auf diesem Handy: Das Mikrofon hört den eigenen Lautsprecher schlecht (Android filtert ihn) –
         // Handy-Ton hört digital mit und klappt viel zuverlässiger.
-        if (!system && !micAnyway && ctx.getSystemService(android.media.AudioManager::class.java)?.isMusicActive == true) {
+        // (Nicht mit USB-Soundkarte: Dann spielt nicht der Handy-Lautsprecher, das Mikrofon hört die Boxen normal.)
+        if (!system && !micAnyway && ctx.getSystemService(android.media.AudioManager::class.java)?.isMusicActive == true &&
+            de.bs002.tunebridge.audio.AudioRoutes.usbOutput(ctx) == null) {
             askPhoneMusic = seconds ?: settings.seconds; return
         }
         if (system && !App.repo.settings.value.systemAck) { askSystem = true; return }
@@ -212,7 +214,13 @@ private fun StatusText(state: Listener.State, system: Boolean) {
         is Listener.State.Found -> (if (state.unsure) "Erkannt – aber unsicher" else "Erkannt") to Fmt.ago(state.rec.ts)
         is Listener.State.NotFound -> "Nichts erkannt" to "Ton kam an (${state.levelDb.toInt()} dB) – an einer anderen Stelle nochmal probieren"
         is Listener.State.Silent -> "Kein Ton angekommen" to
-            if (sys && App.listener.lastSystem) "Spielt gerade etwas? Manche Apps (z. B. mit Kopierschutz) sperren das Mithören – dann das Mikrofon nehmen."
+            if (sys && App.listener.lastSystem) when {
+                state.bitPerfect -> "Deine Musik-App gibt den Ton „bit-perfect“ direkt an die USB-Soundkarte – daran kommt Android nicht heran. " +
+                    "In der Musik-App Bit-perfect/USB-exklusiv ausschalten oder das Mikrofon nehmen."
+                state.usbOut -> "Mit USB-Soundkarte geht der Ton oft direkt (Hi-Res) an die Karte, am Handy vorbei. In der Musik-App " +
+                    "Hi-Res/USB-exklusiv/Bit-perfect ausschalten – oder das Mikrofon nehmen, wenn die Boxen im Raum laufen."
+                else -> "Spielt gerade etwas? Manche Apps (z. B. mit Kopierschutz) sperren das Mithören – dann das Mikrofon nehmen."
+            }
             else "Pegel ${state.levelDb.toInt()} dB – näher an die Musik oder lauter machen"
         is Listener.State.Limited -> "Shazam macht eine Pause" to state.message
         is Listener.State.Failed -> "Hat nicht geklappt" to state.message

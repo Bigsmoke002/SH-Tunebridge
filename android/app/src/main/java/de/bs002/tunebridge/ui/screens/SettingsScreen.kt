@@ -124,6 +124,12 @@ fun SettingsScreen(openPair: () -> Unit, openPc: (String) -> Unit, openPrivacy: 
                 Text("Shazam wertet 10 Sekunden aus. Längere Aufnahmen nehmen die Mitte – hilfreich, wenn am Anfang geredet wird.",
                     style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
                 Segmented(listOf(10, 15, 20), s.seconds, { "$it s" }) { v -> App.repo.updateSettings { it.copy(seconds = v) } }
+                Spacer(Modifier.height(10.dp))
+                Hairline()
+                SettingRow("Angeschlossenes Mikrofon nehmen", "USB-Soundkarte oder Headset als Mikrofon. Aus: immer das Mikrofon des Handys – " +
+                    "sonst nähme Android den (oft stummen) Eingang der Soundkarte.", s.externalMic) { v ->
+                    App.repo.updateSettings { it.copy(externalMic = v) }
+                }
             }
 
             SectionLabel("Datenschutz")

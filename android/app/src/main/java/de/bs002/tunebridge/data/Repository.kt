@@ -85,6 +85,7 @@ class Repository(private val db: Db, private val context: android.content.Contex
         val autoUpdate: Boolean = false,  // einmal am Tag bei GitHub nach einer neuen Version fragen
         val lastUpdateCheck: Double = 0.0,
         val similarDirect: Boolean = false, // ähnliche Songs ohne PC direkt bei Deezer holen (Einwilligung)
+        val externalMic: Boolean = false, // angeschlossenes Mikrofon (USB/Headset) statt des eingebauten nehmen
         val seconds: Int = 10,
         val pcs: List<PcLink> = emptyList(),
         // bis Version 1 (ein einziger PC) – nur noch zum Übernehmen gelesen

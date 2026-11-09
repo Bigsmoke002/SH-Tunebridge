@@ -1,6 +1,7 @@
 package de.bs002.tunebridge
 
 import android.content.Context
+import de.bs002.tunebridge.audio.AudioRoutes
 import de.bs002.tunebridge.audio.CaptureService
 import de.bs002.tunebridge.audio.Recorder
 import de.bs002.tunebridge.audio.ShazamSignature
@@ -36,7 +37,7 @@ class Listener(context: Context, private val repo: Repository, private val sync:
         data object Analysing : State
         data class Found(val rec: Recognition, val unsure: Boolean) : State
         data class NotFound(val levelDb: Float) : State
-        data class Silent(val levelDb: Float) : State
+        data class Silent(val levelDb: Float, val usbOut: Boolean = false, val bitPerfect: Boolean = false) : State
         data class Limited(val waitSeconds: Int, val message: String) : State
         data class Failed(val message: String) : State
     }
@@ -64,12 +65,13 @@ class Listener(context: Context, private val repo: Repository, private val sync:
                     CaptureService.projection.value ?: throw IllegalStateException("Freigabe für den Handy-Ton ist abgelaufen – bitte nochmal tippen")
                 } else null
                 _state.value = State.Recording(0f, FloatArray(Recorder.BANDS), -90f)
-                val pcm = recorder.record(seconds.toFloat(), projection) { f ->
+                val pcm = recorder.record(seconds.toFloat(), projection, repo.settings.value.externalMic) { f ->
                     _state.value = State.Recording(f.progress, f.bands, f.levelDb)
                 }
                 val level = withContext(Dispatchers.Default) { levelDb(pcm) }
                 if (level <= Recorder.SILENT_DB) {
-                    _state.value = State.Silent(level)
+                    _state.value = if (system) State.Silent(level, AudioRoutes.usbOutput(appContext) != null, AudioRoutes.bitPerfect(appContext))
+                    else State.Silent(level)
                     return@launch
                 }
                 _state.value = State.Analysing

@@ -26,7 +26,7 @@ class Recorder(private val context: Context) {
     class Frame(val levelDb: Float, val bands: FloatArray, val progress: Float)
 
     @SuppressLint("MissingPermission")   // Berechtigung prüft der Aufrufer, bevor er aufnimmt
-    suspend fun record(seconds: Float, projection: MediaProjection? = null, onFrame: (Frame) -> Unit): ShortArray = withContext(Dispatchers.IO) {
+    suspend fun record(seconds: Float, projection: MediaProjection? = null, externalMic: Boolean = false, onFrame: (Frame) -> Unit): ShortArray = withContext(Dispatchers.IO) {
         val rate = ShazamSignature.RATE
         val minBuf = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val rec = if (projection == null) AudioRecord(source(), rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, max(minBuf, rate))
@@ -47,6 +47,8 @@ class Recorder(private val context: Context) {
         check(rec.state == AudioRecord.STATE_INITIALIZED) {
             if (projection == null) "Mikrofon ist belegt oder nicht verfügbar" else "Handy-Ton lässt sich gerade nicht abgreifen"
         }
+        // USB-Soundkarte/Headset mit Eingang: Android nähme sonst deren (oft stummen) Eingang statt des Handy-Mikrofons
+        if (projection == null && !externalMic) AudioRoutes.builtinMic(context)?.let { rec.setPreferredDevice(it) }
         val total = (seconds * rate).toInt()
         val out = ShortArray(total)
         val chunk = ShortArray(512)
