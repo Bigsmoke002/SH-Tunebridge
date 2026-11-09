@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.11.0)
+## 0.11.0 – 2026-11-09
 - **Weniger Shazam-Sperren:** Die Tempo-Suche (Slowed/Sped-up) läuft nie mehr automatisch – auch nicht bei
   unsicheren Treffern. Sie kostete bis zu 3 zusätzliche Anfragen pro Scan; jetzt gibt es sie nur per Knopf.
   Nach „Nichts erkannt“ zusätzlich „Länger aufnehmen (20 s)“: Shazam bekommt den mittleren Abschnitt – hilft bei
