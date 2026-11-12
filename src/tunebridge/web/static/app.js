@@ -753,6 +753,14 @@ const Embeds = {
       return { id: "deezer", src: `https://widget.deezer.com/widget/dark/track/${m[1]}`, h: 150 };
     return null;
   },
+  // YouTube lässt manche Videos (z. B. von „Topic“-Kanälen) unter einer reinen IP-Adresse wie 127.0.0.1 nicht
+  // einbetten (Fehler 150) – dann den Player über den App-eigenen Rahmen auf localhost laden (/embed/player).
+  frameSrc(src) {
+    const m = src.match(/^https:\/\/www\.youtube-nocookie\.com\/embed\/([\w-]{11})\?(.*)$/);
+    if (!m || !/^\d+\.\d+\.\d+\.\d+$|^\[/.test(location.hostname)) return src;
+    const auto = /(^|&)autoplay=1(&|$)/.test(m[2]) ? "&autoplay=1" : "";
+    return `${location.protocol}//localhost:${location.port}/embed/player?yt=${m[1]}${auto}`;
+  },
   setup(root, links) {
     const card = $("[data-role=embeds]", root); if (!card) return;
     const list = [...new Map(links.map(l => this.from(l)).filter(Boolean).map(e => [e.id, e])).values()];
@@ -780,7 +788,7 @@ const Embeds = {
   load(box, e) {
     Player.audio?.pause?.();
     const style = e.h ? `height:${e.h}px` : "aspect-ratio:16/9;height:auto";
-    box.innerHTML = `<iframe class="emb-frame" src="${esc(e.src)}" style="${style}" loading="lazy" allowfullscreen
+    box.innerHTML = `<iframe class="emb-frame" src="${esc(this.frameSrc(e.src))}" style="${style}" loading="lazy" allowfullscreen
       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"
       title="${esc(this.NAMES[e.id])}-Player"></iframe>
       <div class="emb-foot"><span>Offizieller Player von ${esc(this.NAMES[e.id])} – gespielt wird direkt beim Anbieter.</span><button class="btn btn--sm btn--ghost" data-unload>${icon("x")}Player schließen</button></div>`;

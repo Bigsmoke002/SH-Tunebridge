@@ -34,6 +34,30 @@ def test_check_rules(strict):
     assert guard.check("GET", {**ok, "sec-fetch-site": "cross-site"}, ws=True) is not None
 
 
+def test_embed_frame_only_exception(strict):
+    """Player-Rahmen /embed/player darf als iframe von 127.0.0.1 nach localhost geladen werden – nur der."""
+    lh = {"host": "localhost:8765", "sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe"}
+    assert guard.check("GET", lh, path="/embed/player") is None
+    assert guard.check("GET", lh, path="/api/playlists") == "Anfrage von fremder Seite"
+    assert guard.check("POST", lh, path="/embed/player") == "Anfrage von fremder Seite"
+    assert guard.check("GET", {**lh, "sec-fetch-dest": "script"}, path="/embed/player") == "Anfrage von fremder Seite"
+    assert guard.check("GET", {**lh, "host": "evil.example"}, path="/embed/player") == "fremder Host"
+
+
+def test_embed_player_page(strict):
+    from tunebridge.web.app import app
+    c = TestClient(app, base_url="http://localhost:8765")
+    h = {"sec-fetch-site": "cross-site", "sec-fetch-mode": "navigate", "sec-fetch-dest": "iframe"}
+    r = c.get("/embed/player?yt=gZRdZhfhqhw&autoplay=1", headers=h)
+    assert r.status_code == 200
+    assert 'src="https://www.youtube-nocookie.com/embed/gZRdZhfhqhw?rel=0&autoplay=1"' in r.text
+    csp = r.headers["content-security-policy"]
+    assert "frame-src https://www.youtube-nocookie.com;" in csp and "frame-ancestors http://127.0.0.1:* http://localhost:*" in csp
+    assert "script-src" not in csp and "default-src 'none'" in csp                  # kein Skript, keine App-Daten
+    for bad in ("", "x", "gZRdZhfhqhw\"><script>", "https://evil.example/aaaaaaaaaaa"):
+        assert c.get("/embed/player", params={"yt": bad}, headers=h).status_code == 404
+
+
 def test_open_host_only_skips_host_check(monkeypatch):
     monkeypatch.setenv("TUNEBRIDGE_OPEN_HOST", "1")
     assert guard.check("GET", {"host": "192.168.1.5:8765"}) is None

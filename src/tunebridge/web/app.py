@@ -1051,6 +1051,24 @@ def fallback_settings_set(data: dict):
     return {**fallback.settings(), **fallback.sources()}
 
 
+@app.get("/embed/player")
+def embed_player(yt: str = "", autoplay: int = 0):
+    """Rahmen nur für den offiziellen YouTube-Player. Das Fenster lädt ihn über localhost statt 127.0.0.1:
+    YouTube lässt manche Videos (z. B. von „Topic“-Kanälen) unter einer reinen IP-Adresse nicht einbetten
+    (Fehler 150). Nimmt nur eine Video-Kennung an – keine beliebigen Adressen; nichts aus der App darin."""
+    if not re.fullmatch(r"[\w-]{11}", yt):
+        raise HTTPException(404, "Unbekanntes Video")
+    src = f"https://www.youtube-nocookie.com/embed/{yt}?rel=0" + ("&autoplay=1" if autoplay else "")
+    html = ('<!doctype html><html lang="de"><head><meta charset="utf-8"><title>YouTube-Player</title>'
+            '<style>html,body{margin:0;height:100%;background:#000}iframe{border:0;width:100%;height:100%;display:block}</style>'
+            f'</head><body><iframe src="{src}" allowfullscreen referrerpolicy="strict-origin-when-cross-origin" '
+            'allow="autoplay; encrypted-media; fullscreen; picture-in-picture" title="YouTube-Player"></iframe></body></html>')
+    return HTMLResponse(html, headers={
+        "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'; frame-src https://www.youtube-nocookie.com; "
+                                   "frame-ancestors http://127.0.0.1:* http://localhost:*",
+        "Referrer-Policy": "strict-origin-when-cross-origin", "Cache-Control": "no-store"})
+
+
 @app.get("/api/fallback")
 async def fallback_get(id: int | None = None, key: str | None = None, artist: str = "", title: str = "", isrc: str = "",
                        dz: str = "", yt: str = "", sp: str = ""):
