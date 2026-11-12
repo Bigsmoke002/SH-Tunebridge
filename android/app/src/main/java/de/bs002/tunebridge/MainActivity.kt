@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         super.onStart()
         App.listener.autoSync()   // beim Öffnen still abgleichen, falls der PC erreichbar ist
         App.listener.retryPending()   // offline Gemerktes nachfragen, falls jetzt Netz da ist
+        de.bs002.tunebridge.update.Updater.cleanup(this)                         // installierte Update-Datei wegräumen
         lifecycleScope.launch { de.bs002.tunebridge.update.Updater.checkDaily() }   // nur wenn eingeschaltet, 1× am Tag
     }
 

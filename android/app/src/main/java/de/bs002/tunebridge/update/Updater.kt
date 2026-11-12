@@ -60,6 +60,15 @@ object Updater {
     private val client by lazy { Http.client.newBuilder().readTimeout(60, TimeUnit.SECONDS).callTimeout(10, TimeUnit.MINUTES).followRedirects(true).build() }
     private val json = Json { ignoreUnknownKeys = true }
 
+    /**
+     * Geladene Update-Datei wieder entfernen, sobald sie installiert ist (oder veraltet): Sie liegt nur im
+     * App-Cache, Android ersetzt beim Installieren die App selbst – es bleibt also keine zweite Kopie liegen.
+     */
+    fun cleanup(ctx: Context) {
+        if (_state.value is State.Downloading || _state.value is State.Ready) return
+        runCatching { File(ctx.cacheDir, "updates").deleteRecursively() }
+    }
+
     /** Beim Öffnen: höchstens einmal am Tag, nur wenn eingeschaltet. */
     suspend fun checkDaily() {
         val s = App.repo.settings.value

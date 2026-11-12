@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Entwicklerversion (de.bs002.tunebridge.dev) sichtbar anders benennen, damit sie nie mit der echten App verwechselt wird -->
+<resources>
+    <string name="app_name">SH-Tunebridge Dev</string>
+</resources>
