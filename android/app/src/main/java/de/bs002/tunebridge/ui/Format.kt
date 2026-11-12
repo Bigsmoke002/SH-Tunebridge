@@ -40,6 +40,7 @@ object Fmt {
         }
     }
 
+    fun duration(ms: Long): String = "%d:%02d".format(ms / 60000, (ms / 1000) % 60)
     fun songs(n: Int) = if (n == 1) "1 Song" else "${"%,d".format(de, n)} Songs"
 }
 

@@ -328,6 +328,57 @@ class PcSync(private val repo: Repository) {
             null
         }
 
+    /** Remixe, Covers & andere Versionen vom PC (remixes.py). null = kein PC erreichbar. */
+    suspend fun versions(track: de.bs002.tunebridge.data.Track): de.bs002.tunebridge.net.VersionResult? =
+        withContext(Dispatchers.IO) {
+            if (!Nets.allowed()) return@withContext null
+            val nets = Nets.current()
+            for (link in repo.settings.value.pcs) {
+                val addrs = reachable(link, nets).ifEmpty { continue }
+                val rid = UUID.randomUUID().toString()
+                val payload = buildJsonObject {
+                    put("ts", System.currentTimeMillis()); put("rid", rid)
+                    put("track", buildJsonObject {
+                        put("title", track.title)
+                        put("artists", kotlinx.serialization.json.JsonArray(track.artists.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                        track.durationMs?.let { put("duration_ms", it) }
+                    })
+                }.toString()
+                val key = syncKey(link.secret)
+                val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "versions:${link.deviceId}", payload)) }.toString()
+                val answer = try {
+                    anyAddr(listOfNotNull(link.lastAddr).filter { it in addrs }.ifEmpty { addrs }) { post(Http.lan, it, "/phone/v1/versions", body) }.second
+                } catch (e: PairError) {
+                    if (e.message?.startsWith("PC nicht erreichbar") == true) continue
+                    if (e.message?.contains("404") == true || e.message?.contains("Not Found") == true) continue   // ältere PC-Version
+                    throw e
+                }
+                val box = repo.json.parseToJsonElement(answer).jsonObject["box"]?.jsonPrimitive?.content ?: throw PairError("Unerwartete Antwort vom PC")
+                val plain = runCatching { Crypto.unseal(key, "versions-ok:${link.deviceId}:$rid", box) }
+                    .getOrElse { throw PairError("Antwort des PCs ließ sich nicht prüfen – bitte neu koppeln") }
+                val a = repo.json.decodeFromString<VersionsAnswer>(plain)
+                return@withContext de.bs002.tunebridge.net.VersionResult(a.core, a.kinds.map { it.id to it.name },
+                    a.items.map { de.bs002.tunebridge.net.Version(it.toTrack(), it.kind, it.label) })
+            }
+            null
+        }
+
+    @Serializable
+    private data class VersionsAnswer(val core: String = "", val kinds: List<VersionKind> = emptyList(), val items: List<VersionItem> = emptyList())
+
+    @Serializable
+    private data class VersionKind(val id: String, val name: String)
+
+    @Serializable
+    private data class VersionItem(
+        val title: String, val artists: List<String> = emptyList(), val album: String? = null,
+        @SerialName("duration_ms") val durationMs: Long? = null, val ids: Map<String, String> = emptyMap(),
+        val cover: String? = null, val kind: String = "andere", val label: String = "",
+    ) {
+        fun toTrack() = de.bs002.tunebridge.data.Track(title = title, artists = artists, album = album, durationMs = durationMs,
+            ids = ids, cover = cover?.takeIf { it.startsWith("https://") })
+    }
+
     /** Erster erreichbarer PC (für Mix/Set-Planer). */
     fun firstReachable(): Repository.PcLink? =
         if (!Nets.allowed()) null else Nets.current().let { nets -> repo.settings.value.pcs.firstOrNull { reachable(it, nets).isNotEmpty() } }

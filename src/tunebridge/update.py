@@ -178,12 +178,47 @@ def _prepare_appimage(rel: dict) -> dict:
     return {"tag": tag, "verified": True, "signature": "Manifest mit Release-Schlüssel signiert", "notes": f["notes"]}
 
 
+# Fortschritt für die Oberfläche (Statusleiste + Balken im Update-Dialog): Schritt, Bytes, Fehler
+_PHASES = {"vorbereiten": "Update wird geprüft …", "sicherung": "Sicherung deiner Daten …", "laden": "Neue Version wird geladen …",
+           "pruefen": "Prüfsumme wird kontrolliert …", "installieren": "Wird installiert …", "fertig": "Bereit zum Neustart",
+           "fehler": "Update fehlgeschlagen"}
+_progress: dict = {"phase": None}
+
+
+def _step(phase: str | None, **kw) -> None:
+    with _lock:
+        if phase != _progress.get("phase"):
+            _progress.clear()
+            _progress.update(phase=phase, started=time.time())
+        _progress.update(kw)
+
+
+def progress() -> dict:
+    """{phase, text, done, total, percent, tag, error} – phase None = es läuft gerade nichts."""
+    with _lock:
+        p = dict(_progress)
+    ph = p.get("phase")
+    out = {"phase": ph, "text": _PHASES.get(ph or "", ""), "tag": p.get("tag"), "error": p.get("error"),
+           "done": p.get("done"), "total": p.get("total"), "percent": None}
+    if ph == "laden" and p.get("total"):
+        out["percent"] = max(0, min(100, round(p.get("done", 0) * 100 / p["total"])))
+    elif ph in ("pruefen", "installieren", "fertig"):
+        out["percent"] = 100
+    return out
+
+
 def _download_verified(info: dict, tmp: Path, h) -> None:
+    total = info.get("size") or 0
+    _step("laden", tag=info.get("tag"), done=0, total=total)
+    done = 0
     with _http() as c, c.stream("GET", info["url"]) as r, tmp.open("wb") as out:
         r.raise_for_status()
         for chunk in r.iter_bytes(1 << 20):
             out.write(chunk)
             h.update(chunk)
+            done += len(chunk)
+            _step("laden", done=done)
+    _step("pruefen", tag=info.get("tag"))
     if tmp.stat().st_size != info["size"] or h.hexdigest() != info["sha256"]:
         raise RuntimeError("Prüfsumme stimmt nicht – Update verworfen.")
 
@@ -202,6 +237,7 @@ def _install_download() -> dict:
     tmp = dest_dir / f".{info['file']}.download"
     if shutil.disk_usage(dest_dir).free < info["size"] + 100_000_000:
         raise RuntimeError("Zu wenig Speicherplatz für das Update")
+    _step("sicherung")
     safety = backup.create(kind="vor-update")
     try:
         _download_verified(info, tmp, hashlib.sha256())
@@ -231,9 +267,11 @@ def _install_appimage() -> dict:
     if shutil.disk_usage(cur.parent).free < info["size"] + 100_000_000:
         raise RuntimeError("Zu wenig Speicherplatz für das Update")
     from . import backup
+    _step("sicherung")
     safety = backup.create(kind="vor-update")
     try:
         _download_verified(info, tmp, hashlib.sha256())
+        _step("installieren", tag=info["tag"])
         tmp.chmod(0o755)
         os.replace(tmp, target)
     except BaseException:
@@ -422,6 +460,17 @@ def prepare(tag: str) -> dict:
     """Tag holen, Signatur + Version prüfen, Änderungen auslesen. Installiert noch nichts."""
     if not _TAG.match(tag):
         raise ValueError("Ungültige Version")
+    _step("vorbereiten", tag=tag)
+    try:
+        res = _prepare(tag)
+    except BaseException as e:
+        _step("fehler", error=str(e) or type(e).__name__)
+        raise
+    _step(None)
+    return res
+
+
+def _prepare(tag: str) -> dict:
     if is_appimage() or is_frozen():
         rel = next((r for r in _releases() if r["tag_name"] == tag), None)
         if not rel:
@@ -490,6 +539,7 @@ def _install_frozen() -> dict:
     root = frozen_root()
     if shutil.disk_usage(root.parent).free < info["size"] * 3 + 200_000_000:
         raise RuntimeError("Zu wenig Speicherplatz für das Update")
+    _step("sicherung")
     safety = backup.create(kind="vor-update")
     work = Path(tempfile.mkdtemp(prefix="sh-tunebridge-update-"))
     new = root.with_name(f".{root.name}.neu")
@@ -497,6 +547,7 @@ def _install_frozen() -> dict:
     try:
         pkg = work / info["file"]
         _download_verified(info, pkg, hashlib.sha256())
+        _step("installieren", tag=info["tag"])
         if osutil.WINDOWS:
             with zipfile.ZipFile(pkg) as z:
                 for n in z.namelist():                      # Schutz vor „../“ im Archiv
@@ -585,6 +636,21 @@ Remove-Item -Recurse -Force {q(w)} -ErrorAction SilentlyContinue
 
 
 def install() -> dict:
+    """Installiert die vorbereitete Version; den Fortschritt liefert progress()."""
+    with _lock:
+        if _progress.get("phase") in ("sicherung", "laden", "pruefen", "installieren"):
+            raise RuntimeError("Update läuft bereits")
+    _step("sicherung", tag=_prepared.get("tag"))
+    try:
+        res = _install()
+    except BaseException as e:
+        _step("fehler", error=str(e) or type(e).__name__)
+        raise
+    _step("fertig", tag=res.get("installed"), manual=bool(res.get("manual")))
+    return res
+
+
+def _install() -> dict:
     if is_appimage():
         return _install_appimage()
     if is_frozen():
@@ -597,7 +663,9 @@ def install() -> dict:
         raise RuntimeError("Entwicklerinstallation – bitte per `git pull` aktualisieren.")
     uv = shutil.which("uv") or str(Path.home() / ".local/bin/uv")
     from . import backup
+    _step("sicherung")
     safety = backup.create(kind="vor-update")
+    _step("installieren", tag=tag)
     r = subprocess.run([uv, "tool", "install", "--force", f"{d}[desktop]"], capture_output=True, text=True, timeout=900)
     if r.returncode != 0:
         raise RuntimeError("Installation fehlgeschlagen: " + (r.stderr.strip().splitlines() or ["?"])[-1])

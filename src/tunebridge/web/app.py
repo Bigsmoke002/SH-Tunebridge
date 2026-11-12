@@ -986,6 +986,57 @@ def similar(rid: int, limit: int = 15):
     return _similar(got[0], limit)
 
 
+# ------------------------------------------------------------------ Remixe, Covers & andere Versionen
+def _versions(track: Track) -> dict:
+    from .. import ratelimit, remixes
+    try:
+        items = remixes.find(track)
+    except ratelimit.LimitReached as e:
+        raise HTTPException(429, f"{e} – bitte gleich nochmal versuchen")
+    for v in items:
+        v["links"] = platform_links(remixes.to_track(v), lookup=False)
+        # Deezer-Hörproben-Adressen laufen ab – der Player holt sie beim Abspielen frisch über die Deezer-ID
+        v["preview_url"] = f"deezer:{v['ids']['deezer']}" if (v.get("ids") or {}).get("deezer") else None
+    (dbg.event if items else dbg.problem)("versionen", f"{len(items)} Versionen", song=f"{track.artist} – {track.title}")
+    return {"core": remixes.core_title(track.title), "kinds": [{"id": k, "name": n} for k, n in remixes.KINDS], "items": items}
+
+
+@app.get("/api/versions")
+async def versions_get(id: int | None = None, key: str | None = None, artist: str = "", title: str = ""):
+    if id is not None and (got := store.get_recognition(id)):
+        t = got[0]
+    elif key and (t := store.find_track(key)):
+        pass
+    elif title.strip():
+        t = Track(title=title.strip()[:300], artists=[artist.strip()[:200]] if artist.strip() else [])
+    else:
+        raise HTTPException(404, "Song nicht gefunden")
+    return await asyncio.to_thread(_versions, t)
+
+
+class VersionAddReq(BaseModel):
+    playlist: str
+    track: dict
+
+
+@app.post("/api/versions/add")
+def versions_add(req: VersionAddReq):
+    """Eine gefundene Version in eine Playlist legen (die Angaben kommen aus /api/versions)."""
+    from .. import remixes
+    name, v = req.playlist.strip()[:120], req.track
+    if not name:
+        raise HTTPException(400, "Playlist-Name fehlt")
+    if not str(v.get("title") or "").strip() or not v.get("artists"):
+        raise HTTPException(400, "Titel oder Künstler fehlt")
+    v = {"title": str(v["title"])[:300], "artists": [str(a)[:200] for a in list(v["artists"])[:5]],
+         "album": str(v.get("album") or "")[:300] or None, "duration_ms": int(v.get("duration_ms") or 0) or None,
+         "cover": v.get("cover") if str(v.get("cover") or "").startswith("https://") else None,
+         "preview_url": v.get("preview_url") if str(v.get("preview_url") or "").startswith("https://") else None,
+         "ids": {"deezer": str((v.get("ids") or {}).get("deezer"))} if str((v.get("ids") or {}).get("deezer") or "").isdigit() else {}}
+    added = store.add_to_playlist(name, remixes.to_track(v))
+    return {"added": bool(added), "playlist": name}
+
+
 @app.get("/api/audiofeat")
 def audiofeat_get(id: int | None = None, key: str | None = None, artist: str = "", title: str = "", isrc: str = "", dz: str = ""):
     """Tempo / Tonart / Energie eines Songs (Speicher oder 30-s-Hörprobe von Deezer). {} = keine Hörprobe."""
@@ -1413,6 +1464,12 @@ async def update_prepare(req: TagReq):
         return await asyncio.to_thread(update.prepare, req.tag)
     except Exception as e:
         raise HTTPException(400, str(e))
+
+
+@app.get("/api/update/progress")
+def update_progress():
+    from .. import update
+    return update.progress()
 
 
 @app.post("/api/update/install")

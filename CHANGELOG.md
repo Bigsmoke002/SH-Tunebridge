@@ -4,6 +4,16 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Remixe, Covers & andere Versionen:** In der Song-Ansicht (und am Handy beim Song bzw. in einer Playlist) findet
+  „Remixe & Versionen“ zu einem Song alle Aufnahmen mit demselben Titel – gruppiert nach Original, Remixe (mit
+  Remixer), Edits & Mix-Versionen, Live, Akustik, Instrumental, Slowed & Sped Up und „Andere Künstler“ (Covers).
+  Mit Hörprobe, Links zu Spotify/YouTube & Co. und „In Playlist“. Karaoke-, Tribute- und Workout-Füllware wird
+  aussortiert; gleichnamige Songs anderer Künstler nur, wenn die Länge zum Original passt. Quelle: Deezer (ohne Login),
+  nur nach Klick; am Handy über den PC oder – mit der Erlaubnis für „Ähnliche Songs ohne PC“ – direkt.
+- **Update mit Fortschrittsbalken:** Am PC zeigt der Update-Dialog Sicherung, Laden (MB und Prozent), Prüfsumme und
+  Installation mit Balken; links in der Seitenleiste steht währenddessen der Stand („Update lädt … 42 %“). Am Handy
+  lädt das Update im Hintergrund weiter, auch wenn du die Seite wechselst – mit Balken unten in der App und einer
+  Benachrichtigung mit Fortschritt; „Jetzt laden“ geht direkt aus dem Update-Hinweis, „Installieren“ aus der Leiste.
 - **Android: Playlists auf dem Handy:** Eigene Playlists auch ohne PC – unter Playlists „+“ anlegen, umbenennen,
   löschen (mit Rückgängig), abspielen, teilen. Beim Einsortieren wählst du „Handy“ oder einen gekoppelten PC; eine
   Handy-Playlist lässt sich mit „Auf PC kopieren“ an den PC übergeben. Mix-Ergebnisse lassen sich auch nur aufs

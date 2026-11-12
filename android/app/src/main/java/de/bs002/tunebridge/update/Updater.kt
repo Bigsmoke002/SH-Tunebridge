@@ -8,7 +8,10 @@ import androidx.core.content.FileProvider
 import de.bs002.tunebridge.App
 import de.bs002.tunebridge.BuildConfig
 import de.bs002.tunebridge.net.Http
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -43,7 +46,7 @@ object Updater {
         data object Checking : State
         data object Current : State
         data class Available(val update: Update) : State
-        data class Downloading(val progress: Float) : State
+        data class Downloading(val progress: Float, val done: Long = 0, val total: Long = 0, val version: String = "") : State
         data class Ready(val update: Update, val apk: File) : State
         data class Failed(val message: String) : State
     }
@@ -119,12 +122,25 @@ object Updater {
         return null
     }
 
+    /** Läuft unabhängig von der Seite weiter (Wechsel des Reiters bricht den Download nicht ab). */
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    /** Download im Hintergrund starten – Fortschritt in [state], in der Statusleiste der App und als Benachrichtigung. */
+    fun start(ctx: Context, u: Update) {
+        if (_state.value is State.Downloading) return
+        val app = ctx.applicationContext
+        _state.value = State.Downloading(0f, 0, u.size, u.version)
+        scope.launch { download(app, u) }
+    }
+
     /** APK laden und prüfen (Größe + SHA-256 aus dem signierten Manifest). */
     suspend fun download(ctx: Context, u: Update): File? = withContext(Dispatchers.IO) {
         val dir = File(ctx.cacheDir, "updates").apply { deleteRecursively(); mkdirs() }
         val out = File(dir, u.file)
         try {
-            _state.value = State.Downloading(0f)
+            _state.value = State.Downloading(0f, 0, u.size, u.version)
+            UpdateNote.progress(ctx, u.version, 0, u.size)
+            var lastPct = -1
             client.newCall(Request.Builder().url(u.url).header("User-Agent", "SH-Tunebridge-Android").build()).execute().use { r ->
                 if (!r.isSuccessful) throw IOException("Download fehlgeschlagen (${r.code})")
                 val md = MessageDigest.getInstance("SHA-256")
@@ -137,7 +153,12 @@ object Updater {
                             if (k < 0) break
                             o.write(buf, 0, k); md.update(buf, 0, k); n += k
                             if (n > u.size) throw IOException("Datei größer als angekündigt – abgebrochen")
-                            _state.value = State.Downloading((n.toFloat() / u.size).coerceIn(0f, 1f))
+                            val pct = (n * 100 / u.size).toInt()
+                            if (pct != lastPct) {        // nicht bei jedem Block – das wäre zu viel Arbeit für Oberfläche und Benachrichtigung
+                                lastPct = pct
+                                _state.value = State.Downloading((n.toFloat() / u.size).coerceIn(0f, 1f), n, u.size, u.version)
+                                UpdateNote.progress(ctx, u.version, n, u.size)
+                            }
                         }
                     }
                 }
@@ -145,10 +166,12 @@ object Updater {
                 if (n != u.size || hex != u.sha256) throw IOException("Prüfsumme stimmt nicht – Update verworfen")
             }
             _state.value = State.Ready(u, out)
+            UpdateNote.ready(ctx, u.version)
             out
         } catch (e: Exception) {
             dir.deleteRecursively()
             _state.value = State.Failed(e.message ?: "Download fehlgeschlagen")
+            UpdateNote.failed(ctx, e.message ?: "Download fehlgeschlagen")
             null
         }
     }
@@ -163,6 +186,7 @@ object Updater {
 
     /** Android-Installer öffnen – du bestätigst dort selbst. */
     fun install(ctx: Context, apk: File) {
+        UpdateNote.cancel(ctx)
         val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.updates", apk)
         ctx.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK))

@@ -1,5 +1,7 @@
 package de.bs002.tunebridge.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +22,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -49,12 +52,8 @@ fun UpdateSection() {
     }
     Spacer(Modifier.height(10.dp))
     when (val x = st) {
-        is Updater.State.Available -> UpdateOffer(x.update) { scope.launch { Updater.download(ctx, x.update) } }
-        is Updater.State.Downloading -> {
-            Text("Lade Version …", style = TbType.small, color = Tb.text2)
-            Spacer(Modifier.height(6.dp))
-            LinearProgressIndicator(progress = { x.progress }, modifier = Modifier.fillMaxWidth(), color = Tb.accent, trackColor = Tb.bg3)
-        }
+        is Updater.State.Available -> UpdateOffer(x.update) { Updater.start(ctx, x.update) }
+        is Updater.State.Downloading -> DownloadProgress(x)
         is Updater.State.Ready -> InstallButton(x)
         else -> {
             Text(
@@ -77,6 +76,47 @@ fun UpdateSection() {
         "Jede Version ist mit dem Release-Schlüssel signiert und wird vor dem Installieren geprüft.", s.autoUpdate) { v ->
         App.repo.updateSettings { it.copy(autoUpdate = v) }
     }
+}
+
+private fun mb(b: Long) = "%.1f".format(java.util.Locale.GERMANY, b / 1_048_576.0)
+
+/** Balken + „12,3 von 40,1 MB · 31 %“. */
+@Composable
+fun DownloadProgress(x: Updater.State.Downloading, compact: Boolean = false) {
+    val pct = (x.progress * 100).toInt()
+    Row(Modifier.fillMaxWidth()) {
+        Text(if (x.version.isNotEmpty()) "Update ${x.version} wird geladen …" else "Update wird geladen …",
+            style = if (compact) TbType.small else TbType.body, color = Tb.text2, modifier = Modifier.weight(1f))
+        Text("$pct %", style = TbType.small, color = Tb.accent)
+    }
+    Spacer(Modifier.height(6.dp))
+    LinearProgressIndicator(progress = { x.progress }, modifier = Modifier.fillMaxWidth(), color = Tb.accent, trackColor = Tb.bg3)
+    if (!compact && x.total > 0) Text("${mb(x.done)} von ${mb(x.total)} MB – danach wird die Prüfsumme kontrolliert. Du kannst die App dabei weiter benutzen.",
+        style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 6.dp))
+}
+
+/** Statusleiste über dem Mini-Player: Update lädt (mit Balken) bzw. ist bereit – auf jeder Seite sichtbar. */
+@Composable
+fun UpdateBanner(openMore: () -> Unit) {
+    val ctx = LocalContext.current
+    val st by Updater.state.collectAsState()
+    val x = st
+    if (x !is Updater.State.Downloading && x !is Updater.State.Ready) return
+    Column(
+        Modifier.fillMaxWidth().background(Tb.bg2).clickable(onClick = openMore).padding(horizontal = 16.dp, vertical = 10.dp),
+    ) {
+        when (x) {
+            is Updater.State.Downloading -> DownloadProgress(x, compact = true)
+            is Updater.State.Ready -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Update ${x.update.version} geladen und geprüft", style = TbType.small, color = Tb.text, modifier = Modifier.weight(1f))
+                TbButton("Installieren", {
+                    if (Updater.canInstall(ctx)) Updater.install(ctx, x.apk) else openMore()
+                }, kind = BtnKind.Primary, small = true, icon = Ico.Check)
+            }
+            else -> Unit
+        }
+    }
+    Hairline()
 }
 
 @Composable
@@ -106,6 +146,7 @@ private fun InstallButton(r: Updater.State.Ready) {
 /** Hinweis beim Öffnen, wenn die tägliche Prüfung etwas gefunden hat. */
 @Composable
 fun UpdatePrompt(openMore: () -> Unit) {
+    val ctx = LocalContext.current
     val st by Updater.state.collectAsState()
     var shown by remember { mutableStateOf<String?>(null) }
     val u = (st as? Updater.State.Available)?.update ?: return
@@ -115,11 +156,17 @@ fun UpdatePrompt(openMore: () -> Unit) {
         title = { Text("Update auf ${u.version}", style = TbType.title, color = Tb.text) },
         text = {
             Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Eine neue, signierte Version ist da. Laden und installieren geht unter Mehr › Über.", style = TbType.body, color = Tb.text2)
+                Text("Eine neue, signierte Version ist da. Beim Laden siehst du den Fortschritt unten in der App und in der Benachrichtigung; " +
+                    "installieren bestätigst du danach selbst.", style = TbType.body, color = Tb.text2)
                 if (u.notes.isNotBlank()) Text(u.notes.take(800), style = TbType.small, color = Tb.text3)
             }
         },
-        confirmButton = { TbButton("Ansehen", { shown = u.version; openMore() }, kind = BtnKind.Primary) },
-        dismissButton = { TbButton("Später", { shown = u.version }, kind = BtnKind.Ghost) },
+        confirmButton = { TbButton("Jetzt laden", { shown = u.version; Updater.start(ctx, u) }, kind = BtnKind.Primary, icon = Ico.Arrow) },
+        dismissButton = {
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TbButton("Details", { shown = u.version; openMore() }, kind = BtnKind.Ghost)
+                TbButton("Später", { shown = u.version }, kind = BtnKind.Ghost)
+            }
+        },
     )
 }

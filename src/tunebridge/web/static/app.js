@@ -554,7 +554,7 @@ document.addEventListener("focusout", e => { if (e.target.closest?.(".tip")) Tip
 const SongLayout = {
   SECS: [["links", "Anhören & öffnen", "external"], ["buy", "Kaufen", "download"], ["player", "Offizieller Player", "play"],
     ["artist", "Mehr vom Künstler", "disc"], ["ai", "KI-Musik-Hinweis", "sparkle"], ["sort", "Einsortieren", "stack"],
-    ["similar", "Ähnliche Songs", "compass"], ["mix", "Passt dazu – zum Mixen", "shuffle"]],
+    ["similar", "Ähnliche Songs", "compass"], ["versions", "Remixe & Versionen", "disc"], ["mix", "Passt dazu – zum Mixen", "shuffle"]],
   get() {
     const d = store.get("songLayout", {}) || {}, ids = this.SECS.map(x => x[0]);
     const order = (Array.isArray(d.order) ? d.order : []).filter(id => ids.includes(id));
@@ -659,6 +659,8 @@ function detailHtml(r) {
     </div>`,
     similar: `<div class="section-title">Ähnliche Songs</div>
     <div data-role="similar"><button class="btn btn--sm" data-role="loadsim">${icon("compass")}Ähnliche Songs laden</button></div>`,
+    versions: `<div class="section-title">Remixe, Covers & andere Versionen</div>
+    <div data-role="versions"><button class="btn btn--sm" data-role="loadver" title="Sucht bei Deezer Aufnahmen mit demselben Titel: Remixe, Live, Akustik, Covers …">${icon("disc")}Remixe & Versionen suchen</button></div>`,
     mix: r.id != null || r.key ? `<div class="section-title">Passt dazu – zum Mixen</div>
     <div data-role="mix"><button class="btn btn--sm" data-role="loadmix" title="Songs aus deinen Playlists mit passendem Tempo und passender Tonart">${icon("disc")}Mixbare Songs aus deiner Bibliothek</button></div>` : "",
   })}`;
@@ -846,6 +848,7 @@ function bindDetail(root, r, onChange) {
   $("[data-role=addpl]", root).onclick = () => inp.value.trim() && update("/api/assign", inp.value.trim(), "Zu „%s“ hinzugefügt");
   inp.onkeydown = e => { if (e.key === "Enter") $("[data-role=addpl]", root).click(); };
   $("[data-role=loadsim]", root).onclick = () => loadSimilar($("[data-role=similar]", root), r);
+  const lv = $("[data-role=loadver]", root); if (lv) lv.onclick = () => loadVersions($("[data-role=versions]", root), r);
   const lm = $("[data-role=loadmix]", root); if (lm) lm.onclick = () => loadMix($("[data-role=mix]", root), r);
   const rf = $("[data-role=refresh]", root);
   if (rf) rf.onclick = async () => {
@@ -924,6 +927,53 @@ async function loadSimilar(box, r) {
   } catch (e) { box.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; }
 }
 
+/* Remixe, Covers & andere Versionen: gruppiert, mit Hörprobe, Links und „In Playlist“ */
+async function loadVersions(box, r) {
+  box.innerHTML = skeletonRows(4);
+  let d;
+  try { d = await api(r.id != null ? `/api/versions?id=${r.id}` : `/api/versions?key=${encodeURIComponent(r.key)}`); }
+  catch (e) { box.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
+  const list = d.items || [];
+  if (!list.length) { box.innerHTML = `<div class="cell-sub">Keine anderen Versionen von „${esc(d.core || "")}“ gefunden.</div>`; return; }
+  const count = Object.fromEntries(d.kinds.map(k => [k.id, list.filter(v => v.kind === k.id).length]));
+  let filter = d.kinds.find(k => k.id === "remix" && count.remix) ? "remix" : "";
+  const draw = () => {
+    const shown = list.map((v, i) => [v, i]).filter(([v]) => !filter || v.kind === filter);
+    let last = null;
+    box.innerHTML = `<div class="ver-chips">
+        <button class="chip ${!filter ? "chip--on" : ""}" data-vf="">Alle <b class="num">${list.length}</b></button>
+        ${d.kinds.filter(k => count[k.id]).map(k => `<button class="chip ${filter === k.id ? "chip--on" : ""}" data-vf="${k.id}">${esc(k.name)} <b class="num">${count[k.id]}</b></button>`).join("")}
+      </div>
+      ${filter === "andere" || (!filter && count.andere) ? `<div class="cell-sub ver-note">${icon("info")}„Andere Künstler“: Covers und Versionen anderer Künstler mit gleichem Titel – bei sehr häufigen Titeln kann auch ein ganz anderer Song dabei sein.</div>` : ""}
+      <div class="rows">${shown.map(([v, i]) => {
+        const head = !filter && v.kind !== last ? `<div class="ver-head">${esc(d.kinds.find(k => k.id === v.kind)?.name || v.kind)}</div>` : "";
+        last = v.kind;
+        return `${head}<div class="row row--ver" data-i="${i}" title="Klicken: auf Spotify, YouTube & Co. öffnen">
+          <div class="thumb-wrap">${v.cover ? `<img class="thumb" src="${esc(v.cover)}" alt="" loading="lazy">` : `<div class="thumb" style="display:grid;place-items:center;color:var(--text-3)">${icon("disc")}</div>`}
+            <button class="thumb-play" ${playAttr(v)} aria-label="Hörprobe">${icon("play")}</button></div>
+          <div class="cell-main"><div class="cell-title">${esc(v.title)}</div><div class="cell-sub">${esc(v.artists.join(", "))}${v.album && v.album !== v.title ? ` · ${esc(v.album)}` : ""}</div></div>
+          <div><span class="chip ver-lbl" title="${esc(v.label)}">${esc(v.label)}</span></div>
+          <div class="cell-muted num">${v.duration_ms ? fmtDur(v.duration_ms) : ""}</div>
+          <div class="row-act"><button class="icon-btn" data-vadd="${i}" title="In eine Playlist legen" aria-label="In Playlist">${icon("plus")}</button></div>
+        </div>`;
+      }).join("")}</div>`;
+    $$("[data-vf]", box).forEach(b => b.onclick = () => { filter = b.dataset.vf; draw(); });
+    $$("[data-vadd]", box).forEach(b => b.onclick = () => {
+      const v = list[+b.dataset.vadd];
+      modal({ title: "In welche Playlist?", text: `${v.title} – ${v.artists.join(", ")}`, body: `<input class="input" id="verPl" list="plnames" placeholder="Name einer Playlist (neu oder vorhanden)" style="width:100%" autocomplete="off">`, confirm: "Hinzufügen",
+        onConfirm: async m => {
+          const name = $("#verPl", m).value.trim();
+          if (!name) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; }
+          const res = await api("/api/versions/add", { method: "POST", body: { playlist: name, track: v } });
+          toast(res.added ? `Zu „${res.playlist}“ hinzugefügt` : `War schon in „${res.playlist}“`);
+          refreshMeta();
+        } });
+    });
+    bindSimilar(box, list, ".row--ver");
+  };
+  draw();
+}
+
 /* Cover für Listen nachladen, wenn die Liste schon steht (Adresse vom Server, Bild direkt vom Anbieter) */
 async function lazyCovers(box, list, rowSel = i => `.row--sim[data-i="${i}"]`) {
   const need = list.map((s, i) => [s, i]).filter(([s]) => !s.cover);
@@ -941,13 +991,13 @@ async function lazyCovers(box, list, rowSel = i => `.row--sim[data-i="${i}"]`) {
   });
 }
 
-function bindSimilar(box, list) {
+function bindSimilar(box, list, rowSel = ".row--sim") {
   hydrateIcons(box);
-  $$(".row--sim", box).forEach(row => row.onclick = e => {
+  $$(rowSel, box).forEach(row => row.onclick = e => {
     if (e.target.closest("button, a")) return;
     const open = row.nextElementSibling?.classList.contains("sim-links");
     $$(".sim-links", box).forEach(x => x.remove());
-    $$(".row--sim.open", box).forEach(x => x.classList.remove("open"));
+    $$(`${rowSel}.open`, box).forEach(x => x.classList.remove("open"));
     if (open) return;
     const s = list[+row.dataset.i];
     row.classList.add("open");
@@ -3445,7 +3495,53 @@ const Update = {
       $("#updateVer").textContent = this.info.latest || "";
     }
     if (!force && prompt) this.maybePrompt();
+    this.watch();          // läuft schon ein Update (z. B. nach Neuladen der Oberfläche)? -> Status zeigen
     return this.info;
+  },
+  // Fortschritt: Balken im Dialog + Status in der Seitenleiste („Lädt … 42 %“), solange ein Update läuft
+  RUN: ["sicherung", "laden", "pruefen", "installieren"],
+  async watch() {
+    if (this.watching) return;
+    this.watching = true;
+    try {
+      for (;;) {
+        let p = null;
+        try { p = await api("/api/update/progress"); } catch { /* Server startet neu */ }
+        this.showProgress(p);
+        if (!p || !this.RUN.includes(p.phase)) break;
+        await new Promise(r => setTimeout(r, 400));
+      }
+    } finally { this.watching = false; }
+  },
+  showProgress(p) {
+    const run = p && this.RUN.includes(p.phase), pct = p?.percent;
+    const mb = n => (n / 1048576).toFixed(1).replace(".", ",");
+    const detail = p?.phase === "laden" && p.total ? `${mb(p.done || 0)} von ${mb(p.total)} MB` : "";
+    const pill = $("#updatePill");
+    if (pill) {
+      pill.classList.toggle("update-pill--run", !!run);
+      pill.style.setProperty("--p", `${pct ?? 0}%`);
+      if (run) {
+        pill.classList.remove("hidden");
+        $("span", pill).textContent = p.phase === "laden" ? "Update lädt …" : p.text.replace(/ …$/, "") + " …";
+        $("#updateVer").textContent = pct != null && p.phase === "laden" ? `${pct} %` : "";
+        pill.title = [p.text, detail].filter(Boolean).join(" – ");
+      } else {
+        $("span", pill).textContent = p?.phase === "fertig" ? "Update bereit" : "Update verfügbar";
+        $("#updateVer").textContent = this.info?.latest || "";
+        pill.title = "";
+        if (!this.info?.available && p?.phase !== "fertig") pill.classList.add("hidden");
+      }
+    }
+    const box = $("#updProg");
+    if (box && p?.phase && p.phase !== "vorbereiten") {
+      box.classList.remove("hidden");
+      box.classList.toggle("upd-prog--err", p.phase === "fehler");
+      box.classList.toggle("upd-prog--busy", run && pct == null);
+      $(".upd-bar b", box).style.width = `${p.phase === "fehler" ? 100 : pct ?? 0}%`;
+      $(".upd-ptext", box).innerHTML = `<span>${esc(p.phase === "fehler" ? p.error || p.text : p.text)}</span><span class="num">${esc(detail)}${pct != null && p.phase === "laden" ? ` · ${pct} %` : ""}</span>`;
+      box.setAttribute("aria-valuenow", String(pct ?? 0));
+    }
   },
   html(u) {
     if (!u) return "";
@@ -3489,7 +3585,8 @@ const Update = {
       title: "Update verfügbar",
       text: `SH-Tunebridge <b>${esc(tag)}</b> ist da – du hast ${esc(u.current)}.`,
       body: `<div id="updBody"><div class="notes" id="updNotes">${skeletonRows(2)}</div></div>
-        <div class="upd-steps hidden" id="updSteps">${steps.map(([k, l]) => `<div class="upd-step" data-step="${k}"><span class="upd-dot"></span>${l}</div>`).join("")}</div>`,
+        <div class="upd-steps hidden" id="updSteps">${steps.map(([k, l]) => `<div class="upd-step" data-step="${k}"><span class="upd-dot"></span>${l}</div>`).join("")}</div>
+        <div class="upd-prog hidden" id="updProg" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt des Updates"><div class="upd-bar"><b></b></div><div class="upd-ptext"></div></div>`,
       confirm: manual ? "Herunterladen" : "Jetzt aktualisieren", cancel: "Später", sticky: true,
       onCancel: () => { try { localStorage.setItem("updSnooze", JSON.stringify({ tag, t: Date.now() })); } catch {} toast(`Erinnerung in ${this.SNOOZE_H} Stunden – oder jederzeit über „Update verfügbar“ links unten`); },
       onConfirm: async () => {
@@ -3500,7 +3597,11 @@ const Update = {
         try {
           ok.textContent = "Aktualisiere …";
           step("prep", "run"); await this.prepared; step("prep", "done");
-          step("inst", "run"); const done = await api("/api/update/install", { method: "POST" }); step("inst", "done");
+          step("inst", "run");
+          const inst = api("/api/update/install", { method: "POST" });
+          setTimeout(() => this.watch(), 150);
+          const done = await inst; step("inst", "done");
+          this.showProgress(await api("/api/update/progress").catch(() => null));
           if (manual) {
             setTimeout(() => modal({ title: "Update heruntergeladen", text: `Geprüft und gespeichert: <span class="path">${esc(done.downloaded)}</span><br>
               Bitte SH-Tunebridge schließen und die neue Version installieren bzw. entpacken – deine Daten bleiben erhalten.`, cancel: null, onConfirm: async () => {} }), 50);
@@ -4528,6 +4629,7 @@ const Privacy = {
       ["Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud", "Abruf deiner Playlists und Likes, bei Spotify/TIDAL auf Wunsch neue Playlists anlegen", "unter „Dienste“ und beim automatischen Abgleich (nur verbundene Dienste)"],
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
+      ["Deezer („Remixe & Versionen“)", "Titel und Hauptkünstler des Songs", "nur nach Klick auf „Remixe & Versionen suchen“"],
       ["Deezer („Mix erstellen“)", "eingegebener Künstlername bzw. Kennungen der gewählten und ähnlicher Künstler", "nur beim Suchen und Erstellen eines Mixes"],
       ["MusicBrainz, Last.fm („Mix erstellen“ nach Genre)", "nur der Genre-Name als Tag (z. B. „liquid funk“); Last.fm nur mit eigenem Key", "nur beim Erstellen eines Genre-Mixes"],
       ["Genre-Datenbank", "deine Einordnungen bleiben lokal; Playlist-Namen werden nur lokal ausgewertet", c.server.genres ? "Beiträge: mit deiner Einwilligung" : "Beiträge: aus"],

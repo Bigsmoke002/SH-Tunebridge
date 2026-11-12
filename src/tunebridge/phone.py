@@ -483,6 +483,33 @@ def handle_similar(body: dict, client: str | None = None) -> dict:
     return {"box": seal(key, f"similar-ok:{dev_id}:{rid}", {"items": items}, limit=None)}
 
 
+def handle_versions(body: dict, client: str | None = None) -> dict:
+    """Remixe, Covers & andere Versionen für das Handy (remixes.py) – Verschlüsselung wie bei handle_similar.
+    Das Handy schickt nur Titel/Künstler des Songs; der PC fragt Deezer wie bei sich selbst."""
+    dev_id = str(body.get("id") or "")[:32]
+    d = _device(dev_id)
+    key = _kdf(base64.b64decode(d["secret"]), "sync")
+    try:
+        req = unseal(key, f"versions:{dev_id}", str(body.get("box") or ""))
+    except ShareError:
+        raise PhoneError("Anfrage ließ sich nicht prüfen – bitte neu koppeln", 403) from None
+    rid = str(req.get("rid") or "")[:64]
+    _replay_check(int(req.get("ts") or 0), rid)
+    t = _track(req.get("track") or {})
+    if t.title == "?":
+        raise PhoneError("Song fehlt")
+    from . import ratelimit, remixes
+    try:
+        items = remixes.find(t)
+    except ratelimit.LimitReached as e:
+        raise PhoneError(f"{e} – bitte gleich nochmal versuchen", 429) from None
+    keep = ("title", "artists", "album", "duration_ms", "cover", "ids", "link", "kind", "label")
+    out = [{k: v[k] for k in keep if v.get(k) not in (None, "", [], {})} for v in items]
+    return {"box": seal(key, f"versions-ok:{dev_id}:{rid}", {"core": remixes.core_title(t.title),
+                                                              "kinds": [{"id": k, "name": n} for k, n in remixes.KINDS],
+                                                              "items": out}, limit=None)}
+
+
 def _items_out(items: list[dict]) -> list[dict]:
     keep = ("title", "artists", "album", "cover", "duration_ms", "isrc", "ids", "preview_url", "bpm", "camelot", "key", "energy",
             "genre", "subgenre")
@@ -903,6 +930,11 @@ def _make_app():
     async def similar_songs(request: Request):
         import asyncio
         return await asyncio.to_thread(handle_similar, await body_of(request), _client(request))
+
+    @api.post("/phone/v1/versions")
+    async def versions_songs(request: Request):
+        import asyncio
+        return await asyncio.to_thread(handle_versions, await body_of(request), _client(request))
 
     @api.post("/phone/v1/job")
     async def job(request: Request):

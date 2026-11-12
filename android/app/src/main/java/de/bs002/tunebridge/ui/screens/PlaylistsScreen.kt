@@ -160,7 +160,7 @@ private fun Mosaic(covers: List<String>, name: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}, openSet: () -> Unit = {},
+fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}, openVersions: (Track) -> Unit = {}, openSet: () -> Unit = {},
                    renamed: (String) -> Unit = {}) {
     val lists by App.repo.playlists.collectAsState()
     val p = lists.firstOrNull { it.pc == pc && it.name == name }
@@ -246,6 +246,8 @@ fun PlaylistScreen(pc: String, name: String, back: () -> Unit, openSimilar: (Tra
                 }
                 Spacer(Modifier.padding(top = 8.dp))
                 TbButton("Ähnliche Songs", { sheet = null; openSimilar(t) }, kind = BtnKind.Ghost, icon = Ico.Sparkle)
+                Spacer(Modifier.padding(top = 8.dp))
+                TbButton("Remixe & Versionen", { sheet = null; openVersions(t) }, kind = BtnKind.Ghost, icon = Ico.Disc)
                 SectionLabel("Anhören & öffnen")
                 LinkGrid(t, emptyMap())
                 SectionLabel("In dieser Playlist")

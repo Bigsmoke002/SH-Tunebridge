@@ -85,6 +85,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | AudD, ACRCloud | Aufnahme-Ausschnitt (Audio) | **nur mit deiner Zustimmung**, getrennt für Desktop und Mikrofon |
 | Deezer, iTunes-Suche, Last.fm, MusicBrainz | Künstler und Titel (ggf. ISRC); zur Genre-Prüfung die Kennung des schon gefundenen Künstlers | nach einer Erkennung, beim Link-Einfügen, Sortieren und automatischen Abgleich (Cover, Hörprobe, Genre, Mikro-Genre) |
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
+| Deezer („Remixe & Versionen“) | Titel (ohne Versions-Zusatz) und Hauptkünstler des Songs | nur nach Klick auf „Remixe & Versionen suchen“; Ergebnis 7 Tage im lokalen Zwischenspeicher |
 | YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer (offizielle Player) | IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters | **erst nach deinem Klick** auf „Player laden“ (siehe unten) |
 | Webseiten, die du über „Öffnen“ oder „Kaufen“ aufrufst | IP-Adresse (dein Standard-Browser) | erst beim Klick |
 | Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud | Abruf deiner Playlists und Lieblingssongs; bei Spotify, TIDAL, YouTube und SoundCloud auf Wunsch Playlists anlegen/ergänzen und Songs liken | unter „Dienste“ und beim automatischen Abgleich – nur mit deinem verbundenen Konto bzw. deinem öffentlichen Profil |
@@ -322,6 +323,8 @@ mit „Nach Updates suchen“. GitHub sieht dabei die IP-Adresse und „SH-Tuneb
 nichts. Ein Update wird nur angeboten, wenn sein Manifest mit dem Release-Schlüssel signiert ist (geprüft mit der
 Bibliothek Bouncy Castle, MIT-Lizenz); das geladene APK wird mit Größe und SHA-256 aus dem Manifest verglichen und
 sonst verworfen. Android nimmt das Update zusätzlich nur an, wenn es mit demselben App-Schlüssel signiert ist.
+Während des Ladens zeigt die App den Fortschritt unten in der App und – falls du Benachrichtigungen erlaubt hast – als
+Benachrichtigung („App-Update“); das bleibt alles auf dem Handy.
 Die Entwicklerversion sucht nie nach Updates.
 
 **Verlauf aus der Shazam-App (nur mit Root, Standard: aus):** Auf gerooteten Handys kann die App unter
@@ -350,6 +353,9 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   sich selbst). Ist kein PC erreichbar, holt die App sie – nur wenn du es erlaubst („Ähnliche Songs ohne PC“, Standard:
   aus) – direkt bei Deezer: dafür gehen Titel und Künstler bzw. Deezer-Nummer/ISRC des Songs an Deezer, Deezer sieht
   deine IP-Adresse.
+- **Remixe & Versionen:** Wie „Ähnliche Songs“: vom gekoppelten PC (verschlüsselt, `/phone/v1/versions`; das Handy
+  schickt nur Titel, Künstler und Länge des Songs, der PC sucht bei Deezer). Ohne erreichbaren PC nur mit derselben
+  Erlaubnis („Ähnliche Songs & Versionen ohne PC“) direkt bei Deezer – mit Titel und Künstler; Deezer sieht deine IP-Adresse.
 - **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
   direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
 - **Dein PC:** siehe unten – im eigenen Netz direkt, unterwegs nur wenn du es einschaltest verschlüsselt über

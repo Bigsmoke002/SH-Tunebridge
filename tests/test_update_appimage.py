@@ -178,3 +178,67 @@ def test_restart_keeps_ui_port(monkeypatch):
     monkeypatch.setattr(sys, "argv", ["tunebridge", "ui", "--port", "8800", "--no-browser"])
     update.restart("ui")
     assert seen[0][-1].endswith("ui --port 8800 --no-browser")
+
+
+def test_download_reports_progress_and_errors(tmp_path, monkeypatch):
+    """Fortschritt fürs Update: Bytes beim Laden, danach Prüfen; falsche Prüfsumme -> Fehler mit Text."""
+    import hashlib
+    from contextlib import contextmanager
+    from types import SimpleNamespace
+
+    from tunebridge import backup
+    data = b"x" * (3 << 20)
+    seen = []
+
+    class Resp:
+        def raise_for_status(self):
+            pass
+
+        def iter_bytes(self, n):
+            for i in range(0, len(data), n):
+                yield data[i:i + n]
+                seen.append(update.progress())
+
+    class Client:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        @contextmanager
+        def stream(self, *a):
+            yield Resp()
+    monkeypatch.setattr(update, "_http", lambda: Client())
+    update._step(None)
+    assert update.progress()["phase"] is None
+    info = {"tag": "v0.6.0", "url": "u", "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+    update._download_verified(info, tmp_path / "f", hashlib.sha256())
+    assert [p["percent"] for p in seen] == [33, 67, 100] and seen[0]["phase"] == "laden" and seen[0]["total"] == len(data)
+    assert update.progress()["phase"] == "pruefen"
+
+    # Ganzer Ablauf mit kaputter Prüfsumme: Phase „fehler“ mit Meldung, danach ist ein neuer Versuch möglich
+    old = tmp_path / "SH-Tunebridge-0.5.0-x86_64.AppImage"
+    old.write_bytes(b"alt")
+    monkeypatch.setenv("APPIMAGE", str(old))
+    monkeypatch.setattr(backup, "create", lambda **k: SimpleNamespace(name="sicherung"))
+    update._prepared.clear()
+    update._prepared["appimage"] = {**info, "sha256": "falsch", "file": "SH-Tunebridge-0.6.0-x86_64.AppImage"}
+    with pytest.raises(RuntimeError, match="läuft bereits"):    # zweiter Start, während eins läuft
+        update.install()
+    update._step(None)
+    with pytest.raises(RuntimeError, match="Prüfsumme"):
+        update.install()
+    p = update.progress()
+    assert p["phase"] == "fehler" and "Prüfsumme" in p["error"]
+    assert old.read_bytes() == b"alt"                          # alte Version unangetastet
+    update._step(None)
+    update._prepared.clear()
+
+
+def test_progress_route():
+    from fastapi.testclient import TestClient
+
+    from tunebridge.web import app as webapp
+    update._step(None)
+    assert TestClient(webapp.app).get("/api/update/progress").json()["phase"] is None

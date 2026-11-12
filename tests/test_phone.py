@@ -360,6 +360,31 @@ def test_similar_for_phone_is_encrypted_and_replay_safe(monkeypatch):
         phone.handle_similar({"id": dev, "box": seal(ks, f"sync:{dev}", {**req, "rid": "s2"})})
 
 
+def test_versions_for_phone_is_encrypted_and_replay_safe(monkeypatch):
+    from tunebridge import remixes
+    seen = {}
+
+    def fake_find(t, limit=80):
+        seen["t"] = t
+        return [{"title": "Faded (X Remix)", "artists": ["Alan Walker"], "album": None, "duration_ms": 200000, "cover": "https://c/1",
+                 "preview_url": "https://p/1", "ids": {"deezer": "1"}, "link": "https://www.deezer.com/track/1",
+                 "kind": "remix", "label": "Remix von X", "rank": 5}]
+    monkeypatch.setattr(remixes, "find", fake_find)
+    dev, secret, _ = _pair()
+    ks = phone._kdf(secret, "sync")
+    req = {"ts": int(time.time() * 1000), "rid": "v1", "track": {"title": "Faded", "artists": ["Alan Walker"]}}
+    body = {"id": dev, "box": seal(ks, f"versions:{dev}", req)}
+    ans = unseal(ks, f"versions-ok:{dev}:v1", phone.handle_versions(body)["box"])
+    assert seen["t"].title == "Faded" and ans["core"] == "Faded" and ans["kinds"][0]["id"] == "original"
+    assert ans["items"] == [{"title": "Faded (X Remix)", "artists": ["Alan Walker"], "duration_ms": 200000, "cover": "https://c/1",
+                             "ids": {"deezer": "1"}, "link": "https://www.deezer.com/track/1", "kind": "remix", "label": "Remix von X"}]
+    with pytest.raises(phone.PhoneError) as e:
+        phone.handle_versions(body)
+    assert e.value.status == 409
+    with pytest.raises(phone.PhoneError):               # anderer Kontext -> passt nicht
+        phone.handle_versions({"id": dev, "box": seal(ks, f"similar:{dev}", {**req, "rid": "v2"})})
+
+
 def test_phone_can_choose_which_playlists_it_gets():
     from tunebridge import store
     from tunebridge.models import Track

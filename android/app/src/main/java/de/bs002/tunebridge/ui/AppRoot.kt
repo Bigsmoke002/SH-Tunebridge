@@ -145,11 +145,13 @@ private fun Main(toast: (String) -> Unit) {
                 }
                 composable("song/{uid}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     SongScreen(Uri.decode(it.arguments?.getString("uid").orEmpty()), back = { nav.popBackStack() },
-                        openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") })
+                        openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") },
+                        openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") })
                 }
                 composable("playlist/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     PlaylistScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() },
                         openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") },
+                        openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") },
                         openSet = { nav.navigate("setplan/${Uri.encode(Uri.decode(it.arguments?.getString("pc").orEmpty()))}/${Uri.encode(Uri.decode(it.arguments?.getString("name").orEmpty()))}") },
                         renamed = { n ->
                             val pcArg = Uri.decode(it.arguments?.getString("pc").orEmpty())
@@ -163,12 +165,16 @@ private fun Main(toast: (String) -> Unit) {
                 composable("similar", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     de.bs002.tunebridge.ui.screens.SimilarScreen(back = { nav.popBackStack() })
                 }
+                composable("versions", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    de.bs002.tunebridge.ui.screens.VersionsScreen(back = { nav.popBackStack() })
+                }
                 composable("pair", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     PairScreen(back = { nav.popBackStack() }, done = { msg -> toast(msg); nav.popBackStack() })
                 }
                 composable("privacy", enterTransition = { slide() }, popExitTransition = { slideOut() }) { PrivacyScreen(back = { nav.popBackStack() }) }
             }
         }
+        de.bs002.tunebridge.ui.screens.UpdateBanner(openMore = { nav.go(Tab.More) })
         de.bs002.tunebridge.ui.components.MiniPlayer(if (tab == null) Modifier.windowInsetsPadding(WindowInsets.navigationBars) else Modifier)
         if (tab != null) BottomBar(tab) { nav.go(it) }
     }
