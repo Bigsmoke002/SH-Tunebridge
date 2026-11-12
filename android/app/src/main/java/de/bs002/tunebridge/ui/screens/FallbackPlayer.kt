@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -27,7 +26,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -112,33 +110,39 @@ fun FallbackPlayer(t: Track, links: Map<String, String>, autoplay: Boolean) {
     }
 }
 
+private fun isEmbed(u: android.net.Uri): Boolean = when (u.host) {
+    "www.youtube-nocookie.com", "www.youtube.com" -> u.path.orEmpty().startsWith("/embed/")
+    "open.spotify.com" -> u.path.orEmpty().startsWith("/embed/")
+    else -> false
+}
+
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
 private fun EmbedView(kind: String, id: String, autoplay: Boolean) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    // Eigene Seite mit fester Herkunft: YouTube verlangt beim Einbetten eine Referrer-Herkunft (sonst Fehler 152/153)
-    val src = if (kind == "youtube") "https://www.youtube-nocookie.com/embed/$id?rel=0&playsinline=1${if (autoplay) "&autoplay=1" else ""}"
+    // Offizielle Player-Seite direkt laden (ein iframe in einer eigenen Seite blieb in der WebView schwarz).
+    // YouTube verlangt beim Einbetten eine Herkunft (sonst Fehler 152/153) – die geht als Referer mit.
+    val origin = "https://shtunebridge.bs002.de"
+    val src = if (kind == "youtube") "https://www.youtube-nocookie.com/embed/$id?rel=0&playsinline=1&origin=$origin" +
+        (if (autoplay) "&autoplay=1" else "")
         else "https://open.spotify.com/embed/track/$id?utm_source=generator&theme=0"
-    val html = """<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1">
-        <style>html,body{margin:0;background:#000;height:100%}iframe{border:0;width:100%;height:100%}</style></head>
-        <body><iframe src="$src" allow="autoplay; encrypted-media; fullscreen; picture-in-picture" allowfullscreen
-        referrerpolicy="strict-origin-when-cross-origin" title="Offizieller Player"></iframe></body></html>"""
     val web = remember(kind, id) {
         WebView(ctx).apply {
             settings.javaScriptEnabled = true            // der offizielle Player braucht JavaScript
             settings.domStorageEnabled = true
             settings.mediaPlaybackRequiresUserGesture = !autoplay
+            setBackgroundColor(android.graphics.Color.BLACK)
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
-                // Links aus dem Player (z. B. „Auf YouTube ansehen“) im Browser bzw. in der YouTube-App öffnen
+                // Der Player selbst bleibt hier; andere Links (z. B. „Auf YouTube ansehen“) im Browser bzw. in der App öffnen
                 override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
-                    if (!req.isForMainFrame) return false
+                    if (!req.isForMainFrame || isEmbed(req.url)) return false
                     runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, req.url)) }
                     return true
                 }
             }
-            loadDataWithBaseURL("https://shtunebridge.bs002.de/", html, "text/html", "utf-8", null)
+            loadUrl(src, mapOf("Referer" to "$origin/"))
         }
     }
     DisposableEffect(owner, web) {
@@ -154,7 +158,7 @@ private fun EmbedView(kind: String, id: String, autoplay: Boolean) {
         onDispose { owner.lifecycle.removeObserver(obs); web.stopLoading(); web.loadUrl("about:blank"); web.destroy() }
     }
     val ratio = if (kind == "youtube") 16f / 9f else 2.2f
-    AndroidView({ web }, Modifier.fillMaxWidth().aspectRatio(ratio).clip(RoundedCornerShape(Tb.radiusSm)))
+    AndroidView({ web }, Modifier.fillMaxWidth().aspectRatio(ratio))   // ohne clip: beschnittene WebViews blieben teils schwarz
 }
 
 /** Einwilligung je Anbieter – derselbe Text wie am PC. */
