@@ -9,11 +9,14 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** Nur von Hand: echte Anfrage an Shazam mit build/livetest/clip.raw (16 kHz, mono, s16le). */
+/**
+ * Nur von Hand: echte Anfrage an Shazam mit build/livetest/clip.raw (16 kHz, mono, s16le).
+ * Läuft nur mit TB_LIVETEST=1 – sonst würde eine liegengebliebene Aufnahme den (Release-)Bau vom Internet abhängig machen.
+ */
 class LiveShazamTest {
     @Test fun recognizesClip() = runBlocking {
         val f = File("build/livetest/clip.raw")
-        assumeTrue(f.exists())
+        assumeTrue(System.getenv("TB_LIVETEST") == "1" && f.exists())
         val b = ByteBuffer.wrap(f.readBytes()).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         val pcm = ShortArray(b.remaining()).also { b.get(it) }
         val sig = ShazamSignature.from(ShazamSignature.middle(pcm))
