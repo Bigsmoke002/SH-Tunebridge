@@ -510,6 +510,30 @@ def handle_versions(body: dict, client: str | None = None) -> dict:
                                                               "items": out}, limit=None)}
 
 
+def handle_fallback(body: dict, client: str | None = None) -> dict:
+    """Ersatz-Player fürs Handy (fallback.py): Kennung des YouTube-Videos bzw. Spotify-Songs. Das Handy nennt die
+    Anbieter, für die du *am Handy* eingewilligt hast (consent); ohne Angabe sucht der PC nichts."""
+    dev_id = str(body.get("id") or "")[:32]
+    d = _device(dev_id)
+    key = _kdf(base64.b64decode(d["secret"]), "sync")
+    try:
+        req = unseal(key, f"fallback:{dev_id}", str(body.get("box") or ""))
+    except ShareError:
+        raise PhoneError("Anfrage ließ sich nicht prüfen – bitte neu koppeln", 403) from None
+    rid = str(req.get("rid") or "")[:64]
+    _replay_check(int(req.get("ts") or 0), rid)
+    from . import fallback
+    kinds = [k for k in (req.get("consent") or []) if k in fallback.KINDS]
+    if not kinds:
+        raise PhoneError("Ersatz-Player ist am Handy nicht erlaubt", 403)
+    t = _track(req.get("track") or {})
+    if t.title == "?":
+        raise PhoneError("Song fehlt")
+    known = {k: str((req.get("known") or {}).get(k) or "")[:22] for k in fallback.KINDS}
+    res = fallback.resolve(t, known, kinds=kinds)
+    return {"box": seal(key, f"fallback-ok:{dev_id}:{rid}", res, limit=None)}
+
+
 def _items_out(items: list[dict]) -> list[dict]:
     keep = ("title", "artists", "album", "cover", "duration_ms", "isrc", "ids", "preview_url", "bpm", "camelot", "key", "energy",
             "genre", "subgenre")
@@ -930,6 +954,11 @@ def _make_app():
     async def similar_songs(request: Request):
         import asyncio
         return await asyncio.to_thread(handle_similar, await body_of(request), _client(request))
+
+    @api.post("/phone/v1/fallback")
+    async def fallback_player(request: Request):
+        import asyncio
+        return await asyncio.to_thread(handle_fallback, await body_of(request), _client(request))
 
     @api.post("/phone/v1/versions")
     async def versions_songs(request: Request):

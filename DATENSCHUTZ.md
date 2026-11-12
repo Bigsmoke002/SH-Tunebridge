@@ -85,6 +85,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | AudD, ACRCloud | Aufnahme-Ausschnitt (Audio) | **nur mit deiner Zustimmung**, getrennt für Desktop und Mikrofon |
 | Deezer, iTunes-Suche, Last.fm, MusicBrainz | Künstler und Titel (ggf. ISRC); zur Genre-Prüfung die Kennung des schon gefundenen Künstlers | nach einer Erkennung, beim Link-Einfügen, Sortieren und automatischen Abgleich (Cover, Hörprobe, Genre, Mikro-Genre) |
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
+| YouTube (Google LLC, USA) / Spotify AB („Ersatz-Hörprobe“, Standard: aus) | Beim Laden des eingebetteten offiziellen Players: IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters. Zum Finden des Videos: Titel und Künstler an die offizielle YouTube-Suche (mit deinem eigenen YouTube-Schlüssel bzw. deiner YouTube-Verbindung) bzw. an die Spotify-Suche deiner verbundenen Spotify-App | nur wenn du es je Anbieter erlaubt hast (Einstellungen › Datenschutz) **und** Deezer/Apple keine Hörprobe haben; gefundene Kennungen höchstens 30 Tage lokal gemerkt, beim Widerruf gelöscht. Es gelten die [YouTube-Nutzungsbedingungen](https://www.youtube.com/t/terms), die [Datenschutzerklärung von Google](https://policies.google.com/privacy) bzw. die [Datenschutzhinweise von Spotify](https://www.spotify.com/de/legal/privacy-policy/) |
 | Deezer („Remixe & Versionen“) | Titel (ohne Versions-Zusatz) und Hauptkünstler des Songs | nur nach Klick auf „Remixe & Versionen suchen“; Ergebnis 7 Tage im lokalen Zwischenspeicher |
 | YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer (offizielle Player) | IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters | **erst nach deinem Klick** auf „Player laden“ (siehe unten) |
 | Webseiten, die du über „Öffnen“ oder „Kaufen“ aufrufst | IP-Adresse (dein Standard-Browser) | erst beim Klick |
@@ -353,6 +354,13 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   sich selbst). Ist kein PC erreichbar, holt die App sie – nur wenn du es erlaubst („Ähnliche Songs ohne PC“, Standard:
   aus) – direkt bei Deezer: dafür gehen Titel und Künstler bzw. Deezer-Nummer/ISRC des Songs an Deezer, Deezer sieht
   deine IP-Adresse.
+- **Ersatz-Hörprobe (Standard: aus):** Nur wenn du es je Anbieter erlaubst (Mehr › Datenschutz) und für einen Song
+  keine Hörprobe bei Deezer/Apple da ist, zeigt die Song-Seite den offiziellen YouTube- bzw. Spotify-Player –
+  sichtbar eingebettet, er hält an, sobald die App in den Hintergrund geht, und endet beim Verlassen der Seite
+  (YouTube-Richtlinien: kein Ton ohne Bild, nichts im Hintergrund, nichts wird heruntergeladen). Beim Laden sehen
+  Google bzw. Spotify IP-Adresse und Geräteinfos und können Cookies setzen. Die Kennung des Videos kommt aus schon
+  bekannten Links des Songs oder verschlüsselt vom gekoppelten PC (`/phone/v1/fallback`; das Handy schickt Titel,
+  Künstler, ggf. ISRC/bekannte Kennungen und die erlaubten Anbieter, der PC sucht mit seinem YouTube-Zugang).
 - **Remixe & Versionen:** Wie „Ähnliche Songs“: vom gekoppelten PC (verschlüsselt, `/phone/v1/versions`; das Handy
   schickt nur Titel, Künstler und Länge des Songs, der PC sucht bei Deezer). Ohne erreichbaren PC nur mit derselben
   Erlaubnis („Ähnliche Songs & Versionen ohne PC“) direkt bei Deezer – mit Titel und Künstler; Deezer sieht deine IP-Adresse.

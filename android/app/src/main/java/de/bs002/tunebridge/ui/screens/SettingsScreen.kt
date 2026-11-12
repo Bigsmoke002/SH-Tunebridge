@@ -154,6 +154,10 @@ fun SettingsScreen(openPair: () -> Unit, openPc: (String) -> Unit, openPrivacy: 
                     App.repo.updateSettings { it.copy(similarDirect = v) }
                 }
                 Hairline()
+                var fbAsk by remember { mutableStateOf(false) }
+                NavRow("Ersatz-Hörprobe (YouTube/Spotify): ${listOfNotNull("YouTube".takeIf { s.fallbackYoutube }, "Spotify".takeIf { s.fallbackSpotify }).joinToString(", ").ifEmpty { "aus" }}") { fbAsk = true }
+                if (fbAsk) FallbackConsentDialog { fbAsk = false }
+                Hairline()
                 NavRow("Was die App sendet und speichert", openPrivacy)
             }
 
@@ -204,6 +208,7 @@ fun PrivacyScreen(back: () -> Unit) {
                 Triple(Ico.Disc, "Cover & Hörproben", "Cover nur, wenn eingeschaltet; Hörproben erst nach Tippen auf „Reinhören“ oder „Abspielen“. Beides kommt von Apple bzw. Deezer, die dabei deine IP-Adresse sehen. Gesteuert wird der Player auch über Benachrichtigung, Sperrbildschirm und Kopfhörer-Tasten – das bleibt auf dem Handy. Ist eine Deezer-Adresse abgelaufen, fragt die App bei Deezer mit Song-Nummer, ISRC oder Künstler + Titel nach der aktuellen."),
                 Triple(Ico.Shield, "Shazam-App (nur Root)", "Nur wenn du es unter Mehr › Shazam-App startest und die Warnung bestätigst: Die App liest aus der Datenbank der Shazam-App nur Song-Nummer, Titel, Künstler und Zeitpunkt deiner Shazams – keinen Standort, keine Signatur, keine Kontodaten – und löscht die Kopie sofort."),
                 Triple(Ico.Sparkle, "Ähnliche Songs", "Vom gekoppelten PC (verschlüsselt, wie der Abgleich). Ist keiner erreichbar und hast du es erlaubt, direkt bei Deezer: Titel, Künstler bzw. Deezer-Nummer/ISRC des Songs – Deezer sieht deine IP-Adresse."),
+                Triple(Ico.Play, "Ersatz-Hörprobe (Standard: aus)", "Nur wenn du es je Anbieter erlaubst und Deezer/Apple keine Hörprobe haben: offizieller YouTube- bzw. Spotify-Player, sichtbar eingebettet. Beim Laden sehen Google bzw. Spotify IP-Adresse und Geräteinfos und können Cookies setzen. Die Video-Kennung kommt aus bekannten Links oder verschlüsselt vom PC (der sucht bei YouTube mit Titel und Künstler)."),
                 Triple(Ico.Disc, "Remixe & Versionen", "Genauso: vom PC (verschlüsselt; Titel, Künstler, Länge) oder – mit derselben Erlaubnis – direkt bei Deezer mit Titel und Künstler."),
                 Triple(Ico.Sync, "Updates (GitHub)", "Nur wenn „Automatisch nach Updates suchen“ an ist (höchstens einmal am Tag) oder du selbst suchst: GitHub sieht deine IP-Adresse. Installiert wird nur eine signierte, geprüfte Version – und erst, wenn du im Android-Installer bestätigst."),
                 Triple(Ico.Monitor, "Dein PC", "Abgleich direkt im eigenen Netz, ohne Server dazwischen – nur mit PCs, denen du hier und am PC zugestimmt hast, und nur über die Adressen, die du je PC auswählst. Gesendet wird nur, wenn das Handy gerade im Netz dieses PCs ist. Dafür liest die App – erst nach deiner Zustimmung – die eigenen Netzwerkkarten (IP-Adresse, Netz), ohne Standort-Berechtigung; widerrufbar unter Mehr › Datenschutz. Jede Nachricht ist mit AES-256-GCM verschlüsselt; der Schlüssel entsteht beim Koppeln und verlässt Handy und PC nie. Mix erstellen und Set-Planer rechnen ebenfalls dort: Das Handy schickt nur Suchbegriff, Künstler/Genre oder Playlist-Namen."),

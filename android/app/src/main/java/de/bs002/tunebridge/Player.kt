@@ -37,6 +37,10 @@ object Player {
     }
 
     private var mp: MediaPlayer? = null
+
+    /** Song (key), für den gerade keine Hörprobe zu finden war – die Song-Seite bietet dann den Ersatz-Player an. */
+    private val _failed = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val failed: kotlinx.coroutines.flow.StateFlow<String?> = _failed
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private var job: Job? = null
     private var misses = 0
@@ -135,6 +139,7 @@ object Player {
         job = scope.launch {
             val url = withContext(Dispatchers.IO) { Previews.resolve(t) }
             if (url == null) {
+                if (s.queue.size == 1) { _failed.value = t.key; stop(); return@launch }   // einzelner Song: Ersatz-Player anbieten
                 // Keine Hörprobe zu finden: nächster Song – nach 5 Fehlschlägen in Folge aufhören
                 if (++misses >= 5) { misses = 0; stop() } else next()
                 return@launch

@@ -1037,6 +1037,45 @@ def versions_add(req: VersionAddReq):
     return {"added": bool(added), "playlist": name}
 
 
+# ------------------------------------------------------------------ Ersatz-Hörprobe (YouTube/Spotify-Player)
+@app.get("/api/fallback/settings")
+def fallback_settings():
+    from .. import fallback
+    return {**fallback.settings(), **fallback.sources()}
+
+
+@app.post("/api/fallback/settings")
+def fallback_settings_set(data: dict):
+    from .. import fallback
+    fallback.save({k: data[k] for k in fallback.KINDS if k in data})
+    return {**fallback.settings(), **fallback.sources()}
+
+
+@app.get("/api/fallback")
+async def fallback_get(id: int | None = None, key: str | None = None, artist: str = "", title: str = "", isrc: str = "",
+                       dz: str = "", yt: str = "", sp: str = ""):
+    """Kennung für den offiziellen YouTube-/Spotify-Player – nur mit Einwilligung (sonst 403)."""
+    from .. import fallback
+    if not any(fallback.settings()[k] for k in fallback.KINDS):
+        raise HTTPException(403, "Ersatz-Player ist aus – erst unter Einstellungen › Datenschutz erlauben.")
+    if id is not None and (got := store.get_recognition(id)):
+        t = got[0]
+    elif key and (t := store.find_track(key)):
+        pass
+    elif title.strip():
+        t = Track(title=title.strip()[:300], artists=[artist.strip()[:200]] if artist.strip() else [],
+                  isrc=isrc.strip().upper()[:12] or None, ids={"deezer": dz} if dz.isdigit() else {})
+    else:
+        raise HTTPException(404, "Song nicht gefunden")
+    try:
+        res = await asyncio.to_thread(fallback.resolve, t, {"youtube": yt.strip()[:11], "spotify": sp.strip()[:22]})
+    except fallback.NotAllowed as e:
+        raise HTTPException(403, str(e))
+    (dbg.event if res["youtube"] or res["spotify"] else dbg.problem)(
+        "ersatz-player", "Ersatz-Player gesucht", song=f"{t.artist} – {t.title}", **{k: v for k, v in res["via"].items()})
+    return res
+
+
 @app.get("/api/audiofeat")
 def audiofeat_get(id: int | None = None, key: str | None = None, artist: str = "", title: str = "", isrc: str = "", dz: str = ""):
     """Tempo / Tonart / Energie eines Songs (Speicher oder 30-s-Hörprobe von Deezer). {} = keine Hörprobe."""

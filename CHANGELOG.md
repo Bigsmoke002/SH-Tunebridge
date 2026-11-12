@@ -10,6 +10,13 @@ Der Updater installiert nur signierte Versionen.
   Mit Hörprobe, Links zu Spotify/YouTube & Co. und „In Playlist“. Karaoke-, Tribute- und Workout-Füllware wird
   aussortiert; gleichnamige Songs anderer Künstler nur, wenn die Länge zum Original passt. Quelle: Deezer (ohne Login),
   nur nach Klick; am Handy über den PC oder – mit der Erlaubnis für „Ähnliche Songs ohne PC“ – direkt.
+- **Ersatz-Hörprobe über YouTube und Spotify:** Haben Deezer und Apple keine Hörprobe, zeigt die Song-Ansicht (PC und
+  Handy) den offiziellen YouTube- bzw. Spotify-Player – automatisch, sichtbar eingebettet; „Reinhören“ startet ihn
+  direkt. Nur nach einmaliger Einwilligung je Anbieter (Einstellungen › Datenschutz, Standard: aus), am Server
+  geprüft. Das Video findet die App über bekannte Links oder die offizielle YouTube-Suche mit deinem eigenen
+  YouTube-Zugang (am Handy über den gekoppelten PC). Spotify nur mit bekanntem Spotify-Link. Gemäß den
+  YouTube-Richtlinien kein Ton ohne Bild und nichts im Hintergrund – am Handy hält der Player an, sobald die App in
+  den Hintergrund geht.
 - **Update mit Fortschrittsbalken:** Am PC zeigt der Update-Dialog Sicherung, Laden (MB und Prozent), Prüfsumme und
   Installation mit Balken; links in der Seitenleiste steht währenddessen der Stand („Update lädt … 42 %“). Am Handy
   lädt das Update im Hintergrund weiter, auch wenn du die Seite wechselst – mit Balken unten in der App und einer

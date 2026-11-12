@@ -88,7 +88,9 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {},
         return
     }
     val playing by Player.playing.collectAsState()
+    val failed by Player.failed.collectAsState()
     var pick by remember { mutableStateOf(false) }
+    var fbAuto by remember { mutableStateOf(false) }
     val t = rec.track
     val x = rec.extra
 
@@ -126,7 +128,7 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {},
                 t.previewUrl?.let { url ->
                     TbButton(if (playing == url) "Stopp" else "Reinhören", { Player.toggle(url, t) }, kind = BtnKind.Primary,
                         icon = if (playing == url) Ico.Pause else Ico.Play)
-                }
+                } ?: TbButton("Reinhören", { fbAuto = true }, kind = BtnKind.Primary, icon = Ico.Play)
                 TbButton("Zur Playlist", { pick = true }, icon = Ico.Plus)
             }
             Spacer(Modifier.height(8.dp))
@@ -144,6 +146,9 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {},
                 }} · ${Fmt.ago(rec.ts)}",
                 style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 14.dp),
             )
+
+            // Keine Hörprobe (oder sie ließ sich nicht laden): offizieller YouTube-/Spotify-Player als Ersatz
+            if (t.previewUrl == null || failed == t.key || fbAuto) FallbackPlayer(t, x.links(), autoplay = fbAuto || failed == t.key)
 
             SectionLabel("Anhören & öffnen")
             LinkGrid(t, x.links())

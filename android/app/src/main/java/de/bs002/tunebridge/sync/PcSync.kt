@@ -328,6 +328,48 @@ class PcSync(private val repo: Repository) {
             null
         }
 
+    /**
+     * Ersatz-Player: Kennung des YouTube-Videos bzw. Spotify-Songs vom PC (fallback.py) – der PC sucht mit seinem
+     * YouTube-Zugang. [kinds] = Anbieter, für die du am Handy eingewilligt hast. null = kein PC erreichbar.
+     */
+    suspend fun fallback(track: de.bs002.tunebridge.data.Track, kinds: List<String>, known: Map<String, String>): Map<String, String?>? =
+        withContext(Dispatchers.IO) {
+            if (!Nets.allowed() || kinds.isEmpty()) return@withContext null
+            val nets = Nets.current()
+            for (link in repo.settings.value.pcs) {
+                val addrs = reachable(link, nets).ifEmpty { continue }
+                val rid = UUID.randomUUID().toString()
+                val payload = buildJsonObject {
+                    put("ts", System.currentTimeMillis()); put("rid", rid)
+                    put("consent", kotlinx.serialization.json.JsonArray(kinds.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                    put("known", buildJsonObject { known.forEach { (k, v) -> put(k, v) } })
+                    put("track", buildJsonObject {
+                        put("title", track.title)
+                        put("artists", kotlinx.serialization.json.JsonArray(track.artists.map { kotlinx.serialization.json.JsonPrimitive(it) }))
+                        track.isrc?.let { put("isrc", it) }
+                        if (track.ids.isNotEmpty()) put("ids", buildJsonObject { track.ids.forEach { (k, v) -> put(k, v) } })
+                    })
+                }.toString()
+                val key = syncKey(link.secret)
+                val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "fallback:${link.deviceId}", payload)) }.toString()
+                val answer = try {
+                    anyAddr(listOfNotNull(link.lastAddr).filter { it in addrs }.ifEmpty { addrs }) { post(Http.lan, it, "/phone/v1/fallback", body) }.second
+                } catch (e: PairError) {
+                    if (e.message?.startsWith("PC nicht erreichbar") == true) continue
+                    if (e.message?.contains("Not Found") == true) continue          // ältere PC-Version
+                    throw e
+                }
+                val box = repo.json.parseToJsonElement(answer).jsonObject["box"]?.jsonPrimitive?.content ?: throw PairError("Unerwartete Antwort vom PC")
+                val plain = runCatching { Crypto.unseal(key, "fallback-ok:${link.deviceId}:$rid", box) }
+                    .getOrElse { throw PairError("Antwort des PCs ließ sich nicht prüfen – bitte neu koppeln") }
+                val o = repo.json.parseToJsonElement(plain).jsonObject
+                return@withContext listOf("youtube", "spotify").associateWith { k ->
+                    (o[k] as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content
+                }
+            }
+            null
+        }
+
     /** Remixe, Covers & andere Versionen vom PC (remixes.py). null = kein PC erreichbar. */
     suspend fun versions(track: de.bs002.tunebridge.data.Track): de.bs002.tunebridge.net.VersionResult? =
         withContext(Dispatchers.IO) {

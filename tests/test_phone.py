@@ -385,6 +385,21 @@ def test_versions_for_phone_is_encrypted_and_replay_safe(monkeypatch):
         phone.handle_versions({"id": dev, "box": seal(ks, f"similar:{dev}", {**req, "rid": "v2"})})
 
 
+def test_fallback_for_phone_needs_phone_consent(monkeypatch):
+    from tunebridge import fallback
+    monkeypatch.setattr(fallback, "_youtube_search", lambda t: "ddddddddddd")
+    monkeypatch.setattr(fallback, "_spotify_search", lambda t: (_ for _ in ()).throw(AssertionError("nicht erlaubt")))
+    dev, secret, _ = _pair()
+    ks = phone._kdf(secret, "sync")
+    base = {"track": {"title": "Faded", "artists": ["Alan Walker"]}}
+    with pytest.raises(phone.PhoneError) as e:                 # ohne Einwilligung am Handy: nichts
+        phone.handle_fallback({"id": dev, "box": seal(ks, f"fallback:{dev}", {**base, "ts": int(time.time() * 1000), "rid": "f0"})})
+    assert e.value.status == 403
+    req = {**base, "ts": int(time.time() * 1000), "rid": "f1", "consent": ["youtube"], "known": {"spotify": "x"}}
+    ans = unseal(ks, f"fallback-ok:{dev}:f1", phone.handle_fallback({"id": dev, "box": seal(ks, f"fallback:{dev}", req)})["box"])
+    assert ans["youtube"] == "ddddddddddd" and ans["spotify"] is None
+
+
 def test_phone_can_choose_which_playlists_it_gets():
     from tunebridge import store
     from tunebridge.models import Track

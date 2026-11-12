@@ -282,6 +282,7 @@ const Player = {
     this.audio.onerror = () => {
       if (!this.track) return;
       if (this.qi >= 0) return this.next();
+      if (Fallback.offerFor(this.track)) return;
       toast("Für diesen Song gibt es gerade keine Hörprobe", "err");
       $("#pTitle").textContent = this.track.title;
     };
@@ -341,7 +342,9 @@ const Player = {
     }).catch(() => {
       if (this.track !== t) return;
       if (this.qi >= 0) return this.next();
-      toast("Für diesen Song gibt es gerade keine Hörprobe", "err"); $("#pTitle").textContent = t.title;
+      $("#pTitle").textContent = t.title;
+      if (Fallback.offerFor(t)) return;
+      toast("Für diesen Song gibt es gerade keine Hörprobe", "err");
     });
     this.audio.addEventListener("playing", () => { $("#pTitle").textContent = t.title; }, { once: true });
     $("#pArtist").textContent = (t.artists || []).join(", ");
@@ -626,7 +629,8 @@ function detailHtml(r) {
       ${meta ? `<div class="track-meta">${meta}</div>` : ""}
       <div class="track-chips">${chips}</div>
       <div class="track-actions">
-        <button class="btn btn--primary btn--sm" ${playAttr(t)}>${icon("play")}Reinhören</button>
+        ${t.preview_url ? `<button class="btn btn--primary btn--sm" ${playAttr(t)}>${icon("play")}Reinhören</button>`
+          : `<button class="btn btn--primary btn--sm" data-role="fbplay" title="Keine Hörprobe bei Deezer/Apple – offizieller YouTube- bzw. Spotify-Player als Ersatz">${icon("play")}Reinhören</button>`}
         ${links}
         ${r.id != null && (x.cached || x.local) ? `<button class="btn btn--sm btn--ghost" data-role="refresh" title="Genre, Cover, Hörprobe und Links frisch online nachschlagen">${icon("repeat")}Infos neu laden</button>` : ""}
         <button class="btn btn--sm btn--ghost" data-role="aianalyze" title="Song von der gewählten KI einschätzen lassen">${icon("sparkle")}KI-Analyse</button>
@@ -714,6 +718,7 @@ async function loadLinks(root, r) {
       <span class="otile-txt"><span class="otile-name">${esc(l.name)}</span><span class="otile-kind">${l.direct ? "Direkt zum Song" : "Suche"}</span></span>
       ${icon(l.direct ? "external" : "search", "otile-ico")}</a>`).join("");
     Embeds.setup(root, list);
+    Fallback.bind(root, r, list);
   } catch { _linkCache.delete(q); box.remove(); }
 }
 
@@ -781,6 +786,110 @@ const Embeds = {
       <div class="emb-foot"><span>Offizieller Player von ${esc(this.NAMES[e.id])} – gespielt wird direkt beim Anbieter.</span><button class="btn btn--sm btn--ghost" data-unload>${icon("x")}Player schließen</button></div>`;
     hydrateIcons(box);
     $("[data-unload]", box).onclick = () => { box.innerHTML = ""; $$(".seg-btn", box.parentElement).forEach(b => b.classList.remove("on")); };
+  },
+};
+
+/* ---------- Ersatz-Hörprobe: offizieller YouTube-/Spotify-Player, wenn Deezer/Apple keine Hörprobe haben.
+   Nur sichtbar eingebettet (YouTube-Richtlinien: kein Ton ohne Bild, nichts im Hintergrund), nur nach Einwilligung
+   je Anbieter – die prüft auch der Server (/api/fallback antwortet sonst 403). */
+const Fallback = {
+  s: null,
+  cur: null,                      // gerade offene Song-Ansicht {root, r, links}
+  TERMS: { youtube: "https://www.youtube.com/t/terms", google: "https://policies.google.com/privacy?hl=de", spotify: "https://www.spotify.com/de/legal/privacy-policy/" },
+  async get(force = false) {
+    if (!this.s || force) this.s = await api("/api/fallback/settings").catch(() => null);
+    return this.s;
+  },
+  bind(root, r, links) {
+    this.cur = { root, r, links };
+    const t = r.track || {};
+    const btn = $("[data-role=fbplay]", root);
+    if (btn) btn.onclick = () => this.run(root, r, links, true);
+    if (!t.preview_url) this.run(root, r, links, false);
+  },
+  // Hörprobe ließ sich nicht laden: Ersatz in der offenen Song-Ansicht anbieten. true = übernommen.
+  offerFor(t) {
+    const c = this.cur;
+    if (!c || !c.root.isConnected || (c.r.track || {}).title !== t.title) return false;
+    this.run(c.root, c.r, c.links, true);
+    return true;
+  },
+  vid(links, kind) {
+    for (const l of links || []) {
+      const e = Embeds.from(l);
+      if (!e || e.id !== kind) continue;
+      const m = kind === "youtube" ? e.src.match(/embed\/([\w-]{11})/) : e.src.match(/track\/([A-Za-z0-9]{22})/);
+      if (m) return m[1];
+    }
+    return "";
+  },
+  async run(root, r, links, autoplay) {
+    const card = $("[data-role=embeds]", root);
+    if (!card) return;
+    const s = await this.get();
+    if (!s) return;
+    const sec = card.closest(".lsec"); if (sec) sec.hidden = false;
+    card.classList.remove("hidden");
+    const tabs = $("[data-role=embtabs]", card), box = $("[data-role=embbox]", card);
+    if (autoplay) card.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (!s.youtube && !s.spotify) return this.gate(box, () => this.run(root, r, links, autoplay));
+    box.innerHTML = `<div class="cell-sub" style="padding:10px 2px">${icon("search")} Suche den offiziellen Player als Ersatz …</div>`;
+    const t = r.track || {};
+    const q = new URLSearchParams(r.id != null ? { id: r.id } : r.key ? { key: r.key } : { artist: (t.artists || [])[0] || "", title: t.title || "" });
+    if (t.isrc) q.set("isrc", t.isrc);
+    if (t.ids?.deezer) q.set("dz", t.ids.deezer);
+    const yt = this.vid(links, "youtube"), sp = this.vid(links, "spotify");
+    if (yt) q.set("yt", yt); if (sp) q.set("sp", sp);
+    let res;
+    try { res = await api(`/api/fallback?${q}`); }
+    catch (e) { box.innerHTML = `<div class="cell-sub" style="padding:10px 2px">${esc(e.message)}</div>`; hydrateIcons(box); return; }
+    const list = [];
+    if (res.youtube) list.push({ id: "youtube", src: `https://www.youtube-nocookie.com/embed/${res.youtube}?rel=0${autoplay ? "&autoplay=1" : ""}`, h: 0 });
+    if (res.spotify) list.push({ id: "spotify", src: `https://open.spotify.com/embed/track/${res.spotify}?utm_source=generator&theme=0`, h: 152 });
+    if (!list.length) {
+      const hint = s.youtube && !s.youtube_key && !s.youtube_app ? " Tipp: Mit einem eigenen YouTube-API-Schlüssel (Einstellungen) sucht die App auch direkt bei YouTube." : "";
+      box.innerHTML = `<div class="cell-sub" style="padding:10px 2px;white-space:normal">Auch bei ${[s.youtube && "YouTube", s.spotify && "Spotify"].filter(Boolean).join(" und ")} kein passender Player gefunden.${hint}</div>`;
+      return;
+    }
+    tabs.innerHTML = list.map(e => `<button class="seg-btn" data-fb="${e.id}" style="--pc:${PLATFORM_COLORS[e.id]}"><span class="plat-dot"></span>${Embeds.NAMES[e.id]}</button>`).join("");
+    const show = e => {
+      $$("[data-fb]", tabs).forEach(b => b.classList.toggle("on", b.dataset.fb === e.id));
+      Embeds.load(box, e);
+      const foot = $(".emb-foot span", box);
+      if (foot) foot.textContent = `Ersatz-Hörprobe: offizieller ${Embeds.NAMES[e.id]}-Player (Deezer/Apple haben keine) – gespielt wird direkt bei ${Embeds.NAMES[e.id]}${res.via?.[e.id] ? ` · gefunden über ${res.via[e.id]}` : ""}.`;
+    };
+    $$("[data-fb]", tabs).forEach(b => b.onclick = () => show(list.find(e => e.id === b.dataset.fb)));
+    show(list[0]);
+  },
+  gate(box, then) {
+    if (store.get("fbNoAsk", false)) { box.innerHTML = `<div class="cell-sub" style="padding:10px 2px">Keine Hörprobe bei Deezer/Apple. Ersatz-Player kannst du unter Einstellungen › Datenschutz erlauben.</div>`; return; }
+    box.innerHTML = `<div class="emb-gate">
+      <div class="emb-gate-ico" style="--pc:${PLATFORM_COLORS.youtube}">▶</div>
+      <div><b>Keine Hörprobe bei Deezer oder Apple</b>
+        <p>Als Ersatz kann die App den offiziellen YouTube- oder Spotify-Player einbetten – sichtbar, direkt beim Anbieter. Das musst du einmal ausdrücklich erlauben.</p>
+        <div class="btn-row"><button class="btn btn--sm btn--primary" data-fb-ok>${icon("play")}Ersatz-Player einrichten …</button>
+          <button class="btn btn--sm btn--ghost" data-fb-no>Nicht mehr fragen</button></div></div></div>`;
+    hydrateIcons(box);
+    $("[data-fb-ok]", box).onclick = () => this.dialog(then);
+    $("[data-fb-no]", box).onclick = () => { store.set("fbNoAsk", true); this.gate(box, then); };
+  },
+  async dialog(then) {
+    const s = await this.get(true) || {};
+    modal({
+      title: "Ersatz-Hörprobe über YouTube / Spotify",
+      text: "Gibt es bei Deezer und Apple keine Hörprobe, zeigt die App den offiziellen Player des Anbieters – automatisch in der Song-Ansicht, nur sichtbar und nur dort (kein Ton im Hintergrund, nichts wird heruntergeladen).",
+      body: `<div class="set-group" style="display:grid;gap:12px">
+        <label class="switch-row"><input type="checkbox" id="fbYt" ${s.youtube ? "checked" : ""}> <span><b>YouTube</b> (Google LLC, USA): Beim Laden des Players gehen deine IP-Adresse und Geräteinfos an Google, Daten können in die USA gehen; beim Abspielen kann YouTube Cookies setzen. Das Video kommt aus schon bekannten Links des Songs oder – falls eingerichtet – aus der offiziellen YouTube-Suche mit deinem eigenen YouTube-Schlüssel bzw. deiner YouTube-Verbindung (dafür gehen Titel und Künstler an Google).
+          Es gelten die <a href="${this.TERMS.youtube}" target="_blank" rel="noopener">YouTube-Nutzungsbedingungen</a> und die <a href="${this.TERMS.google}" target="_blank" rel="noopener">Datenschutzerklärung von Google</a>.</span></label>
+        <label class="switch-row"><input type="checkbox" id="fbSp" ${s.spotify ? "checked" : ""}> <span><b>Spotify</b> (Spotify AB, Schweden): Der Player spielt ohne Anmeldung eine Vorschau; Spotify sieht IP-Adresse und Geräteinfos und kann Cookies setzen. Der Song kommt aus schon bekannten Links oder – falls verbunden – aus der Suche über deine Spotify-App (Titel/Künstler bzw. ISRC an Spotify). <a href="${this.TERMS.spotify}" target="_blank" rel="noopener">Datenschutzhinweise von Spotify</a>.</span></label>
+        <div class="cell-sub" style="white-space:normal">Gefundene Kennungen merkt sich die App höchstens 30 Tage. Jederzeit widerrufbar unter Einstellungen › Datenschutz.</div></div>`,
+      confirm: "Speichern",
+      onConfirm: async box => {
+        this.s = await api("/api/fallback/settings", { method: "POST", body: { youtube: $("#fbYt", box).checked, spotify: $("#fbSp", box).checked } });
+        toast(this.s.youtube || this.s.spotify ? "Ersatz-Player erlaubt" : "Ersatz-Player aus");
+        if (then) setTimeout(then, 50);
+      },
+    });
   },
 };
 
@@ -4629,6 +4738,7 @@ const Privacy = {
       ["Spotify, TIDAL, Deezer, Last.fm, YouTube, SoundCloud", "Abruf deiner Playlists und Likes, bei Spotify/TIDAL auf Wunsch neue Playlists anlegen", "unter „Dienste“ und beim automatischen Abgleich (nur verbundene Dienste)"],
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
+      ["YouTube / Spotify („Ersatz-Hörprobe“)", "beim Laden des offiziellen Players: IP-Adresse, Geräteinfos, ggf. Cookies; zum Finden: Titel + Künstler an die YouTube-Suche (eigener Zugang)", "nur nach Einwilligung je Anbieter und nur, wenn Deezer/Apple keine Hörprobe haben"],
       ["Deezer („Remixe & Versionen“)", "Titel und Hauptkünstler des Songs", "nur nach Klick auf „Remixe & Versionen suchen“"],
       ["Deezer („Mix erstellen“)", "eingegebener Künstlername bzw. Kennungen der gewählten und ähnlicher Künstler", "nur beim Suchen und Erstellen eines Mixes"],
       ["MusicBrainz, Last.fm („Mix erstellen“ nach Genre)", "nur der Genre-Name als Tag (z. B. „liquid funk“); Last.fm nur mit eigenem Key", "nur beim Erstellen eines Genre-Mixes"],
@@ -4675,8 +4785,17 @@ const Privacy = {
       embBox.innerHTML = `<div class="set-row"><div><div class="lbl">Offizielle Player (eingebettet)</div><div class="hint">${ids.length
         ? `„Immer laden“ erlaubt für: ${ids.map(id => `${esc(Embeds.NAMES[id] || id)} (seit ${new Date(ok[id]).toLocaleDateString("de-DE")})`).join(", ")}`
         : "Kein Anbieter dauerhaft erlaubt – jeder Player lädt erst nach deinem Klick."}</div></div><div></div>
-        <div class="row-actions">${ids.length ? `<button class="btn btn--sm" data-emb-reset>${icon("x")}Alle widerrufen</button>` : ""}</div></div>`;
+        <div class="row-actions">${ids.length ? `<button class="btn btn--sm" data-emb-reset>${icon("x")}Alle widerrufen</button>` : ""}</div></div>
+        <div class="set-row"><div><div class="lbl">Ersatz-Hörprobe (YouTube / Spotify)</div><div class="hint" data-fb-state>…</div></div><div></div>
+        <div class="row-actions"><button class="btn btn--sm" data-fb-edit>${icon("pencil")}Ändern</button></div></div>`;
       hydrateIcons(embBox);
+      Fallback.get(true).then(fs => {
+        const el = $("[data-fb-state]", embBox); if (!el || !fs) return;
+        const on = ["youtube", "spotify"].filter(k => fs[k]);
+        el.textContent = on.length ? `Erlaubt für: ${on.map(k => `${Embeds.NAMES[k]} (seit ${new Date(fs.at[k] * 1000).toLocaleDateString("de-DE")})`).join(", ")} – nur wenn Deezer/Apple keine Hörprobe haben, nur sichtbar eingebettet.`
+          : "Aus – ohne Hörprobe bei Deezer/Apple zeigt die App keinen Ersatz-Player.";
+      });
+      $("[data-fb-edit]", embBox).onclick = () => Fallback.dialog(() => drawEmb());
       const rb = $("[data-emb-reset]", embBox);
       if (rb) rb.onclick = () => { store.set("embedOk", {}); toast("Einwilligungen für Player widerrufen"); drawEmb(); };
     };

@@ -103,6 +103,8 @@ class Repository(private val db: Db, private val context: android.content.Contex
         val autoUpdate: Boolean = false,  // einmal am Tag bei GitHub nach einer neuen Version fragen
         val lastUpdateCheck: Double = 0.0,
         val similarDirect: Boolean = false, // ähnliche Songs ohne PC direkt bei Deezer holen (Einwilligung)
+        val fallbackYoutube: Boolean = false, // Ersatz-Hörprobe: offizieller YouTube-Player eingebettet (Einwilligung)
+        val fallbackSpotify: Boolean = false, // Ersatz-Hörprobe: offizieller Spotify-Player eingebettet (Einwilligung)
         val externalMic: Boolean = false, // angeschlossenes Mikrofon (USB/Headset) statt des eingebauten nehmen
         val offlineQueue: Boolean = true, // ohne Internet den Fingerabdruck (kein Ton) merken und später nachfragen
         val seconds: Int = 10,
