@@ -68,7 +68,7 @@ private sealed interface FLoad {
 }
 
 @Composable
-fun FallbackPlayer(t: Track, links: Map<String, String>, autoplay: Boolean) {
+fun FallbackPlayer(t: Track, links: Map<String, String>, autoplay: Boolean, request: Int = 0) {
     val s by App.repo.settings.collectAsState()
     var ask by remember { mutableStateOf(false) }
     SectionLabel("Ersatz-Hörprobe")
@@ -102,7 +102,9 @@ fun FallbackPlayer(t: Track, links: Map<String, String>, autoplay: Boolean) {
         is FLoad.None -> Text(l.why, style = TbType.small, color = Tb.text3)
         is FLoad.Found -> {
             // Eigenes Fenster statt eingebettet: in der scrollbaren Seite kam nur der Ton, nicht das Videobild
-            var open by remember(t.key, l.id) { mutableStateOf(autoplay) }
+            var open by remember(t.key, l.id) { mutableStateOf(autoplay || request > 0) }
+            var seen by remember(t.key, l.id) { mutableStateOf(request) }
+            if (request != seen) { seen = request; open = true }
             val name = if (l.kind == "youtube") "YouTube" else "Spotify"
             Row(Modifier.padding(top = 2.dp)) {
                 TbButton("Im $name-Player abspielen", { open = true }, kind = BtnKind.Primary, small = true, icon = Ico.Play)
