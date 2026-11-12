@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.13.0)
+## 0.13.0 – 2026-11-13
 - **Remixe, Covers & andere Versionen:** In der Song-Ansicht (und am Handy beim Song bzw. in einer Playlist) findet
   „Remixe & Versionen“ zu einem Song alle Aufnahmen mit demselben Titel – gruppiert nach Original, Remixe (mit
   Remixer), Edits & Mix-Versionen, Live, Akustik, Instrumental, Slowed & Sped Up und „Andere Künstler“ (Covers).
