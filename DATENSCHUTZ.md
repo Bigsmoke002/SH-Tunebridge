@@ -302,6 +302,16 @@ Die Android-App von SH-Tunebridge erkennt Songs selbst und gleicht auf Wunsch mi
 Künstler, Album, ISRC, Genre, Zeitpunkt, Quelle und einem Link in ihren Cache und übergibt sie an die App, die du im
 Android-Teilen-Menü wählst. Keine Cover, keine Musik; die Datei wird beim nächsten Export ersetzt.
 
+**Playlists auf dem Handy:** Playlists unter „Auf dem Handy“ liegen nur in der App-Datenbank und gehen an keinen PC
+und keinen Server – außer du kopierst eine ausdrücklich auf einen gekoppelten PC („Auf PC kopieren“, dann wie eine
+Playlist-Änderung beim Abgleich).
+
+**Sicherung (Mehr › Sicherung):** Nur auf Tippen schreibt die App eine JSON-Datei an den Ort, den du im
+Android-Dateidialog wählst (z. B. Downloads, USB-Stick oder ein Cloud-Ordner deiner Wahl). Inhalt: dein ganzer
+Verlauf (Song-Angaben, Zeitpunkt, Gerät/Quelle, Links, Favoriten, Genre) und die Playlists auf dem Handy – **keine**
+gekoppelten PCs, Geräte-Geheimnisse, Schlüssel oder Einstellungen. Die Datei ist nicht verschlüsselt; wohin sie geht
+und wer sie sieht, bestimmst du. „Wiederherstellen“ liest nur die Datei, die du auswählst, und ergänzt Fehlendes.
+
 **Schnellzugriffe:** Kachel in den Schnelleinstellungen, Startbildschirm-Widget und App-Verknüpfungen
 („Erkennen“, „Handy-Ton“) öffnen nur die App und starten das Erkennen wie ein Tipp auf den Kreis – mit denselben
 Hinweisen und Rückfragen. Das Widget zeigt den letzten Treffer, gespeichert nur auf dem Handy.

@@ -325,6 +325,11 @@ private fun JobResult(link: Repository.PcLink, kind: String, j: Job, defaultName
                     }
                 }, kind = BtnKind.Primary, small = true, enabled = saveName.isNotBlank())
             }
+            TbButton("Stattdessen nur aufs Handy", {
+                val n = saveName.trim().ifBlank { defaultName }.take(120)
+                App.repo.addAllToPlaylist(de.bs002.tunebridge.data.PHONE, n, list.map { it.track() })
+                msg = "Auf dem Handy gespeichert – „$n“ steht unter Playlists › Auf dem Handy."
+            }, kind = BtnKind.Ghost, icon = Ico.Phone, small = true, modifier = Modifier.padding(top = 8.dp))
             msg?.let { Text(it, style = TbType.small, color = Tb.text2, modifier = Modifier.padding(top = 8.dp)) }
             Spacer(Modifier.height(14.dp))
             TbCard(Modifier.fillMaxWidth(), padding = 4.dp) {

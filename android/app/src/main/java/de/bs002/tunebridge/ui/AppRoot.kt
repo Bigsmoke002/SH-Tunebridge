@@ -80,6 +80,16 @@ fun AppRoot(messages: Flow<String>) {
     val scope = rememberCoroutineScope()
     val toast: (String) -> Unit = { m -> scope.launch { snack.currentSnackbarData?.dismiss(); snack.showSnackbar(m) } }
     LaunchedEffect(messages) { messages.collect { toast(it) } }
+    LaunchedEffect(Unit) {
+        App.snacks.collect { s ->
+            scope.launch {
+                snack.currentSnackbarData?.dismiss()
+                val r = snack.showSnackbar(s.message, s.action, duration = if (s.action != null) androidx.compose.material3.SnackbarDuration.Long
+                    else androidx.compose.material3.SnackbarDuration.Short)
+                if (r == androidx.compose.material3.SnackbarResult.ActionPerformed) s.run?.invoke()
+            }
+        }
+    }
 
     Box(Modifier.fillMaxSize().background(Tb.bg0)) {
         if (settings.consent < App.CONSENT_VERSION) {
@@ -90,7 +100,12 @@ fun AppRoot(messages: Flow<String>) {
             }
         } else Main(toast)
         SnackbarHost(snack, Modifier.align(Alignment.BottomCenter).padding(bottom = 96.dp, start = 16.dp, end = 16.dp)) { data ->
-            Snackbar(containerColor = Tb.bg4, contentColor = Tb.text, shape = RoundedCornerShape(Tb.radius)) {
+            Snackbar(
+                containerColor = Tb.bg4, contentColor = Tb.text, shape = RoundedCornerShape(Tb.radius),
+                action = data.visuals.actionLabel?.let { label ->
+                    { androidx.compose.material3.TextButton({ data.performAction() }) { Text(label, style = TbType.bodyStrong, color = Tb.accent) } }
+                },
+            ) {
                 Text(data.visuals.message, style = TbType.body)
             }
         }
@@ -135,7 +150,11 @@ private fun Main(toast: (String) -> Unit) {
                 composable("playlist/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     PlaylistScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() },
                         openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") },
-                        openSet = { nav.navigate("setplan/${Uri.encode(Uri.decode(it.arguments?.getString("pc").orEmpty()))}/${Uri.encode(Uri.decode(it.arguments?.getString("name").orEmpty()))}") })
+                        openSet = { nav.navigate("setplan/${Uri.encode(Uri.decode(it.arguments?.getString("pc").orEmpty()))}/${Uri.encode(Uri.decode(it.arguments?.getString("name").orEmpty()))}") },
+                        renamed = { n ->
+                            val pcArg = Uri.decode(it.arguments?.getString("pc").orEmpty())
+                            nav.popBackStack(); nav.navigate("playlist/${Uri.encode(pcArg)}/${Uri.encode(n)}")
+                        })
                 }
                 composable("setplan/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     SetPlanScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() })

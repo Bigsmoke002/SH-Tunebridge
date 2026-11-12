@@ -60,6 +60,12 @@ enum class Ico(val paths: List<String>, val circles: List<Triple<Float, Float, F
     Qr(listOf("M14 14h3v3h-3z", "M20 14v1", "M14 20h1", "M18 18h3v3", "M17 21h1"),
         rects = listOf(floatArrayOf(3f, 3f, 7f, 7f, 1.2f), floatArrayOf(14f, 3f, 7f, 7f, 1.2f), floatArrayOf(3f, 14f, 7f, 7f, 1.2f))),
     Sync(listOf("M21 12a9 9 0 0 1-15.5 6.2L3 16", "M3 12a9 9 0 0 1 15.5-6.2L21 8", "M21 3v5h-5", "M3 21v-5h5")),
+    More(emptyList(), listOf(Triple(12f, 5f, 0.9f), Triple(12f, 12f, 0.9f), Triple(12f, 19f, 0.9f))),
+    Phone(listOf("M11 18h2"), rects = listOf(floatArrayOf(6f, 2f, 12f, 20f, 2.5f))),
+    Edit(listOf("M12 20h9", "M16.4 3.6a2.1 2.1 0 1 1 3 3L7 19l-4 1 1-4Z")),
+    Download(listOf("M12 3v12", "m7 10 5 5 5-5", "M5 21h14")),
+    Upload(listOf("M12 21V9", "m7 14 5-5 5 5", "M5 3h14")),
+    Select(listOf("m9 11 3 3L22 4", "M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11")),
 }
 
 @Composable

@@ -108,7 +108,7 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {})
                     Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TbButton("Stimmt", { App.repo.updateExtra(uid, JsonObject(x - "unsure" + ("confirmed" to JsonPrimitive(true)))) },
                             kind = BtnKind.Primary, icon = Ico.Check, small = true)
-                        TbButton("Falsch", { App.repo.delete(uid); back() }, kind = BtnKind.Ghost, small = true)
+                        TbButton("Falsch", { deleteWithUndo(uid); back() }, kind = BtnKind.Ghost, small = true)
                     }
                 }
                 Spacer(Modifier.height(16.dp))
@@ -146,7 +146,7 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {})
             LinkGrid(t, x.links())
 
             SectionLabel("Stimmt etwas nicht?")
-            TbButton("Falsch erkannt – aus dem Verlauf entfernen", { App.repo.delete(uid); back() }, kind = BtnKind.Danger, icon = Ico.Trash)
+            TbButton("Falsch erkannt – aus dem Verlauf entfernen", { deleteWithUndo(uid); back() }, kind = BtnKind.Danger, icon = Ico.Trash)
             Spacer(Modifier.height(32.dp))
         }
     }
@@ -219,26 +219,37 @@ fun TopBack(back: () -> Unit, title: String? = null) {
     }
 }
 
+@Composable
+fun PlaylistPicker(track: Track, close: () -> Unit) = PlaylistPicker(listOf(track), close)
+
+/** Songs in eine Playlist legen – auf dem Handy oder (gekoppelt) in eine PC-Playlist. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaylistPicker(track: Track, close: () -> Unit) {
+fun PlaylistPicker(tracks: List<Track>, close: () -> Unit) {
     val lists by App.repo.playlists.collectAsState()
     val pcs = App.repo.settings.collectAsState().value.pcs
     var name by remember { mutableStateOf("") }
-    var target by remember { mutableStateOf(pcs.firstOrNull()?.pcId) }
+    val targets = listOf(de.bs002.tunebridge.data.PHONE) + pcs.map { it.pcId }
+    var target by remember { mutableStateOf(pcs.firstOrNull()?.pcId ?: de.bs002.tunebridge.data.PHONE) }
+    val single = tracks.singleOrNull()
+    fun add(pc: String, list: String) {
+        val n = App.repo.addAllToPlaylist(pc, list, tracks)
+        App.snack(when {
+            single != null && n == 0 -> "Schon in „$list“"
+            single != null -> "Zu „$list“ hinzugefügt"
+            n == 0 -> "Alle schon in „$list“"
+            else -> "${Fmt.songs(n)} zu „$list“ hinzugefügt"
+        })
+        close()
+    }
     ModalBottomSheet(onDismissRequest = close, sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true), containerColor = Tb.bg1) {
         Column(Modifier.padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
-            Text("Zur Playlist hinzufügen", style = TbType.title, color = Tb.text)
+            Text(if (single != null) "Zur Playlist hinzufügen" else "${Fmt.songs(tracks.size)} zur Playlist", style = TbType.title, color = Tb.text)
             val pc = target
-            if (pc == null) {
-                Text("Playlists gehören zu einem PC. Kopple das Handy unter „Mehr“ mit SH-Tunebridge am PC – dann kannst du hier einsortieren.",
-                    style = TbType.body, color = Tb.text2, modifier = Modifier.padding(top = 8.dp))
-                return@Column
-            }
-            Text("Landet beim nächsten Abgleich auch in der Playlist am PC.", style = TbType.small, color = Tb.text3,
-                modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
-            if (pcs.size > 1) {
-                Segmented(pcs.map { it.pcId }, pc, { id -> pcs.first { it.pcId == id }.pcName }) { target = it }
+            Text(if (pc == de.bs002.tunebridge.data.PHONE) "Bleibt auf dem Handy." else "Landet beim nächsten Abgleich auch in der Playlist am PC.",
+                style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 4.dp, bottom = 12.dp))
+            if (targets.size > 1) {
+                Segmented(targets, pc, { id -> if (id == de.bs002.tunebridge.data.PHONE) "Handy" else pcs.first { it.pcId == id }.pcName }) { target = it }
                 Spacer(Modifier.height(10.dp))
             }
             SearchField(name, { name = it }, placeholder = "Neue Playlist oder suchen …")
@@ -246,13 +257,16 @@ fun PlaylistPicker(track: Track, close: () -> Unit) {
             val mine = lists.filter { it.pc == pc }
             val shown = mine.filter { name.isBlank() || it.name.contains(name.trim(), true) }.take(40)
             if (name.isNotBlank() && mine.none { it.name.equals(name.trim(), true) }) {
-                PickRow("Neu: ${name.trim()}", null, Ico.Plus) { App.repo.addToPlaylist(pc, name.trim(), track); close() }
+                PickRow("Neu: ${name.trim()}", null, Ico.Plus) { add(pc, name.trim().take(120)) }
             }
+            if (mine.isEmpty() && name.isBlank()) Text(
+                if (pc == de.bs002.tunebridge.data.PHONE) "Noch keine Playlist auf dem Handy – oben einen Namen eingeben." else "Noch keine Playlists von diesem PC.",
+                style = TbType.small, color = Tb.text3, modifier = Modifier.padding(vertical = 8.dp))
             shown.forEach { p ->
-                val inside = p.tracks.any { it.key == track.key }
+                val inside = single != null && p.tracks.any { it.key == single.key }
                 PickRow(p.name, Fmt.songs(p.tracks.size), if (inside) Ico.Check else Ico.Stack) {
-                    if (inside) App.repo.removeFromPlaylist(pc, p.name, track) else App.repo.addToPlaylist(pc, p.name, track)
-                    close()
+                    if (inside) { App.repo.removeFromPlaylist(pc, p.name, single!!); App.snack("Aus „${p.name}“ entfernt"); close() }
+                    else add(pc, p.name)
                 }
             }
         }
@@ -268,4 +282,11 @@ private fun PickRow(title: String, sub: String?, icon: Ico, onClick: () -> Unit)
         Text(title, style = TbType.bodyStrong, color = Tb.text, modifier = Modifier.weight(1f), maxLines = 1)
         if (sub != null) Text(sub, style = TbType.small, color = Tb.text3)
     }
+}
+
+/** Aus dem Verlauf entfernen, mit „Rückgängig“ in der Meldung unten. */
+fun deleteWithUndo(vararg uids: String) {
+    val gone = App.repo.deleteMany(uids.toList())
+    if (gone.isEmpty()) return
+    App.snack(if (gone.size == 1) "„${gone[0].track.title}“ entfernt" else "${Fmt.songs(gone.size)} entfernt", "Rückgängig") { App.repo.restore(gone) }
 }

@@ -71,11 +71,36 @@ fun HistoryScreen(openSong: (String) -> Unit, openStats: () -> Unit = {}) {
     val filtered = favOnly || period != Period.All || origin != Origin.All || genre != null
     val groups = remember(list) { list.groupBy { Fmt.dayLabel(it.ts) } }
     val listState = rememberLazyListState()
+    // Mehrfachauswahl: lange auf einen Song drücken
+    var sel by rememberSaveable { mutableStateOf(listOf<String>()) }
+    val selecting = sel.isNotEmpty()
+    val selSet = remember(sel) { sel.toHashSet() }
+    androidx.activity.compose.BackHandler(selecting) { sel = emptyList() }
+    var pickFor by remember { mutableStateOf<List<de.bs002.tunebridge.data.Track>?>(null) }
+    var shareSel by remember { mutableStateOf(false) }
+    pickFor?.let { PlaylistPicker(it) { pickFor = null; sel = emptyList() } }
+    if (shareSel) {
+        val chosen = list.filter { it.uid in selSet }
+        ExportSheet("Auswahl", chosen.map { de.bs002.tunebridge.data.Export.Item(it.track, it.ts, it.source, it.extra.links(), it.shownGenre) }) { shareSel = false }
+    }
     // Neuer Song oben (Erkennung, Teilen, Abgleich): mitnehmen, solange man ganz oben war
     LaunchedEffect(list.firstOrNull()?.uid) { if (listState.firstVisibleItemIndex <= 2) listState.animateScrollToItem(0) }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenHeader("Verlauf", if (all.isEmpty()) null else if (list.size != all.size) "${list.size} von ${Fmt.songs(all.size)}" else Fmt.songs(all.size)) {
+        if (selecting) SelectionBar(sel.size, list.size,
+            selectAll = { sel = if (sel.size == list.size) emptyList() else list.map { it.uid } },
+            favorite = {
+                val recs = list.filter { it.uid in selSet }
+                val on = !recs.all { it.favorite }
+                App.repo.setFavorites(sel, on)
+                App.snack(if (on) "${Fmt.songs(recs.size)} als Favorit markiert" else "Favorit bei ${Fmt.songs(recs.size)} entfernt")
+                sel = emptyList()
+            },
+            playlist = { pickFor = list.filter { it.uid in selSet }.map { it.track }.distinctBy { it.key } },
+            share = { shareSel = true },
+            delete = { deleteWithUndo(*sel.toTypedArray()); sel = emptyList() },
+            close = { sel = emptyList() },
+        ) else ScreenHeader("Verlauf", if (all.isEmpty()) null else if (list.size != all.size) "${list.size} von ${Fmt.songs(all.size)}" else Fmt.songs(all.size)) {
             if (all.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(Ico.Chart, "Rückblick", openStats)
             if (list.isNotEmpty()) de.bs002.tunebridge.ui.components.IconBtn(Ico.Share, "Teilen / exportieren", { share = true })
             if (list.any { it.track.playable }) PlayButtons(list.map { it.track }, "Verlauf")
@@ -101,7 +126,9 @@ fun HistoryScreen(openSong: (String) -> Unit, openStats: () -> Unit = {}) {
                     Text(day, style = TbType.label, color = Tb.text3, modifier = Modifier.padding(start = 10.dp, top = 20.dp, bottom = 6.dp))
                 }
                 items(recs, key = { it.uid }) { rec ->
-                    SongRow(rec, onClick = { openSong(rec.uid) }, showSource = true)
+                    val on = rec.uid in selSet
+                    SongRow(rec, onClick = { if (selecting) sel = if (on) sel - rec.uid else sel + rec.uid else openSong(rec.uid) }, showSource = true,
+                        onLongClick = { sel = if (on) sel - rec.uid else sel + rec.uid }, selected = if (selecting) on else null)
                 }
             }
             if (list.isEmpty()) item { Text(if (q.isBlank()) "Nichts passt zu diesen Filtern." else "Keine Treffer für „$q“.", style = TbType.body, color = Tb.text3, modifier = Modifier.padding(20.dp)) }
@@ -199,3 +226,21 @@ fun MenuChip(text: String, active: Boolean, options: List<String>, pick: (Int) -
 }
 
 private fun filtered0(fav: Boolean, p: Period, o: Origin, g: String?, q: String) = fav || p != Period.All || o != Origin.All || g != null || q.isNotBlank()
+
+/** Leiste oben, solange Songs ausgewählt sind. */
+@Composable
+private fun SelectionBar(n: Int, total: Int, selectAll: () -> Unit, favorite: () -> Unit, playlist: () -> Unit, share: () -> Unit,
+                         delete: () -> Unit, close: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 14.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.X, "Auswahl beenden", close)
+        Column(Modifier.weight(1f).padding(start = 4.dp)) {
+            Text("$n ausgewählt", style = TbType.title, color = Tb.text)
+            Text(if (n == total) "Alle abwählen" else "Alle ${Fmt.songs(total)} auswählen", style = TbType.small, color = Tb.accent,
+                modifier = Modifier.clickable(onClick = selectAll).padding(top = 2.dp))
+        }
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.Heart, "Favorit an/aus", favorite)
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.Plus, "Zur Playlist", playlist)
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.Share, "Teilen / exportieren", share)
+        de.bs002.tunebridge.ui.components.IconBtn(Ico.Trash, "Löschen", delete, tint = Tb.danger)
+    }
+}

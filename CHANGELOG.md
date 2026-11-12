@@ -4,6 +4,20 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht
+- **Android: Playlists auf dem Handy:** Eigene Playlists auch ohne PC – unter Playlists „+“ anlegen, umbenennen,
+  löschen (mit Rückgängig), abspielen, teilen. Beim Einsortieren wählst du „Handy“ oder einen gekoppelten PC; eine
+  Handy-Playlist lässt sich mit „Auf PC kopieren“ an den PC übergeben. Mix-Ergebnisse lassen sich auch nur aufs
+  Handy speichern.
+- **Android: Mehrfachauswahl im Verlauf:** Lange auf einen Song drücken, weitere antippen (oder „Alle auswählen“) –
+  dann gemeinsam als Favorit markieren, in eine Playlist legen, teilen/exportieren oder löschen.
+- **Android: Rückgängig:** Gelöschte Songs und Handy-Playlists lassen sich über die Meldung unten zurückholen.
+- **Android: Sicherung:** Unter Mehr › Sicherung den ganzen Verlauf (mit Favoriten) und die Handy-Playlists als
+  Datei speichern und auf einem anderen Handy zurückholen (ergänzt nur, ersetzt nichts). Gekoppelte PCs, Schlüssel
+  und Einstellungen kommen nicht in die Datei.
+- **Android: flüssiger:** Verlauf und Playlists laden im Hintergrund statt nach jeder Erkennung auf dem
+  Haupt-Thread; Herz und Playlist-Änderungen wirken sofort. Suche, Filter und Rückblick sehen jetzt bis zu 10 000
+  Einträge (vorher 2000).
+- **Android:** Das PC-Abzeichen auf „Erkennen“ zeigt „Unterwegs“, wenn der Internet-Abgleich an ist.
 - **Handy unterwegs abgleichen:** Handy und PC gleichen jetzt auch ohne gemeinsames WLAN/VPN ab – über eine
   Ende-zu-Ende-verschlüsselte Ablage auf shtunebridge.bs002.de (dieselbe Technik wie „Playlists teilen“; der Server
   sieht nur zufällige Kennungen und unlesbare Blöcke). Standard aus: am PC unter Einstellungen › Handy beim Handy

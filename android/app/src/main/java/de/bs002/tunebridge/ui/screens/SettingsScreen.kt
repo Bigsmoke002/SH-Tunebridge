@@ -137,6 +137,9 @@ fun SettingsScreen(openPair: () -> Unit, openPc: (String) -> Unit, openPrivacy: 
                 }
             }
 
+            SectionLabel("Sicherung")
+            BackupCard()
+
             SectionLabel("Datenschutz")
             TbCard(Modifier.fillMaxWidth(), padding = 14.dp) {
                 SettingRow("Cover-Bilder anzeigen", "Lädt Albumcover von Apples Bildserver (sieht deine IP-Adresse). Aus: neutrale Platzhalter.", s.covers) { v ->
@@ -204,6 +207,7 @@ fun PrivacyScreen(back: () -> Unit) {
                 Triple(Ico.Sync, "Updates (GitHub)", "Nur wenn „Automatisch nach Updates suchen“ an ist (höchstens einmal am Tag) oder du selbst suchst: GitHub sieht deine IP-Adresse. Installiert wird nur eine signierte, geprüfte Version – und erst, wenn du im Android-Installer bestätigst."),
                 Triple(Ico.Monitor, "Dein PC", "Abgleich direkt im eigenen Netz, ohne Server dazwischen – nur mit PCs, denen du hier und am PC zugestimmt hast, und nur über die Adressen, die du je PC auswählst. Gesendet wird nur, wenn das Handy gerade im Netz dieses PCs ist. Dafür liest die App – erst nach deiner Zustimmung – die eigenen Netzwerkkarten (IP-Adresse, Netz), ohne Standort-Berechtigung; widerrufbar unter Mehr › Datenschutz. Jede Nachricht ist mit AES-256-GCM verschlüsselt; der Schlüssel entsteht beim Koppeln und verlässt Handy und PC nie. Mix erstellen und Set-Planer rechnen ebenfalls dort: Das Handy schickt nur Suchbegriff, Künstler/Genre oder Playlist-Namen."),
                 Triple(Ico.Sync, "Unterwegs abgleichen", "Nur wenn du es je PC einschaltest (und am PC ebenfalls): Ist das Handy nicht im Netz des PCs, legt es den Abgleich auf shtunebridge.bs002.de ab und holt dort die Antwort des PCs. Inhalt wie im Heimnetz, Ende-zu-Ende verschlüsselt mit dem Schlüssel aus der Kopplung. Der Server sieht nur zufällige Kennungen, unlesbare Blöcke, das Datum; IP-Adresse und Zeitpunkt protokolliert die Server-Technik wie bei jeder Verbindung (höchstens 12 Monate). Ausschalten oder Entkoppeln löscht die Ablagen sofort, sonst nach einem Jahr ohne Nutzung."),
+                Triple(Ico.Download, "Sicherung", "Nur auf Tippen: eine Datei mit deinem Verlauf und den Handy-Playlists an den Ort, den du wählst – ohne gekoppelte PCs, Schlüssel oder Einstellungen, nicht verschlüsselt. Playlists „Auf dem Handy“ bleiben sonst nur in der App."),
                 Triple(Ico.Share, "Teilen & Export", "Nur nach Tippen auf Teilen: Datei mit Titel, Künstler, Album, ISRC, Genre, Zeitpunkt und Link an die App, die du wählst – keine Cover, keine Musik."),
                 Triple(Ico.Shield, "Auf dem Handy", "Verlauf, Playlists und Einstellungen liegen nur in der App (nicht in Android-Sicherungen). App löschen = alles weg."),
                 Triple(Ico.X, "Was es nicht gibt", "Kein Konto, keine Werbung, keine Analyse- oder Absturz-Dienste, keine Google-Play-Dienste."),
@@ -219,5 +223,80 @@ fun PrivacyScreen(back: () -> Unit) {
             }
             Spacer(Modifier.height(32.dp))
         }
+    }
+}
+
+/** Verlauf und Handy-Playlists als Datei sichern bzw. zurückholen (z. B. beim Handywechsel). */
+@Composable
+private fun BackupCard() {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var restoreFrom by remember { mutableStateOf<android.net.Uri?>(null) }
+    val save = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri == null) return@rememberLauncherForActivityResult
+        busy = true
+        scope.launch {
+            runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val b = App.repo.backup(de.bs002.tunebridge.BuildConfig.VERSION_NAME)
+                    ctx.contentResolver.openOutputStream(uri, "wt")!!.use { it.write(App.repo.json.encodeToString(de.bs002.tunebridge.data.Repository.Backup.serializer(), b).toByteArray()) }
+                    b
+                }
+            }.onSuccess { b -> App.snack("Gesichert: ${Fmt.songs(b.recognitions.size)}, ${b.playlists.size} Handy-Playlists") }
+                .onFailure { App.snack("Sichern fehlgeschlagen: ${it.message ?: "unbekannter Fehler"}") }
+            busy = false
+        }
+    }
+    val open = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.OpenDocument()) { uri -> restoreFrom = uri }
+    TbCard(Modifier.fillMaxWidth(), padding = 14.dp) {
+        Text("Verlauf und Playlists sichern", style = TbType.bodyStrong, color = Tb.text)
+        Text("Speichert deinen ganzen Verlauf (mit Favoriten) und die Playlists auf dem Handy als Datei, wohin du willst – z. B. für ein neues Handy. " +
+            "Gekoppelte PCs, Schlüssel und Einstellungen kommen nicht hinein. Die Datei ist nicht verschlüsselt – gut aufbewahren.",
+            style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 2.dp, bottom = 12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TbButton(if (busy) "Bitte warten …" else "Sichern", {
+                if (!busy) save.launch("sh-tunebridge-sicherung-${java.time.LocalDate.now()}.json")
+            }, kind = BtnKind.Primary, icon = Ico.Download, enabled = !busy)
+            TbButton("Wiederherstellen", { if (!busy) open.launch(arrayOf("application/json", "application/octet-stream", "text/plain")) },
+                kind = BtnKind.Ghost, icon = Ico.Upload, enabled = !busy)
+        }
+    }
+    restoreFrom?.let { uri ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { restoreFrom = null }, containerColor = Tb.bg2,
+            title = { Text("Sicherung zurückholen?", style = TbType.title, color = Tb.text) },
+            text = {
+                Text("Songs und Playlists aus der Datei kommen dazu; was schon da ist, bleibt unverändert. Gekoppelte PCs bekommen die neuen Songs beim nächsten Abgleich.",
+                    style = TbType.body, color = Tb.text2)
+            },
+            confirmButton = {
+                TbButton("Zurückholen", {
+                    restoreFrom = null
+                    busy = true
+                    scope.launch {
+                        runCatching {
+                            kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                                val text = ctx.contentResolver.openInputStream(uri)!!.use { inp ->
+                                    val bytes = inp.readBytes()
+                                    require(bytes.size < 64 shl 20) { "Die Datei ist zu groß für eine Sicherung" }
+                                    String(bytes)
+                                }
+                                val b = runCatching { App.repo.json.decodeFromString(de.bs002.tunebridge.data.Repository.Backup.serializer(), text) }
+                                    .getOrElse { throw IllegalArgumentException("Die Datei ist keine gültige Sicherung") }
+                                App.repo.restoreBackup(b)
+                            }
+                        }.onSuccess { (n, songs) ->
+                            App.snack(if (n == 0 && songs == 0) "Nichts Neues – alles war schon da" else "Zurückgeholt: ${Fmt.songs(n)} im Verlauf, $songs in Playlists")
+                            if (n > 0) App.listener.autoSync()
+                        }.onFailure { App.snack(it.message ?: "Zurückholen fehlgeschlagen") }
+                        busy = false
+                    }
+                }, kind = BtnKind.Primary)
+            },
+            dismissButton = { TbButton("Abbrechen", { restoreFrom = null }, kind = BtnKind.Ghost) },
+        )
     }
 }

@@ -12,6 +12,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -284,7 +285,7 @@ private fun FoundCard(rec: Recognition, unsure: Boolean, openSong: (String) -> U
                         App.repo.updateExtra(rec.uid, kotlinx.serialization.json.JsonObject(rec.extra - "unsure" + ("confirmed" to kotlinx.serialization.json.JsonPrimitive(true))))
                         App.listener.reset()
                     }, kind = BtnKind.Primary, icon = Ico.Check, small = true)
-                    TbButton("Falsch", { App.repo.delete(rec.uid); App.listener.reset() }, kind = BtnKind.Ghost, small = true)
+                    TbButton("Falsch", { deleteWithUndo(rec.uid); App.listener.reset() }, kind = BtnKind.Ghost, small = true)
                 }
             }
             Spacer(Modifier.height(10.dp))
@@ -305,14 +306,24 @@ private fun FoundCard(rec: Recognition, unsure: Boolean, openSong: (String) -> U
 }
 
 @Composable
-fun SongRow(rec: Recognition, onClick: () -> Unit, showDay: Boolean = false, showSource: Boolean = false) {
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+fun SongRow(rec: Recognition, onClick: () -> Unit, showDay: Boolean = false, showSource: Boolean = false,
+            onLongClick: (() -> Unit)? = null, selected: Boolean? = null) {
     val genre = rec.shownGenre
     val fromPc = showSource && !rec.host.startsWith("Handy")
+    val shape = androidx.compose.foundation.shape.RoundedCornerShape(Tb.radiusSm)
     Row(
-        Modifier.fillMaxWidth().clip(androidx.compose.foundation.shape.RoundedCornerShape(Tb.radiusSm)).clickable(onClick = onClick)
+        Modifier.fillMaxWidth().clip(shape).background(if (selected == true) Tb.accent.copy(alpha = 0.12f) else androidx.compose.ui.graphics.Color.Transparent)
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick, onLongClickLabel = if (onLongClick != null) "Auswählen" else null)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        if (selected != null) {
+            Box(Modifier.size(22.dp).clip(CircleShape).background(if (selected) Tb.accent else Tb.bg3), contentAlignment = Alignment.Center) {
+                if (selected) TbIcon(Ico.Check, Tb.accentInk, 14.dp)
+            }
+            Spacer(Modifier.width(12.dp))
+        }
         Cover(rec.track.cover, 48.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
@@ -346,7 +357,8 @@ private fun PcBadge(pcs: List<de.bs002.tunebridge.data.Repository.PcLink>, onCli
     val near = pcs.filter { App.sync.reachable(it).isNotEmpty() }
     val last = pcs.maxOfOrNull { it.lastSync } ?: 0.0
     val err = near.isNotEmpty() && near.all { it.lastSyncError != null }
-    val color = when { pcs.isEmpty() || near.isEmpty() -> Tb.text3; err -> Tb.warn; else -> Tb.accent }
+    val relay = near.isEmpty() && pcs.any { it.relay }
+    val color = when { pcs.isEmpty() -> Tb.text3; relay -> Tb.accent.copy(alpha = 0.6f); near.isEmpty() -> Tb.text3; err -> Tb.warn; else -> Tb.accent }
     Row(
         Modifier.clip(CircleShape).background(Tb.bg2).clickable(onClick = onClick).padding(horizontal = 11.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -356,6 +368,7 @@ private fun PcBadge(pcs: List<de.bs002.tunebridge.data.Repository.PcLink>, onCli
         Text(
             when {
                 pcs.isEmpty() -> "PC koppeln"
+                relay -> "Unterwegs${if (last > 0) " · ${Fmt.ago(last)}" else ""}"
                 !de.bs002.tunebridge.sync.Nets.allowed() -> "Abgleich aus"
                 near.isEmpty() -> if (pcs.size == 1) "${pcs[0].pcName} · nicht im Netz" else "${pcs.size} PCs · nicht im Netz"
                 err -> "PC offline"
