@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -28,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -47,7 +44,8 @@ import de.bs002.tunebridge.ui.theme.TbType
 /**
  * Ersatz-Hörprobe: offizieller YouTube- bzw. Spotify-Player, eingebettet und sichtbar – nur wenn Deezer/Apple keine
  * Hörprobe haben und nur nach Einwilligung je Anbieter. YouTube-Richtlinien: kein Ton ohne Bild, nichts im
- * Hintergrund – der Player pausiert, sobald die App in den Hintergrund geht, und wird beim Verlassen der Seite beendet.
+ * Hintergrund – der Player läuft in einem eigenen Vollbild-Fenster, pausiert, sobald die App in den Hintergrund geht,
+ * und wird beim Schließen beendet.
  */
 private val YT = Regex("""(?:youtu\.be/|youtube\.com/(?:watch\?v=|embed/|shorts/)|music\.youtube\.com/watch\?v=)([\w-]{11})""")
 private val SP = Regex("""open\.spotify\.com/(?:intl-[a-z]+/)?track/([A-Za-z0-9]{22})""")
@@ -103,9 +101,15 @@ fun FallbackPlayer(t: Track, links: Map<String, String>, autoplay: Boolean) {
         FLoad.Busy -> Text("Suche den offiziellen Player …", style = TbType.small, color = Tb.text3)
         is FLoad.None -> Text(l.why, style = TbType.small, color = Tb.text3)
         is FLoad.Found -> {
-            EmbedView(l.kind, l.id, autoplay)
-            Text("Offizieller ${if (l.kind == "youtube") "YouTube" else "Spotify"}-Player (${l.via}) – gespielt wird direkt beim Anbieter, " +
-                "nur solange die Seite offen ist.", style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 6.dp))
+            // Eigenes Fenster statt eingebettet: in der scrollbaren Seite kam nur der Ton, nicht das Videobild
+            var open by remember(t.key, l.id) { mutableStateOf(autoplay) }
+            val name = if (l.kind == "youtube") "YouTube" else "Spotify"
+            Row(Modifier.padding(top = 2.dp)) {
+                TbButton("Im $name-Player abspielen", { open = true }, kind = BtnKind.Primary, small = true, icon = Ico.Play)
+            }
+            Text("Offizieller $name-Player (${l.via}) – gespielt wird direkt beim Anbieter, nur solange der Player offen ist.",
+                style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 6.dp))
+            if (open) PlayerWindow(l.kind, l.id) { open = false }
         }
     }
 }
@@ -116,26 +120,31 @@ private fun isEmbed(u: android.net.Uri): Boolean = when (u.host) {
     else -> false
 }
 
+/**
+ * Offizieller Player in einem eigenen Vollbild-Fenster (schwarz, Player mittig, „Schließen“ bzw. Zurück).
+ * Geöffnet nur durch Antippen – deshalb startet er gleich. Pausiert, sobald die App in den Hintergrund geht.
+ */
 @SuppressLint("SetJavaScriptEnabled")
 @Composable
-private fun EmbedView(kind: String, id: String, autoplay: Boolean) {
+private fun PlayerWindow(kind: String, id: String, close: () -> Unit) {
     val ctx = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    // Offizielle Player-Seite direkt laden (ein iframe in einer eigenen Seite blieb in der WebView schwarz).
-    // YouTube verlangt beim Einbetten eine Herkunft (sonst Fehler 152/153) – die geht als Referer mit.
-    val origin = "https://shtunebridge.bs002.de"
-    val src = if (kind == "youtube") "https://www.youtube-nocookie.com/embed/$id?rel=0&playsinline=1&origin=$origin" +
-        (if (autoplay) "&autoplay=1" else "")
-        else "https://open.spotify.com/embed/track/$id?utm_source=generator&theme=0"
-    val web = remember(kind, id) {
-        WebView(ctx).apply {
-            settings.javaScriptEnabled = true            // der offizielle Player braucht JavaScript
+    val onClose by androidx.compose.runtime.rememberUpdatedState(close)
+    DisposableEffect(kind, id) {
+        Player.stop()                                       // nie zwei Töne gleichzeitig
+        // YouTube verlangt beim Einbetten eine Herkunft (sonst Fehler 152/153) – die geht als Referer mit
+        val origin = "https://shtunebridge.bs002.de"
+        val src = if (kind == "youtube") "https://www.youtube-nocookie.com/embed/$id?rel=0&playsinline=1&autoplay=1&origin=$origin"
+            else "https://open.spotify.com/embed/track/$id?utm_source=generator&theme=0"
+        val dm = ctx.resources.displayMetrics
+        val web = WebView(ctx).apply {
+            settings.javaScriptEnabled = true               // der offizielle Player braucht JavaScript
             settings.domStorageEnabled = true
-            settings.mediaPlaybackRequiresUserGesture = !autoplay
+            settings.mediaPlaybackRequiresUserGesture = false
             setBackgroundColor(android.graphics.Color.BLACK)
             webChromeClient = WebChromeClient()
             webViewClient = object : WebViewClient() {
-                // Der Player selbst bleibt hier; andere Links (z. B. „Auf YouTube ansehen“) im Browser bzw. in der App öffnen
+                // Der Player selbst bleibt hier; andere Links (z. B. „Ansehen auf YouTube“) im Browser bzw. in der App öffnen
                 override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
                     if (!req.isForMainFrame || isEmbed(req.url)) return false
                     runCatching { ctx.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, req.url)) }
@@ -144,9 +153,24 @@ private fun EmbedView(kind: String, id: String, autoplay: Boolean) {
             }
             loadUrl(src, mapOf("Referer" to "$origin/"))
         }
-    }
-    DisposableEffect(owner, web) {
-        Player.stop()                                       // nie zwei Töne gleichzeitig
+        val h = if (kind == "youtube") dm.widthPixels * 9 / 16 else (352 * dm.density).toInt()
+        val root = android.widget.FrameLayout(ctx).apply {
+            setBackgroundColor(android.graphics.Color.BLACK)
+            addView(web, android.widget.FrameLayout.LayoutParams(-1, h, android.view.Gravity.CENTER))
+            addView(android.widget.TextView(ctx).apply {
+                text = "Schließen"
+                setTextColor(android.graphics.Color.WHITE)
+                textSize = 16f
+                val p = (16 * dm.density).toInt()
+                setPadding(p, p * 3, p, p)
+                setOnClickListener { onClose() }
+            }, android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP or android.view.Gravity.END))
+        }
+        val dlg = android.app.Dialog(ctx, android.R.style.Theme_Black_NoTitleBar_Fullscreen).apply {
+            setContentView(root)
+            setOnDismissListener { onClose() }
+            show()
+        }
         val obs = LifecycleEventObserver { _, e ->
             when (e) {
                 Lifecycle.Event.ON_PAUSE -> web.onPause()   // App im Hintergrund: Player hält an
@@ -155,10 +179,12 @@ private fun EmbedView(kind: String, id: String, autoplay: Boolean) {
             }
         }
         owner.lifecycle.addObserver(obs)
-        onDispose { owner.lifecycle.removeObserver(obs); web.stopLoading(); web.loadUrl("about:blank"); web.destroy() }
+        onDispose {
+            owner.lifecycle.removeObserver(obs)
+            dlg.setOnDismissListener(null); dlg.dismiss()
+            web.stopLoading(); web.loadUrl("about:blank"); web.destroy()
+        }
     }
-    val ratio = if (kind == "youtube") 16f / 9f else 2.2f
-    AndroidView({ web }, Modifier.fillMaxWidth().aspectRatio(ratio))   // ohne clip: beschnittene WebViews blieben teils schwarz
 }
 
 /** Einwilligung je Anbieter – derselbe Text wie am PC. */
