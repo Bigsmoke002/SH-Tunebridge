@@ -830,13 +830,15 @@ const Embeds = {
           <div class="btn-row"><button class="btn btn--sm btn--primary" data-load>${icon("play")}Player laden</button>
             <label class="switch-row"><input type="checkbox" data-always> <span>Für ${esc(n)} immer laden (widerrufbar unter Einstellungen › Datenschutz)</span></label></div></div></div>`;
       hydrateIcons(box);
-      $("[data-load]", box).onclick = () => { if ($("[data-always]", box).checked) this.allow(e.id, true); this.load(box, e); };
+      $("[data-load]", box).onclick = () => { if ($("[data-always]", box).checked) this.allow(e.id, true); this.load(box, e, true); };
     };
     $$("[data-emb]", tabs).forEach(b => b.onclick = () => show(list.find(e => e.id === b.dataset.emb)));
     show(list.find(e => e.id === store.get("embedLast", "")) || list[0]);
   },
-  load(box, e) {
-    Player.audio?.pause?.();
+  // Hörprobe nur anhalten, wenn der Player bewusst gestartet wird – nicht beim automatischen Laden auf einer Song-Seite
+  // (sonst stoppte jeder Klick auf einen Song die laufende Musik, wenn „immer laden“ an war)
+  load(box, e, stopPreview = false) {
+    if (stopPreview) Player.audio?.pause?.();
     const style = e.h ? `height:${e.h}px` : "aspect-ratio:16/9;height:auto";
     box.innerHTML = `<iframe class="emb-frame" src="${esc(this.frameSrc(e.src))}" style="${style}" loading="lazy" allowfullscreen
       allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin"
@@ -912,7 +914,7 @@ const Fallback = {
     tabs.innerHTML = list.map(e => `<button class="seg-btn" data-fb="${e.id}" style="--pc:${PLATFORM_COLORS[e.id]}"><span class="plat-dot"></span>${Embeds.NAMES[e.id]}</button>`).join("");
     const show = e => {
       $$("[data-fb]", tabs).forEach(b => b.classList.toggle("on", b.dataset.fb === e.id));
-      Embeds.load(box, e);
+      Embeds.load(box, e, !!autoplay);
       const foot = $(".emb-foot span", box);
       if (foot) foot.textContent = `Ersatz-Hörprobe: offizieller ${Embeds.NAMES[e.id]}-Player (Deezer/Apple haben keine) – gespielt wird direkt bei ${Embeds.NAMES[e.id]}${res.via?.[e.id] ? ` · gefunden über ${res.via[e.id]}` : ""}.`;
     };

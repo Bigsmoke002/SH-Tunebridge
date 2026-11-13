@@ -4,6 +4,9 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.14.0)
+- **Behoben: Klick auf einen Song stoppte die Musik.** War bei „Offizieller Player“ „immer laden“ angehakt, lud jede
+  geöffnete Song-Seite den Player des Anbieters und hielt dabei die laufende Hörprobe an. Jetzt hält nur noch ein
+  bewusster Klick auf „Player laden“ (oder die Ersatz-Hörprobe mit automatischem Start) die Musik an.
 - **Neue, eigene Symbole (PC + Handy):** Alle Symbole neu gezeichnet im kräftigen, gefüllten „Glyph“-Stil – am PC
   und am Handy aus einer gemeinsamen Quelle (`scripts/gen-icons.py`), daher überall gleich. Neu: eigenes Symbol für
   „Anhören“ (Kopfhörer) und „Öffnen“. Die Kacheln der Musikdienste zeigen keine Buchstaben-Kürzel oder logoähnlichen
