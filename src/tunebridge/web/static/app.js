@@ -930,8 +930,9 @@ const ArtistMore = {
           <a class="icon-btn" href="https://www.deezer.com/track/${esc(t.ids.deezer)}" target="_blank" rel="noopener" title="Bei Deezer öffnen">${icon("external")}</a></div>`; };
       const col = (title, sub, list) => `<section class="det-card am-col"><div class="det-h">${icon(title === "solo" ? "disc" : "stack")}<b>${sub}</b><span class="det-legend">${list.length} Songs</span></div>
         <div class="am-list">${list.slice(0, 25).map(row).join("") || `<div class="cell-sub" style="padding:8px">Keine gefunden.</div>`}</div></section>`;
-      out.innerHTML = `<div class="am-head">${d.artist.picture ? `<img src="${esc(d.artist.picture)}" alt="">` : ""}<div><b>${esc(d.artist.name)}</b>
-          <span class="cell-sub">${d.artist.fans ? `${d.artist.fans.toLocaleString("de-DE")} Fans bei Deezer · ` : ""}${d.artist.albums || 0} Veröffentlichungen · beliebteste zuerst</span></div></div>
+      out.innerHTML = `<div class="am-head">${d.artist.picture ? `<img src="${esc(d.artist.picture)}" alt="">` : ""}<div><b><a class="dc-a" href="#/discover?artist=${d.artist.id}" title="Künstlerseite öffnen">${esc(d.artist.name)}</a></b>
+          <span class="cell-sub">${d.artist.fans ? `${d.artist.fans.toLocaleString("de-DE")} Fans bei Deezer · ` : ""}${d.artist.albums || 0} Veröffentlichungen · beliebteste zuerst</span></div>
+          <a class="btn btn--sm btn--ghost" style="margin-left:auto" href="#/discover?artist=${d.artist.id}">${icon("compass")}Künstlerseite</a></div>
         <div class="det-grid am-grid">${col("solo", `Nur ${esc(d.artist.name)}`, d.solo)}${col("collab", "Zusammen mit anderen", d.collab)}</div>`;
       hydrateIcons(out); Player.sync();
     };
@@ -1048,7 +1049,8 @@ async function loadSimilar(box, r) {
 async function loadVersions(box, r) {
   box.innerHTML = skeletonRows(4);
   let d;
-  try { d = await api(r.id != null ? `/api/versions?id=${r.id}` : `/api/versions?key=${encodeURIComponent(r.key)}`); }
+  try { d = await api(r.id != null ? `/api/versions?id=${r.id}` : r.key ? `/api/versions?key=${encodeURIComponent(r.key)}`
+    : `/api/versions?${new URLSearchParams({ artist: (r.track?.artists || [])[0] || "", title: r.track?.title || "" })}`); }
   catch (e) { box.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
   const list = d.items || [];
   if (!list.length) { box.innerHTML = `<div class="cell-sub">Keine anderen Versionen von „${esc(d.core || "")}“ gefunden.</div>`; return; }
@@ -1075,17 +1077,7 @@ async function loadVersions(box, r) {
         </div>`;
       }).join("")}</div>`;
     $$("[data-vf]", box).forEach(b => b.onclick = () => { filter = b.dataset.vf; draw(); });
-    $$("[data-vadd]", box).forEach(b => b.onclick = () => {
-      const v = list[+b.dataset.vadd];
-      modal({ title: "In welche Playlist?", text: `${v.title} – ${v.artists.join(", ")}`, body: `<input class="input" id="verPl" list="plnames" placeholder="Name einer Playlist (neu oder vorhanden)" style="width:100%" autocomplete="off">`, confirm: "Hinzufügen",
-        onConfirm: async m => {
-          const name = $("#verPl", m).value.trim();
-          if (!name) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; }
-          const res = await api("/api/versions/add", { method: "POST", body: { playlist: name, track: v } });
-          toast(res.added ? `Zu „${res.playlist}“ hinzugefügt` : `War schon in „${res.playlist}“`);
-          refreshMeta();
-        } });
-    });
+    $$("[data-vadd]", box).forEach(b => b.onclick = () => addFoundToPlaylist(list[+b.dataset.vadd]));
     bindSimilar(box, list, ".row--ver");
   };
   draw();
@@ -2234,6 +2226,7 @@ const mixGenreOk = g => g && TAXONOMY?.[g.genre] && (!g.sub || TAXONOMY[g.genre]
 
 Views.mix = async (main) => {
   const meta = await api("/api/mix/levels");
+  Mix.max = meta.max_seeds || 15;
   if (!mixGenreOk(Mix.genre)) Mix.genre = null;
   Mix.gOpen = Mix.genre?.genre || Mix.gOpen;
   const o = Mix.opts;
@@ -2382,7 +2375,8 @@ function mixGenresDraw() {
 }
 function mixAddSeed(a) {
   if (!a || Mix.seeds.some(s => s.id === a.id)) return;
-  if (Mix.seeds.length >= 5) return toast("Höchstens 5 Künstler – entferne erst einen", "err");
+  const max = Mix.max || 15;
+  if (Mix.seeds.length >= max) return toast(`Höchstens ${max} Künstler – entferne erst einen`, "err");
   Mix.seeds.push({ id: a.id, name: a.name, picture: a.picture }); store.set("mixSeeds", Mix.seeds); mixSeedsDraw(); Mix.refresh?.();
 }
 function mixSeedsDraw() {
@@ -2503,21 +2497,194 @@ Views.dupes = async (main) => {
   }));
 };
 
-/* ---------- Entdecken */
-Views.discover = async (main) => {
-  main.innerHTML = `<div class="page view-enter">
-    <div class="page-head"><div><h1>Entdecken</h1><p>Gib einen Song ein – du bekommst Genre, Subgenre und ähnliche Tracks.</p></div></div>
-    <div class="card discover-bar">
+/* ---------- Entdecken: im Deezer-Katalog stöbern (Suche, Künstler, Alben, Charts nach Genre) und „Ähnlich zu einem Song“.
+   Quelle Deezer (ohne Login) – gesendet wird nur der Suchbegriff bzw. die angeklickte Kennung; nichts wird gespeichert. */
+const Disc = { tab: store.get("discTab", "browse"), genre: store.get("discGenre", 0), chart: store.get("discChart", "tracks"), genres: null };
+
+const discArtists = t => (t.artists || []).map((n, i) => { const id = (t.artist_ids || [])[i];
+  return id ? `<a class="dc-a" href="#/discover?artist=${id}">${esc(n)}</a>` : esc(n); }).join(", ");
+
+function discRows(list, { num = false, album = true } = {}) {
+  if (!list.length) return `<div class="cell-sub" style="padding:10px 2px">Nichts gefunden.</div>`;
+  return `<div class="rows">${list.map((v, i) => `<div class="row row--dc ${num ? "row--dcn" : ""}" data-i="${i}" title="Klicken: auf Spotify, YouTube & Co. öffnen">
+      ${num ? `<div class="cell-muted num dc-num">${i + 1}</div>` : ""}
+      <div class="thumb-wrap">${v.cover ? `<img class="thumb" src="${esc(v.cover)}" alt="" loading="lazy">` : `<div class="thumb" style="display:grid;place-items:center;color:var(--text-3)">${icon("disc")}</div>`}
+        ${v.preview_url ? `<button class="thumb-play" ${playAttr(v)} aria-label="Hörprobe">${icon("play")}</button>` : ""}</div>
+      <div class="cell-main"><div class="cell-title">${esc(v.title)}${v.explicit ? ` <span class="dc-e" title="Expliziter Text">E</span>` : ""}</div><div class="cell-sub">${discArtists(v)}</div></div>
+      <div class="cell-sub dc-alb">${album ? (v.album_id ? `<a class="dc-a" href="#/discover?album=${v.album_id}">${esc(v.album || "")}</a>` : esc(v.album || "")) : ""}</div>
+      <div class="cell-muted num">${v.duration_ms ? fmtDur(v.duration_ms) : ""}</div>
+      <div class="row-act"><button class="icon-btn" data-dver="${i}" title="Remixe & Versionen" aria-label="Remixe & Versionen">${icon("layers")}</button><button class="icon-btn" data-dadd="${i}" title="In eine Playlist legen" aria-label="In Playlist">${icon("plus")}</button></div>
+    </div>`).join("")}</div>`;
+}
+function bindDiscRows(box, list) {
+  $$("[data-dadd]", box).forEach(b => b.onclick = () => addFoundToPlaylist(list[+b.dataset.dadd]));
+  $$("[data-dver]", box).forEach(b => b.onclick = () => showVersionsOf(list[+b.dataset.dver]));
+  bindSimilar(box, list, ".row--dc");
+  Player.sync();
+}
+const discCards = (list, kind) => list.length ? `<div class="dc-grid">${list.map(x => kind === "artist"
+  ? `<a class="dc-card" href="#/discover?artist=${x.id}">${x.picture ? `<img class="dc-pic dc-pic--round" src="${esc(x.picture)}" alt="" loading="lazy">` : `<div class="dc-pic dc-pic--round"></div>`}
+      <b>${esc(x.name)}</b><span>${x.fans ? `${x.fans.toLocaleString("de-DE")} Fans` : "Künstler"}</span></a>`
+  : `<a class="dc-card" href="#/discover?album=${x.id}">${x.cover ? `<img class="dc-pic" src="${esc(x.cover)}" alt="" loading="lazy">` : `<div class="dc-pic"></div>`}
+      <b>${esc(x.title)}</b><span>${[x.artist, x.type, x.year].filter(Boolean).map(esc).join(" · ")}</span></a>`).join("")}</div>`
+  : `<div class="cell-sub" style="padding:10px 2px">Nichts gefunden.</div>`;
+
+function addFoundToPlaylist(v) {
+  modal({ title: "In welche Playlist?", text: `${esc(v.title)} – ${esc((v.artists || []).join(", "))}`, body: `<input class="input" id="verPl" list="plnames" placeholder="Name einer Playlist (neu oder vorhanden)" style="width:100%" autocomplete="off">`, confirm: "Hinzufügen",
+    onConfirm: async m => {
+      const name = $("#verPl", m).value.trim();
+      if (!name) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; }
+      const res = await api("/api/versions/add", { method: "POST", body: { playlist: name, track: v } });
+      toast(res.added ? `Zu „${res.playlist}“ hinzugefügt` : `War schon in „${res.playlist}“`);
+      refreshMeta();
+    } });
+}
+function saveAllAsPlaylist(list, name) {
+  if (!list.length) return;
+  modal({ title: `${list.length} Songs als Playlist speichern`, text: "Neue Playlist oder an eine vorhandene anhängen – Songs, die schon drin sind, werden übersprungen.",
+    body: `<input class="input" id="dcPl" list="plnames" value="${esc(name)}" style="width:100%" autocomplete="off">`, confirm: "Speichern",
+    onConfirm: async m => {
+      const pl = $("#dcPl", m).value.trim();
+      if (!pl) { toast("Bitte einen Namen eingeben", "err"); throw { silent: true }; }
+      const r = await api("/api/discover/save", { method: "POST", body: { playlist: pl, tracks: list } });
+      toast(`${r.added} Songs in „${r.playlist}“${r.skipped ? ` (${r.skipped} waren schon drin)` : ""}`);
+      refreshMeta();
+    } });
+}
+function showVersionsOf(v) {
+  modal({ title: "Remixe & Versionen", text: `${esc(v.title)} – ${esc((v.artists || []).join(", "))}`, body: `<div id="dcVer"></div>`, confirm: "Schließen", cancel: null, wide: true });
+  loadVersions($("#dcVer"), { track: { title: v.title, artists: v.artists || [] } });
+}
+
+Views.discover = async (main, _, params) => {
+  const p = params || new URLSearchParams();
+  const deep = p.get("artist") || p.get("album");
+  if (deep) Disc.tab = "browse";
+  main.innerHTML = `<div class="page view-enter dc-page">
+    <div class="page-head"><div><h1>Entdecken</h1><p>Stöbere im Katalog von Deezer: Songs, Künstler und Alben suchen, Charts nach Genre, reinhören und in Playlists legen.</p></div>
+      <div class="segmented" id="dcTabs"><button data-t="browse" class="${Disc.tab === "browse" ? "on" : ""}">${icon("compass")}Stöbern</button><button data-t="similar" class="${Disc.tab === "similar" ? "on" : ""}">${icon("sparkle")}Ähnlich zu einem Song</button></div></div>
+    <div id="dcBody"></div></div>`;
+  hydrateIcons(main);
+  $$("#dcTabs button").forEach(b => b.onclick = () => {
+    Disc.tab = b.dataset.t; store.set("discTab", Disc.tab);
+    if (location.hash !== "#/discover") location.hash = "#/discover"; else Views.discover(main, null, new URLSearchParams());
+  });
+  const body = $("#dcBody");
+  if (Disc.tab === "similar") return discSimilar(body);
+  if (p.get("artist")) return discArtist(body, p.get("artist"));
+  if (p.get("album")) return discAlbum(body, p.get("album"));
+  body.innerHTML = `<div class="card discover-bar"><div class="input-icon" style="flex:1">${icon("search")}<input class="input" id="dcQ" placeholder="Song, Künstler oder Album suchen …" value="${esc(p.get("q") || "")}" autocomplete="off"></div></div>
+    <div id="dcOut"></div>
+    <div class="cell-sub dc-foot">Quelle: Deezer (ohne Login) – gesendet wird nur dein Suchbegriff bzw. was du anklickst; Deezer sieht dabei deine IP-Adresse. Gespeichert wird nichts.</div>`;
+  hydrateIcons(body);
+  const q = $("#dcQ"), out = $("#dcOut");
+  let tmo, seq = 0;
+  const run = async () => {
+    const term = q.value.trim(), my = ++seq;
+    history.replaceState(null, "", term ? `#/discover?q=${encodeURIComponent(term)}` : "#/discover");
+    if (!term) return discCharts(out);
+    out.innerHTML = skeletonRows(6);
+    let d;
+    try { d = await api(`/api/discover/search?q=${encodeURIComponent(term)}`); } catch (e) { if (my === seq) out.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
+    if (my !== seq || !document.body.contains(out)) return;
+    out.innerHTML = `${d.artists.length ? `<div class="section-title">Künstler</div>${discCards(d.artists, "artist")}` : ""}
+      <div class="section-title dc-st">Songs<button class="btn btn--sm btn--ghost" id="dcMore">Mehr Songs</button></div><div id="dcTr">${discRows(d.tracks)}</div>
+      ${d.albums.length ? `<div class="section-title">Alben</div>${discCards(d.albums, "album")}` : ""}`;
+    hydrateIcons(out); bindDiscRows($("#dcTr"), d.tracks);
+    $("#dcMore").onclick = async e => {
+      e.target.disabled = true;
+      try { const m = await api(`/api/discover/search?kind=track&q=${encodeURIComponent(term)}`); $("#dcTr").innerHTML = discRows(m.items); bindDiscRows($("#dcTr"), m.items); e.target.remove(); }
+      catch (err) { toast(err.message, "err"); e.target.disabled = false; }
+    };
+  };
+  q.oninput = () => { clearTimeout(tmo); tmo = setTimeout(run, 400); };
+  q.onkeydown = e => { if (e.key === "Enter") { clearTimeout(tmo); run(); } };
+  run();
+  if (!p.get("q")) q.focus();
+};
+
+async function discCharts(out) {
+  out.innerHTML = skeletonRows(6);
+  if (!Disc.genres) Disc.genres = await api("/api/discover/genres").catch(() => [{ id: 0, name: "Alle" }]);
+  let d;
+  try { d = await api(`/api/discover/charts?genre=${Disc.genre}`); } catch (e) { out.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
+  if (!document.body.contains(out)) return;
+  const g = Disc.genres.find(x => x.id === Disc.genre)?.name || "Alle";
+  out.innerHTML = `<div class="section-title dc-st">Charts${Disc.genre ? ` · ${esc(g)}` : ""}
+      <div class="segmented segmented--sm" id="dcCk">${[["tracks", "Songs"], ["artists", "Künstler"], ["albums", "Alben"]].map(([k, l]) => `<button data-k="${k}" class="${Disc.chart === k ? "on" : ""}">${l}</button>`).join("")}</div>
+      ${Disc.chart === "tracks" ? `<button class="btn btn--sm btn--ghost" id="dcSaveCh">${icon("plus")}Als Playlist</button>` : ""}</div>
+    <div class="ver-chips">${Disc.genres.map(x => `<button class="chip ${x.id === Disc.genre ? "chip--on" : ""}" data-g="${x.id}">${esc(x.name)}</button>`).join("")}</div>
+    <div id="dcCh">${Disc.chart === "tracks" ? discRows(d.tracks, { num: true }) : discCards(d[Disc.chart], Disc.chart === "artists" ? "artist" : "album")}</div>`;
+  hydrateIcons(out);
+  if (Disc.chart === "tracks") bindDiscRows($("#dcCh"), d.tracks);
+  $$("[data-g]", out).forEach(b => b.onclick = () => { Disc.genre = +b.dataset.g; store.set("discGenre", Disc.genre); discCharts(out); });
+  $$("#dcCk button", out).forEach(b => b.onclick = () => { Disc.chart = b.dataset.k; store.set("discChart", Disc.chart); discCharts(out); });
+  const sv = $("#dcSaveCh", out); if (sv) sv.onclick = () => saveAllAsPlaylist(d.tracks, `Charts ${g} ${new Date().toLocaleDateString("de-DE")}`);
+}
+
+async function discArtist(body, aid) {
+  body.innerHTML = skeletonRows(6);
+  let d;
+  try { d = await api(`/api/discover/artist/${encodeURIComponent(aid)}`); } catch (e) { body.innerHTML = `<div class="empty">${icon("info")}<h3>Geht gerade nicht</h3><p>${esc(e.message)}</p></div>`; return; }
+  if (!document.body.contains(body)) return;
+  const a = d.artist;
+  let all = false;
+  body.innerHTML = `<button class="btn btn--sm btn--ghost dc-back" id="dcBack">${icon("prev")}Zurück</button>
+    <div class="card dc-hero">${a.picture_big || a.picture ? `<img class="dc-hero-pic dc-pic--round" src="${esc(a.picture_big || a.picture)}" alt="">` : ""}
+      <div class="dc-hero-txt"><span class="cell-sub">Künstler</span><h2>${esc(a.name)}</h2>
+        <div class="cell-sub">${[a.fans ? `${a.fans.toLocaleString("de-DE")} Fans bei Deezer` : "", a.albums ? `${a.albums} Veröffentlichungen` : ""].filter(Boolean).join(" · ")}</div>
+        <div class="btn-row">${d.top.length ? `<button class="btn btn--primary btn--sm" id="dcPlay">${icon("play")}Reinhören</button>` : ""}
+          <button class="btn btn--sm" id="dcMix">${icon("shuffle")}Mix mit ${esc(a.name)}</button>
+          ${d.top.length ? `<button class="btn btn--sm" id="dcSaveTop">${icon("plus")}Top-Songs als Playlist</button>` : ""}
+          ${a.link ? `<a class="btn btn--sm btn--ghost" href="${esc(a.link)}" target="_blank" rel="noopener">${icon("external")}Bei Deezer</a>` : ""}</div></div></div>
+    <div class="section-title dc-st">Beliebteste Songs${d.top.length > 10 ? `<button class="btn btn--sm btn--ghost" id="dcAll">Alle ${d.top.length} zeigen</button>` : ""}</div><div id="dcTop"></div>
+    ${d.albums.length ? `<div class="section-title">Alben</div>${discCards(d.albums, "album")}` : ""}
+    ${d.singles.length ? `<div class="section-title">Singles & EPs</div>${discCards(d.singles, "album")}` : ""}
+    ${d.related.length ? `<div class="section-title">Ähnliche Künstler</div>${discCards(d.related, "artist")}` : ""}`;
+  hydrateIcons(body);
+  const drawTop = () => { const l = all ? d.top : d.top.slice(0, 10); $("#dcTop").innerHTML = discRows(l, { num: true }); bindDiscRows($("#dcTop"), l); };
+  drawTop();
+  $("#dcBack").onclick = () => history.length > 1 ? history.back() : (location.hash = "#/discover");
+  const al = $("#dcAll"); if (al) al.onclick = () => { all = true; al.remove(); drawTop(); };
+  const pl = $("#dcPlay"); if (pl) pl.onclick = () => $("#dcTop .thumb-play")?.click();
+  const st = $("#dcSaveTop"); if (st) st.onclick = () => saveAllAsPlaylist(d.top, `Best of ${a.name}`);
+  $("#dcMix").onclick = () => { mixAddSeed({ id: a.id, name: a.name, picture: a.picture }); Mix.mode = "artists"; store.set("mixMode", "artists"); location.hash = "#/mix"; };
+}
+
+async function discAlbum(body, alid) {
+  body.innerHTML = skeletonRows(6);
+  let d;
+  try { d = await api(`/api/discover/album/${encodeURIComponent(alid)}`); } catch (e) { body.innerHTML = `<div class="empty">${icon("info")}<h3>Geht gerade nicht</h3><p>${esc(e.message)}</p></div>`; return; }
+  if (!document.body.contains(body)) return;
+  const a = d.album;
+  const who = a.artist_id ? `<a class="dc-a" href="#/discover?artist=${a.artist_id}">${esc(a.artist || "")}</a>` : esc((a.artists || []).join(", "));
+  body.innerHTML = `<button class="btn btn--sm btn--ghost dc-back" id="dcBack">${icon("prev")}Zurück</button>
+    <div class="card dc-hero">${a.cover_big || a.cover ? `<img class="dc-hero-pic" src="${esc(a.cover_big || a.cover)}" alt="">` : ""}
+      <div class="dc-hero-txt"><span class="cell-sub">${esc(a.type || "Album")}</span><h2>${esc(a.title)}</h2><div>${who}</div>
+        <div class="cell-sub">${[a.date ? new Date(a.date).toLocaleDateString("de-DE") : a.year, d.tracks.length ? `${d.tracks.length} Songs` : "", a.duration_ms ? `${Math.round(a.duration_ms / 60000)} Min.` : "", a.label, (a.genres || []).join(", ")].filter(Boolean).map(esc).join(" · ")}</div>
+        <div class="btn-row">${d.tracks.some(t => t.preview_url) ? `<button class="btn btn--primary btn--sm" id="dcPlay">${icon("play")}Reinhören</button>` : ""}
+          ${d.tracks.length ? `<button class="btn btn--sm" id="dcSave">${icon("plus")}Als Playlist speichern</button>` : ""}
+          ${a.link ? `<a class="btn btn--sm btn--ghost" href="${esc(a.link)}" target="_blank" rel="noopener">${icon("external")}Bei Deezer</a>` : ""}</div></div></div>
+    <div class="section-title">Songs</div><div id="dcTr">${discRows(d.tracks, { num: true, album: false })}</div>`;
+  hydrateIcons(body); bindDiscRows($("#dcTr"), d.tracks);
+  $("#dcBack").onclick = () => history.length > 1 ? history.back() : (location.hash = "#/discover");
+  const pl = $("#dcPlay"); if (pl) pl.onclick = () => $("#dcTr .thumb-play")?.click();
+  const sv = $("#dcSave"); if (sv) sv.onclick = () => saveAllAsPlaylist(d.tracks, `${a.artist ? `${a.artist} – ` : ""}${a.title}`);
+}
+
+/* „Ähnlich zu einem Song“: Genre, Subgenre und ähnliche Tracks über Last.fm (die bisherige Entdecken-Seite) */
+function discSimilar(body) {
+  body.innerHTML = `<div class="card discover-bar">
       <input class="input" id="dArtist" placeholder="Künstler, z. B. Netsky">
       <input class="input" id="dTitle" placeholder="Titel, z. B. Come Alive">
-      <button class="btn btn--primary" id="dGo">${icon("compass")}Entdecken</button>
+      <button class="btn btn--primary" id="dGo">${icon("compass")}Ähnliche finden</button>
     </div>
     <div class="toolbar hidden" id="dTools">
       <div class="seed" id="dSeed" style="margin:0"></div>
       <label class="switch" style="margin-left:auto"><input type="checkbox" id="dSame"><span class="track"></span>Nur gleiches Subgenre</label>
     </div>
-    <div id="dOut"><div class="empty">${icon("compass")}<h3>Neue Musik finden</h3><p>Basierend auf Last.fm-Hörerdaten – mit Subgenre zu jedem Treffer, damit du nur bekommst, was zu deinem Stil passt.</p></div></div>
-  </div>`;
+    <div id="dOut"><div class="empty">${icon("compass")}<h3>Ähnliche Songs finden</h3><p>Gib einen Song ein – du bekommst Genre, Subgenre und ähnliche Tracks, basierend auf Last.fm-Hörerdaten.</p></div></div>`;
+  hydrateIcons(body);
   let data = null;
   const draw = () => {
     if (!data) return;
@@ -2540,7 +2707,7 @@ Views.discover = async (main) => {
   $("#dGo").onclick = go;
   [$("#dArtist"), $("#dTitle")].forEach(i => i.onkeydown = e => e.key === "Enter" && go());
   $("#dSame").onchange = draw;
-};
+}
 
 /* ---------- Aufteilen */
 Views.split = async (main, _, params) => {
@@ -4747,6 +4914,7 @@ const Privacy = {
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
       ["YouTube / Spotify („Ersatz-Hörprobe“)", "beim Laden des offiziellen Players: IP-Adresse, Geräteinfos, ggf. Cookies; zum Finden: Titel + Künstler an die YouTube-Suche (eigener Zugang)", "nur nach Einwilligung je Anbieter und nur, wenn Deezer/Apple keine Hörprobe haben"],
+      ["Deezer („Entdecken“)", "Suchbegriff bzw. Deezer-Kennung des angetippten Künstlers, Albums oder Genres", "nur beim Suchen und Öffnen unter „Entdecken“; Ergebnis höchstens 1 Stunde im Arbeitsspeicher"],
       ["Deezer („Remixe & Versionen“)", "Titel und Hauptkünstler des Songs", "nur nach Klick auf „Remixe & Versionen suchen“"],
       ["Deezer („Mix erstellen“)", "eingegebener Künstlername bzw. Kennungen der gewählten und ähnlicher Künstler", "nur beim Suchen und Erstellen eines Mixes"],
       ["MusicBrainz, Last.fm („Mix erstellen“ nach Genre)", "nur der Genre-Name als Tag (z. B. „liquid funk“); Last.fm nur mit eigenem Key", "nur beim Erstellen eines Genre-Mixes"],
@@ -6203,7 +6371,7 @@ const SEARCH_PAGES = [
   ["#/services", "Dienste", "grid", "spotify tidal youtube soundcloud deezer verbinden alles einlesen sortieren"],
   ["#/inbox", "Neu für dich", "inbox", "automatischer abgleich neue songs likes einsortieren filter"],
   ["#/links", "Link einfügen", "external", "url link öffnen playlist link"],
-  ["#/discover", "Entdecken", "compass", "ähnliche songs neue musik finden bpm tonart"],
+  ["#/discover", "Entdecken", "compass", "stöbern browsen suchen katalog künstler album charts genre ähnliche songs neue musik finden bpm tonart"],
   ["#/mix", "Mix erstellen", "shuffle", "neue playlist künstler genre subgenre ähnliche künstler mix generieren tempo bpm tonart camelot energie passend"],
   ["#/share", "Teilen", "share", "playlists teilen freunde schlüssel verschlüsselt"],
   ["#/directory", "Verzeichnis", "globe", "öffentliche playlists veröffentlichen melden stöbern"],

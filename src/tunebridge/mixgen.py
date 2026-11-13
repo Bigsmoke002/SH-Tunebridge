@@ -48,8 +48,9 @@ LEVELS: dict[str, dict] = {
 }
 POPULARITY = ("mix", "hits", "unbekannt")
 COUNT_DEFAULT, COUNT_MAX = 30, 100
-MAX_SEEDS = 5
-RELATED_PER_SEED = 12      # ähnliche Künstler je Start-Künstler
+MAX_SEEDS = 15
+RELATED_PER_SEED = 12      # ähnliche Künstler je Start-Künstler (bei vielen Start-Künstlern weniger, s. collect)
+RELATED_TOTAL = 48         # höchstens so viele ähnliche Künstler insgesamt – Rücksicht auf Deezer
 TOP_PER_RELATED = 4        # Top-Songs je ähnlichem Künstler
 MEASURE_MAX = 150          # höchstens so viele Hörproben pro Auftrag (Rücksicht auf Deezer)
 MEASURE_WORKERS = 4       # gleichzeitige Messungen – das Deezer-Budget (ratelimit) gilt trotzdem für alle zusammen
@@ -144,6 +145,9 @@ def collect(seeds: list[dict], opts: dict, job: dict | None = None) -> list[dict
             out.append(it)
 
     related: dict[int, tuple[float, str, str]] = {}      # Künstler-ID -> (fit, Name, über wen)
+    n = max(1, len(seeds))
+    per_seed = max(3, min(RELATED_PER_SEED, RELATED_TOTAL // n))   # 1–4 Künstler: 12 je Künstler, 15 Künstler: 3
+    radio_n = max(20, min(50, 250 // n))
     for s in seeds:
         aid, name = int(s["id"]), s.get("name") or ""
         top = _cached(f"top:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/top", limit=10)).get("data") or []
@@ -151,7 +155,7 @@ def collect(seeds: list[dict], opts: dict, job: dict | None = None) -> list[dict
             for i, h in enumerate(top):
                 own = (h.get("artist") or {}).get("id") == aid
                 add(h, 1.0 - i * 0.02, f"von {name}" if own else f"mit {name}", seed=True)
-        radio = _cached(f"radio:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/radio", limit=50)).get("data") or []
+        radio = (_cached(f"radio:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/radio", limit=50)).get("data") or [])[:radio_n]
         for i, h in enumerate(radio):
             if (h.get("artist") or {}).get("id") in seed_ids:
                 if opts["include_seeds"]:
@@ -159,7 +163,7 @@ def collect(seeds: list[dict], opts: dict, job: dict | None = None) -> list[dict
                 continue
             add(h, max(0.45, 0.88 - i * 0.008), f"aus dem Radio von {name}")
         rel = _cached(f"rel:{aid}", lambda aid=aid: _get(f"https://api.deezer.com/artist/{aid}/related", limit=RELATED_PER_SEED)).get("data") or []
-        for i, a in enumerate(rel[:RELATED_PER_SEED]):
+        for i, a in enumerate(rel[:per_seed]):
             if a.get("id") and a["id"] not in seed_ids:
                 fit = 0.85 - i * 0.025
                 if fit > related.get(a["id"], (0,))[0]:

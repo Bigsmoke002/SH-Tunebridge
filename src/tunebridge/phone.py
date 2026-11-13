@@ -510,6 +510,43 @@ def handle_versions(body: dict, client: str | None = None) -> dict:
                                                               "items": out}, limit=None)}
 
 
+def handle_discover(body: dict, client: str | None = None) -> dict:
+    """„Entdecken“ fürs Handy (discover.py): Suche, Künstler, Album, Charts, Genres im Deezer-Katalog.
+    Das Handy schickt nur Suchbegriff bzw. Deezer-Kennung; der PC fragt Deezer wie bei sich selbst."""
+    dev_id = str(body.get("id") or "")[:32]
+    d = _device(dev_id)
+    key = _kdf(base64.b64decode(d["secret"]), "sync")
+    try:
+        req = unseal(key, f"discover:{dev_id}", str(body.get("box") or ""))
+    except ShareError:
+        raise PhoneError("Anfrage ließ sich nicht prüfen – bitte neu koppeln", 403) from None
+    rid = str(req.get("rid") or "")[:64]
+    _replay_check(int(req.get("ts") or 0), rid)
+    from . import discover, ratelimit
+    what, arg = str(req.get("what") or ""), req.get("arg")
+    try:
+        if what == "search":
+            kind = str(req.get("kind") or "all")
+            res = discover.search_all(str(arg or "")) if kind == "all" else discover.search(str(arg or ""), kind)
+        elif what == "artist":
+            res = discover.artist_page(arg)
+        elif what == "album":
+            res = discover.album_page(arg)
+        elif what == "charts":
+            res = discover.charts(arg if arg not in (None, "") else 0)
+        elif what == "genres":
+            res = {"genres": discover.genres()}
+        else:
+            raise PhoneError("Unbekannte Anfrage")
+    except ratelimit.LimitReached as e:
+        raise PhoneError(f"{e} – bitte gleich nochmal versuchen", 429) from None
+    except LookupError as e:
+        raise PhoneError(str(e), 404) from None
+    except ValueError as e:
+        raise PhoneError(str(e)) from None
+    return {"box": seal(key, f"discover-ok:{dev_id}:{rid}", res, limit=None)}
+
+
 def handle_fallback(body: dict, client: str | None = None) -> dict:
     """Ersatz-Player fürs Handy (fallback.py): Kennung des YouTube-Videos bzw. Spotify-Songs. Das Handy nennt die
     Anbieter, für die du *am Handy* eingewilligt hast (consent); ohne Angabe sucht der PC nichts."""
@@ -630,7 +667,7 @@ _TRACK_FIELDS = {f for f in Track.__dataclass_fields__}
 def _track(d: dict) -> Track:
     t = {k: v for k, v in (d or {}).items() if k in _TRACK_FIELDS}
     t["title"] = str(t.get("title") or "?")[:300]
-    t["artists"] = [str(a)[:200] for a in (t.get("artists") or [])][:10]
+    t["artists"] = [str(a)[:200] for a in (t.get("artists") or [])][:20]
     return Track(**t)
 
 
@@ -964,6 +1001,11 @@ def _make_app():
     async def versions_songs(request: Request):
         import asyncio
         return await asyncio.to_thread(handle_versions, await body_of(request), _client(request))
+
+    @api.post("/phone/v1/discover")
+    async def discover_songs(request: Request):
+        import asyncio
+        return await asyncio.to_thread(handle_discover, await body_of(request), _client(request))
 
     @api.post("/phone/v1/job")
     async def job(request: Request):

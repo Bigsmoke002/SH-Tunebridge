@@ -385,6 +385,34 @@ def test_versions_for_phone_is_encrypted_and_replay_safe(monkeypatch):
         phone.handle_versions({"id": dev, "box": seal(ks, f"similar:{dev}", {**req, "rid": "v2"})})
 
 
+def test_discover_for_phone_is_encrypted_and_replay_safe(monkeypatch):
+    from tunebridge import discover
+    calls = []
+    monkeypatch.setattr(discover, "search_all", lambda q: calls.append(("all", q)) or {"q": q, "tracks": [], "artists": [], "albums": []})
+    monkeypatch.setattr(discover, "artist_page", lambda a: calls.append(("artist", a)) or {"artist": {"id": 7}})
+    monkeypatch.setattr(discover, "album_page", lambda a: (_ for _ in ()).throw(LookupError("Album bei Deezer nicht gefunden")))
+    dev, secret, _ = _pair()
+    ks = phone._kdf(secret, "sync")
+
+    def ask(rid, **req):
+        body = {"id": dev, "box": seal(ks, f"discover:{dev}", {"ts": int(time.time() * 1000), "rid": rid, **req})}
+        return unseal(ks, f"discover-ok:{dev}:{rid}", phone.handle_discover(body)["box"])
+    assert ask("d1", what="search", arg="netsky")["q"] == "netsky"
+    assert ask("d2", what="artist", arg="7") == {"artist": {"id": 7}}
+    assert calls == [("all", "netsky"), ("artist", "7")]
+    with pytest.raises(phone.PhoneError) as e:
+        ask("d3", what="album", arg="1")
+    assert e.value.status == 404
+    with pytest.raises(phone.PhoneError):
+        ask("d4", what="etwas")
+    with pytest.raises(phone.PhoneError) as e:                    # gleiche Anfrage nochmal -> abgewiesen
+        phone.handle_discover({"id": dev, "box": seal(ks, f"discover:{dev}", {"ts": int(time.time() * 1000), "rid": "d1",
+                                                                            "what": "search", "arg": "netsky"})})
+    assert e.value.status == 409
+    with pytest.raises(phone.PhoneError):                         # anderer Kontext -> passt nicht
+        phone.handle_discover({"id": dev, "box": seal(ks, f"versions:{dev}", {"ts": int(time.time() * 1000), "rid": "d5", "what": "genres"})})
+
+
 def test_fallback_for_phone_needs_phone_consent(monkeypatch):
     from tunebridge import fallback
     monkeypatch.setattr(fallback, "_youtube_search", lambda t: "ddddddddddd")

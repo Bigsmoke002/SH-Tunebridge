@@ -86,6 +86,7 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Deezer, iTunes-Suche, Last.fm, MusicBrainz | Künstler und Titel (ggf. ISRC); zur Genre-Prüfung die Kennung des schon gefundenen Künstlers | nach einer Erkennung, beim Link-Einfügen, Sortieren und automatischen Abgleich (Cover, Hörprobe, Genre, Mikro-Genre) |
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
 | YouTube (Google LLC, USA) / Spotify AB („Ersatz-Hörprobe“, Standard: aus) | Beim Laden des eingebetteten offiziellen Players: IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters. Zum Finden des Videos: Titel und Künstler an die offizielle YouTube-Suche (mit deinem eigenen YouTube-Schlüssel bzw. deiner YouTube-Verbindung) bzw. an die Spotify-Suche deiner verbundenen Spotify-App | nur wenn du es je Anbieter erlaubt hast (Einstellungen › Datenschutz) **und** Deezer/Apple keine Hörprobe haben; gefundene Kennungen höchstens 30 Tage lokal gemerkt, beim Widerruf gelöscht. Es gelten die [YouTube-Nutzungsbedingungen](https://www.youtube.com/t/terms), die [Datenschutzerklärung von Google](https://policies.google.com/privacy) bzw. die [Datenschutzhinweise von Spotify](https://www.spotify.com/de/legal/privacy-policy/) |
+| Deezer („Entdecken“) | dein Suchbegriff bzw. die Deezer-Kennung des angetippten Künstlers, Albums oder Genres | nur während du unter „Entdecken“ suchst oder etwas öffnest; Ergebnis höchstens 1 Stunde im Arbeitsspeicher, Suchbegriffe werden nicht gespeichert |
 | Deezer („Remixe & Versionen“) | Titel (ohne Versions-Zusatz) und Hauptkünstler des Songs | nur nach Klick auf „Remixe & Versionen suchen“; Ergebnis 7 Tage im lokalen Zwischenspeicher |
 | YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer (offizielle Player) | IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters | **erst nach deinem Klick** auf „Player laden“ (siehe unten) |
 | Webseiten, die du über „Öffnen“ oder „Kaufen“ aufrufst | IP-Adresse (dein Standard-Browser) | erst beim Klick |
@@ -217,6 +218,16 @@ anderen**. Der Künstler wird nicht über den Namen gesucht, sondern über den s
 Titel stimmen), damit keine Namensvettern auftauchen. Quelle ist Deezers öffentliche Schnittstelle (ohne Login);
 die Liste bleibt höchstens eine Stunde im Arbeitsspeicher und wird nicht gespeichert. Hörproben dazu kommen wie
 immer direkt vom Anbieter.
+
+## Entdecken
+
+Unter *Entdecken* kannst du im Deezer-Katalog stöbern: Songs, Künstler und Alben suchen, Künstler- und Albumseiten,
+Charts und Genres. Dafür geht an **Deezers öffentliche Schnittstelle** (`api.deezer.com`, ohne Login) nur, was du
+suchst bzw. antippst – der Suchbegriff oder die Deezer-Kennung des Künstlers, Albums oder Genres. Deezer sieht dabei
+wie bei jeder Abfrage deine IP-Adresse. Die Ergebnisse bleiben höchstens eine Stunde im Arbeitsspeicher; Suchbegriffe
+werden nirgends gespeichert oder protokolliert. Erst wenn du einen Song in eine Playlist legst, wird er wie jeder andere
+Playlist-Eintrag lokal gespeichert. Hörproben kommen wie immer direkt vom Anbieter (siehe oben). Ganze Songs gibt es
+nicht – zum Anhören ganzer Titel führen die Links zu den offiziellen Diensten.
 
 ## Mix erstellen
 
@@ -351,7 +362,7 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   Playlist; der PC fragt Deezer und misst Tempo/Tonart an den offiziellen Hörproben genau wie bei sich selbst (siehe
   oben). Gespeichert wird das Ergebnis nur, wenn du „Speichern“ tippst – als Playlist am PC.
 - **Ähnliche Songs:** Kommen vom gekoppelten PC (verschlüsselt wie der Abgleich; der PC fragt Last.fm/Deezer wie bei
-  sich selbst). Ist kein PC erreichbar, holt die App sie – nur wenn du es erlaubst („Ähnliche Songs ohne PC“, Standard:
+  sich selbst). Ist kein PC erreichbar, holt die App sie – nur wenn du es erlaubst („Ähnliche Songs, Versionen & Entdecken ohne PC“, Standard:
   aus) – direkt bei Deezer: dafür gehen Titel und Künstler bzw. Deezer-Nummer/ISRC des Songs an Deezer, Deezer sieht
   deine IP-Adresse.
 - **Ersatz-Hörprobe (Standard: aus):** Nur wenn du es je Anbieter erlaubst (Mehr › Datenschutz) und für einen Song
@@ -363,7 +374,11 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   Künstler, ggf. ISRC/bekannte Kennungen und die erlaubten Anbieter, der PC sucht mit seinem YouTube-Zugang).
 - **Remixe & Versionen:** Wie „Ähnliche Songs“: vom gekoppelten PC (verschlüsselt, `/phone/v1/versions`; das Handy
   schickt nur Titel, Künstler und Länge des Songs, der PC sucht bei Deezer). Ohne erreichbaren PC nur mit derselben
-  Erlaubnis („Ähnliche Songs & Versionen ohne PC“) direkt bei Deezer – mit Titel und Künstler; Deezer sieht deine IP-Adresse.
+  Erlaubnis („Ähnliche Songs, Versionen & Entdecken ohne PC“) direkt bei Deezer – mit Titel und Künstler; Deezer sieht deine IP-Adresse.
+- **Entdecken:** Suche, Künstler-/Albumseiten und Charts kommen vom gekoppelten PC (verschlüsselt, `/phone/v1/discover`;
+  das Handy schickt nur den Suchbegriff bzw. die Deezer-Kennung, der PC fragt Deezer). Ohne erreichbaren PC nur mit
+  derselben Erlaubnis („Ähnliche Songs, Versionen & Entdecken ohne PC“) direkt bei Deezer; Deezer sieht deine IP-Adresse.
+  Ergebnisse bleiben nur im Arbeitsspeicher (1 Stunde).
 - **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
   direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
 - **Dein PC:** siehe unten – im eigenen Netz direkt, unterwegs nur wenn du es einschaltest verschlüsselt über

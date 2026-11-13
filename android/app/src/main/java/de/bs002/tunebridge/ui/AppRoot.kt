@@ -69,6 +69,7 @@ import android.net.Uri
 private enum class Tab(val route: String, val label: String, val icon: Ico) {
     Listen("listen", "Erkennen", Ico.Wave),
     History("history", "Verlauf", Ico.Clock),
+    Discover("discover", "Entdecken", Ico.Compass),
     Lists("playlists", "Playlists", Ico.Stack),
     More("more", "Mehr", Ico.Sliders),
 }
@@ -120,6 +121,11 @@ private fun Main(toast: (String) -> Unit) {
     val tab = Tab.entries.firstOrNull { it.route == route }
     val request by App.listenRequest.collectAsState()
     LaunchedEffect(request) { if (request != null && route != Tab.Listen.route) nav.go(Tab.Listen) }
+    val dnav = remember(nav) {
+        de.bs002.tunebridge.ui.screens.DiscoverNav(
+            openArtist = { nav.navigate("discover/artist/$it") }, openAlbum = { nav.navigate("discover/album/$it") },
+            openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") }, openMix = { nav.navigate("mix") })
+    }
 
     de.bs002.tunebridge.ui.screens.UpdatePrompt(openMore = { nav.go(Tab.More) })
     Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.statusBars)) {
@@ -130,6 +136,16 @@ private fun Main(toast: (String) -> Unit) {
             ) {
                 composable(Tab.Listen.route) { ListenScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }, openPc = { nav.go(Tab.More) }) }
                 composable(Tab.History.route) { HistoryScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }, openStats = { nav.navigate("stats") }) }
+                composable(Tab.Discover.route) { de.bs002.tunebridge.ui.screens.DiscoverScreen(dnav) }
+                composable("discover/artist/{id}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    de.bs002.tunebridge.ui.screens.DiscoverArtistScreen(it.arguments?.getString("id")?.toLongOrNull() ?: 0L, dnav, back = { nav.popBackStack() })
+                }
+                composable("discover/album/{id}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    de.bs002.tunebridge.ui.screens.DiscoverAlbumScreen(it.arguments?.getString("id")?.toLongOrNull() ?: 0L, dnav, back = { nav.popBackStack() })
+                }
+                composable("discover/name/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
+                    de.bs002.tunebridge.ui.screens.DiscoverArtistByName(Uri.decode(it.arguments?.getString("name").orEmpty()), dnav, back = { nav.popBackStack() })
+                }
                 composable("stats", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     StatsScreen(back = { nav.popBackStack() }, openSong = { uid -> nav.navigate("song/${Uri.encode(uid)}") })
                 }
@@ -146,7 +162,8 @@ private fun Main(toast: (String) -> Unit) {
                 composable("song/{uid}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     SongScreen(Uri.decode(it.arguments?.getString("uid").orEmpty()), back = { nav.popBackStack() },
                         openSimilar = { t -> App.similarSeed.value = t; nav.navigate("similar") },
-                        openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") })
+                        openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") },
+                        openArtist = { n -> nav.navigate("discover/name/${Uri.encode(n)}") })
                 }
                 composable("playlist/{pc}/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     PlaylistScreen(Uri.decode(it.arguments?.getString("pc").orEmpty()), Uri.decode(it.arguments?.getString("name").orEmpty()), back = { nav.popBackStack() },

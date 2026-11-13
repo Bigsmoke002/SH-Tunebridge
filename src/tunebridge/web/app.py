@@ -1014,27 +1014,109 @@ async def versions_get(id: int | None = None, key: str | None = None, artist: st
     return await asyncio.to_thread(_versions, t)
 
 
+# ------------------------------------------------------------------ Entdecken (Deezer-Katalog durchstöbern)
+def _discover(fn, *args):
+    from .. import ratelimit, remixes
+    try:
+        d = fn(*args)
+    except ratelimit.LimitReached as e:
+        raise HTTPException(429, f"{e} – bitte gleich nochmal versuchen")
+    except (LookupError, ValueError) as e:
+        raise HTTPException(404 if isinstance(e, LookupError) else 400, str(e))
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"Deezer nicht erreichbar: {e}")
+    import copy
+    d = copy.deepcopy(d)                              # Zwischenspeicher nicht verändern
+    lists = [d] if isinstance(d, list) else [v for v in d.values() if isinstance(v, list)] if isinstance(d, dict) else []
+    for lst in lists:
+        for v in lst:
+            if isinstance(v, dict) and "ids" in v and "title" in v:
+                v["links"] = platform_links(remixes.to_track(v), lookup=False)
+    return d
+
+
+@app.get("/api/discover/search")
+async def discover_search(q: str = "", kind: str = "all"):
+    from .. import discover
+    if kind == "all":
+        return await asyncio.to_thread(_discover, discover.search_all, q)
+    return await asyncio.to_thread(_discover, discover.search, q, kind)
+
+
+@app.get("/api/discover/artist/{aid}")
+async def discover_artist(aid: str):
+    from .. import discover
+    return await asyncio.to_thread(_discover, discover.artist_page, aid)
+
+
+@app.get("/api/discover/album/{alid}")
+async def discover_album(alid: str):
+    from .. import discover
+    return await asyncio.to_thread(_discover, discover.album_page, alid)
+
+
+@app.get("/api/discover/charts")
+async def discover_charts(genre: str = "0"):
+    from .. import discover
+    return await asyncio.to_thread(_discover, discover.charts, genre)
+
+
+@app.get("/api/discover/genres")
+async def discover_genres():
+    from .. import discover
+    return await asyncio.to_thread(_discover, discover.genres)
+
+
 class VersionAddReq(BaseModel):
     playlist: str
     track: dict
 
 
-@app.post("/api/versions/add")
-def versions_add(req: VersionAddReq):
-    """Eine gefundene Version in eine Playlist legen (die Angaben kommen aus /api/versions)."""
+def _found_track(v: dict) -> Track:
+    """Song aus „Remixe & Versionen“ bzw. „Entdecken“ (Angaben kommen von der Oberfläche) -> geprüfter Track."""
     from .. import remixes
-    name, v = req.playlist.strip()[:120], req.track
-    if not name:
-        raise HTTPException(400, "Playlist-Name fehlt")
-    if not str(v.get("title") or "").strip() or not v.get("artists"):
+    if not isinstance(v, dict) or not str(v.get("title") or "").strip() or not v.get("artists"):
         raise HTTPException(400, "Titel oder Künstler fehlt")
-    v = {"title": str(v["title"])[:300], "artists": [str(a)[:200] for a in list(v["artists"])[:5]],
+    isrc = str(v.get("isrc") or "").strip().upper()
+    v = {"title": str(v["title"])[:300], "artists": [str(a)[:200] for a in list(v["artists"])[:20]],
          "album": str(v.get("album") or "")[:300] or None, "duration_ms": int(v.get("duration_ms") or 0) or None,
          "cover": v.get("cover") if str(v.get("cover") or "").startswith("https://") else None,
          "preview_url": v.get("preview_url") if str(v.get("preview_url") or "").startswith("https://") else None,
          "ids": {"deezer": str((v.get("ids") or {}).get("deezer"))} if str((v.get("ids") or {}).get("deezer") or "").isdigit() else {}}
-    added = store.add_to_playlist(name, remixes.to_track(v))
+    t = remixes.to_track(v)
+    if re.fullmatch(r"[A-Z]{2}[A-Z0-9]{3}\d{7}", isrc):
+        t.isrc = isrc
+    return t
+
+
+@app.post("/api/versions/add")
+def versions_add(req: VersionAddReq):
+    """Eine gefundene Version in eine Playlist legen (die Angaben kommen aus /api/versions)."""
+    name = req.playlist.strip()[:120]
+    if not name:
+        raise HTTPException(400, "Playlist-Name fehlt")
+    added = store.add_to_playlist(name, _found_track(req.track))
     return {"added": bool(added), "playlist": name}
+
+
+class DiscoverSaveReq(BaseModel):
+    playlist: str
+    tracks: list[dict]
+
+
+@app.post("/api/discover/save")
+def discover_save(req: DiscoverSaveReq):
+    """Mehrere Songs aus „Entdecken“ (Album, Top-Songs, Charts) auf einmal in eine Playlist legen."""
+    name = req.playlist.strip()[:120]
+    if not name:
+        raise HTTPException(400, "Playlist-Name fehlt")
+    if not req.tracks or len(req.tracks) > 300:
+        raise HTTPException(400, "1 bis 300 Songs")
+    tracks = [_found_track(v) for v in req.tracks]
+    added = sum(1 for t in tracks if store.add_to_playlist(name, t))
+    return {"added": added, "skipped": len(tracks) - added, "playlist": name}
 
 
 # ------------------------------------------------------------------ Ersatz-Hörprobe (YouTube/Spotify-Player)

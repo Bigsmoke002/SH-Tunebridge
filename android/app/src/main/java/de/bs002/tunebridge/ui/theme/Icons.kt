@@ -47,6 +47,7 @@ enum class Ico(val paths: List<String>, val circles: List<Triple<Float, Float, F
     Search(listOf("m20 20-3.5-3.5"), listOf(Triple(11f, 11f, 7f))),
     Mic(listOf("M19 10v1a7 7 0 0 1-14 0v-1", "M12 18v4"), rects = listOf(floatArrayOf(9f, 2f, 6f, 12f, 3f))),
     Disc(emptyList(), listOf(Triple(12f, 12f, 9f), Triple(12f, 12f, 2.5f))),
+    Compass(listOf("m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"), listOf(Triple(12f, 12f, 9f))),
     Info(listOf("M12 8v4", "M12 16h.01"), listOf(Triple(12f, 12f, 9f))),
     Arrow(listOf("M5 12h14", "m13 6 6 6-6 6")),
     Back(listOf("M19 12H5", "m11 18-6-6 6-6")),

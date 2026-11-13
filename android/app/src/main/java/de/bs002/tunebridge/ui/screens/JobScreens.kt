@@ -118,7 +118,8 @@ fun MixScreen(back: () -> Unit) {
     var byGenre by remember { mutableStateOf(false) }
     var q by remember { mutableStateOf("") }
     var found by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
-    var seeds by remember { mutableStateOf<List<Pair<Int, String>>>(emptyList()) }
+    var seeds by remember { mutableStateOf<List<Pair<Int, String>>>(listOfNotNull(App.mixSeed.value)) }
+    LaunchedEffect(Unit) { App.mixSeed.value = null }
     var genres by remember { mutableStateOf<List<Pair<String, List<String>>>>(emptyList()) }
     var levels by remember { mutableStateOf<List<Triple<String, String, String>>>(emptyList()) }
     var genre by remember { mutableStateOf<String?>(null) }
@@ -150,7 +151,7 @@ fun MixScreen(back: () -> Unit) {
             Segmented(listOf(false, true), byGenre, { if (it) "Genre" else "Künstler" }) { byGenre = it }
             Spacer(Modifier.height(14.dp))
             if (!byGenre) {
-                Text("Bis zu 5 Künstler – der Mix nimmt ähnliche Künstler und deren bekannteste Songs.", style = TbType.small, color = Tb.text3)
+                Text("Bis zu 15 Künstler – der Mix nimmt ähnliche Künstler und deren bekannteste Songs.", style = TbType.small, color = Tb.text3)
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Box1(Modifier.weight(1f)) { SearchField(q, { q = it }, placeholder = "Künstler suchen …") }
@@ -168,7 +169,7 @@ fun MixScreen(back: () -> Unit) {
                     found.forEach { a ->
                         val on = seeds.any { it.first == a.first }
                         FilterChip(a.second, on, if (on) Ico.Check else Ico.Plus) {
-                            seeds = if (on) seeds.filterNot { it.first == a.first } else (seeds + a).take(5)
+                            seeds = if (on) seeds.filterNot { it.first == a.first } else (seeds + a).take(15)
                         }
                     }
                 }

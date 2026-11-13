@@ -3,6 +3,20 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
+## Unveröffentlicht (0.14.0)
+- **Entdecken – im Katalog stöbern:** Neue Seite „Entdecken“ am PC (Seitenleiste) und am Handy (eigener Tab):
+  Songs, Künstler und Alben suchen, Charts nach Genre (Songs, Künstler, Alben), Künstlerseiten mit beliebtesten Songs,
+  Alben, Singles & EPs und ähnlichen Künstlern sowie Albumseiten mit Titelliste. Überall mit Hörprobe, „Zur
+  Playlist“ (auch ganze Alben, Top-Songs oder Charts auf einmal), „Remixe & Versionen“ und Links zu den Diensten;
+  auf der Künstlerseite „Mix mit …“. Quelle: Deezers öffentliche Schnittstelle, nur der Suchbegriff bzw. die
+  Kennung geht hin; am Handy über den PC oder – mit der Erlaubnis „Ähnliche Songs, Versionen & Entdecken ohne PC“ –
+  direkt. Die frühere Seite „Entdecken“ (ähnliche Songs zu einem Song) ist dort jetzt der Bereich „Ähnlich zu einem Song“.
+- **Alle Interpreten eines Songs:** Songs mit mehreren Künstlern behalten jetzt bis zu 20 Interpreten (bisher 5 bzw.
+  10). Jeder Interpret ist anklickbar und führt zu seiner Künstlerseite – am PC in „Mehr vom Künstler“ und unter
+  „Entdecken“, am Handy auf der Song-Seite.
+- **Mix erstellen mit bis zu 15 Künstlern** (bisher 5) – am PC und am Handy. Bei vielen Künstlern holt der Mix je
+  Künstler entsprechend weniger, damit Deezer nicht überlastet wird.
+
 ## 0.13.0 – 2026-11-13
 - **Remixe, Covers & andere Versionen:** In der Song-Ansicht (und am Handy beim Song bzw. in einer Playlist) findet
   „Remixe & Versionen“ zu einem Song alle Aufnahmen mit demselben Titel – gruppiert nach Original, Remixe (mit

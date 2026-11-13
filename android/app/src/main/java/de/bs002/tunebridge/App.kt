@@ -49,6 +49,8 @@ class App : Application(), ImageLoaderFactory {
         /** Song, zu dem die Seite „Ähnliche Songs“ gerade Vorschläge zeigt. */
         val similarSeed = kotlinx.coroutines.flow.MutableStateFlow<de.bs002.tunebridge.data.Track?>(null)
         val versionsSeed = kotlinx.coroutines.flow.MutableStateFlow<de.bs002.tunebridge.data.Track?>(null)
+        /** Künstler (Deezer-ID, Name), den „Mix mit …“ auf der Künstlerseite vorwählt. */
+        val mixSeed = kotlinx.coroutines.flow.MutableStateFlow<Pair<Int, String>?>(null)
 
         /** Erkennen von außen angestoßen (Schnellkachel, Widget, App-Kurzbefehl): false = Mikrofon, true = Handy-Ton. */
         val listenRequest = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)

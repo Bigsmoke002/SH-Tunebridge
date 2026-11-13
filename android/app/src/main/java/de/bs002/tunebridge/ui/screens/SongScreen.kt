@@ -79,8 +79,9 @@ private val STYLE = mapOf(
     "tidal" to ("T" to 0xFFD6DBE2), "bandcamp" to ("BC" to 0xFF5FA8C9), "shazam" to ("Sh" to 0xFF0A8CFF),
 )
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}, openVersions: (Track) -> Unit = {}) {
+fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {}, openVersions: (Track) -> Unit = {}, openArtist: (String) -> Unit = {}) {
     val history by App.repo.history.collectAsState()
     val rec = history.firstOrNull { it.uid == uid }
     if (rec == null) {
@@ -118,7 +119,14 @@ fun SongScreen(uid: String, back: () -> Unit, openSimilar: (Track) -> Unit = {},
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) { Cover(t.cover, 232.dp, 12.dp) }
             Spacer(Modifier.height(22.dp))
             Text(t.title, style = TbType.display, color = Tb.text)
-            Text(t.artist, style = TbType.heading.copy(fontWeight = TbType.body.fontWeight), color = Tb.text2, modifier = Modifier.padding(top = 2.dp))
+            // Jeder Interpret einzeln antippbar → Künstlerseite unter „Entdecken“
+            FlowRow(Modifier.padding(top = 2.dp)) {
+                val names = artistNames(t.artists)
+                names.forEachIndexed { i, n ->
+                    Text(n + if (i < names.lastIndex) ", " else "", style = TbType.heading.copy(fontWeight = TbType.body.fontWeight), color = Tb.text2,
+                        modifier = Modifier.clickable { openArtist(n) })
+                }
+            }
             val meta = listOfNotNull(t.album, x.str("label"), x.str("year")).joinToString("  ·  ")
             if (meta.isNotEmpty()) Text(meta, style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(14.dp))
@@ -298,3 +306,10 @@ fun deleteWithUndo(vararg uids: String) {
     if (gone.isEmpty()) return
     App.snack(if (gone.size == 1) "„${gone[0].track.title}“ entfernt" else "${Fmt.songs(gone.size)} entfernt", "Rückgängig") { App.repo.restore(gone) }
 }
+
+private val ARTIST_SPLIT = Regex("""\s*(?:,|;|\bfeat\.?|\bft\.?|\bfeaturing\b|\s[xX×]\s|\bvs\.?|\bwith\b)\s*""", RegexOption.IGNORE_CASE)
+
+/** Einzelne Interpreten („A, B feat. C“ → A, B, C). „&“ bleibt zusammen (Duos wie „Simon & Garfunkel“). */
+fun artistNames(artists: List<String>): List<String> =
+    artists.flatMap { it.split(ARTIST_SPLIT) }.map { it.trim().trim('(', ')', '[', ']').trim() }.filter { it.isNotEmpty() }
+        .distinctBy { it.lowercase() }.ifEmpty { artists }

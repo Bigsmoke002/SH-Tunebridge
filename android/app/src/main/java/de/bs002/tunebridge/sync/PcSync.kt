@@ -405,6 +405,37 @@ class PcSync(private val repo: Repository) {
             null
         }
 
+    /**
+     * „Entdecken“ über den PC (discover.py): [what] = search/artist/album/charts/genres, [arg] = Suchbegriff bzw. Deezer-Kennung.
+     * Antwort als JSON-Text (Felder wie am PC). null = kein PC erreichbar bzw. PC zu alt.
+     */
+    suspend fun discover(what: String, arg: String?, kind: String? = null): String? =
+        withContext(Dispatchers.IO) {
+            if (!Nets.allowed()) return@withContext null
+            val nets = Nets.current()
+            for (link in repo.settings.value.pcs) {
+                val addrs = reachable(link, nets).ifEmpty { continue }
+                val rid = UUID.randomUUID().toString()
+                val payload = buildJsonObject {
+                    put("ts", System.currentTimeMillis()); put("rid", rid); put("what", what)
+                    arg?.let { put("arg", it) }; kind?.let { put("kind", it) }
+                }.toString()
+                val key = syncKey(link.secret)
+                val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "discover:${link.deviceId}", payload)) }.toString()
+                val answer = try {
+                    anyAddr(listOfNotNull(link.lastAddr).filter { it in addrs }.ifEmpty { addrs }) { post(Http.lan, it, "/phone/v1/discover", body) }.second
+                } catch (e: PairError) {
+                    if (e.message?.startsWith("PC nicht erreichbar") == true) continue
+                    if (e.message == "Not Found" || e.message?.endsWith("Fehler 404") == true) continue   // ältere PC-Version
+                    throw e
+                }
+                val box = repo.json.parseToJsonElement(answer).jsonObject["box"]?.jsonPrimitive?.content ?: throw PairError("Unerwartete Antwort vom PC")
+                return@withContext runCatching { Crypto.unseal(key, "discover-ok:${link.deviceId}:$rid", box) }
+                    .getOrElse { throw PairError("Antwort des PCs ließ sich nicht prüfen – bitte neu koppeln") }
+            }
+            null
+        }
+
     @Serializable
     private data class VersionsAnswer(val core: String = "", val kinds: List<VersionKind> = emptyList(), val items: List<VersionItem> = emptyList())
 

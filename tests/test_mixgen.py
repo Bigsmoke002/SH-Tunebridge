@@ -306,3 +306,25 @@ def test_measure_runs_in_parallel(fake_deezer, monkeypatch):
     run({"level": "passend", "count": 50})
     assert 1 < state["max"] <= mixgen.MEASURE_WORKERS
     assert len(fake_deezer) <= 20
+
+
+def test_many_seeds_stay_gentle_on_deezer(monkeypatch):
+    """15 Start-Künstler: insgesamt höchstens RELATED_TOTAL ähnliche Künstler abfragen (statt 15 × 12)."""
+    tops = []
+
+    def get(url, **params):
+        aid = int(url.split("/artist/")[1].split("/")[0])
+        if url.endswith("/related"):
+            return {"data": [{"id": 1000 + aid * 50 + i, "name": f"R{aid}-{i}"} for i in range(20)]}
+        if url.endswith("/radio"):
+            return {"data": [_h(70000 + aid * 100 + i, f"Radio {aid}-{i}", 900, "X") for i in range(50)]}
+        if url.endswith("/top"):
+            if aid >= 1000:
+                tops.append(aid)
+            return {"data": [_h(aid * 100 + k, f"Song {aid}-{k}", aid, f"A{aid}") for k in range(params.get("limit", 4))]}
+        raise AssertionError(url)
+    monkeypatch.setattr(artists, "_get", get)
+    seeds = [{"id": i, "name": f"S{i}"} for i in range(1, 16)]
+    assert mixgen.MAX_SEEDS == 15
+    out = mixgen.collect(seeds, mixgen.clean_opts({"level": "locker"}))
+    assert out and len(set(tops)) <= mixgen.RELATED_TOTAL
