@@ -123,8 +123,12 @@ private fun Main(toast: (String) -> Unit) {
     LaunchedEffect(request) { if (request != null && route != Tab.Listen.route) nav.go(Tab.Listen) }
     val dnav = remember(nav) {
         de.bs002.tunebridge.ui.screens.DiscoverNav(
-            openArtist = { nav.navigate("discover/artist/$it") }, openAlbum = { nav.navigate("discover/album/$it") },
-            openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") }, openMix = { nav.navigate("mix") })
+            openArtist = { id, also ->
+                nav.navigate("discover/artist/${Uri.encode(id)}" + if (also.isEmpty()) "" else "?also=${Uri.encode(also.joinToString(","))}")
+            },
+            openAlbum = { nav.navigate("discover/album/${Uri.encode(it)}") },
+            openVersions = { t -> App.versionsSeed.value = t; nav.navigate("versions") }, openMix = { nav.navigate("mix") },
+            openCharts = { nav.go(Tab.Discover) })
     }
 
     de.bs002.tunebridge.ui.screens.UpdatePrompt(openMore = { nav.go(Tab.More) })
@@ -137,11 +141,13 @@ private fun Main(toast: (String) -> Unit) {
                 composable(Tab.Listen.route) { ListenScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }, openPc = { nav.go(Tab.More) }) }
                 composable(Tab.History.route) { HistoryScreen(openSong = { nav.navigate("song/${Uri.encode(it)}") }, openStats = { nav.navigate("stats") }) }
                 composable(Tab.Discover.route) { de.bs002.tunebridge.ui.screens.DiscoverScreen(dnav) }
-                composable("discover/artist/{id}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
-                    de.bs002.tunebridge.ui.screens.DiscoverArtistScreen(it.arguments?.getString("id")?.toLongOrNull() ?: 0L, dnav, back = { nav.popBackStack() })
+                composable("discover/artist/{id}?also={also}", enterTransition = { slide() }, popExitTransition = { slideOut() },
+                    arguments = listOf(androidx.navigation.navArgument("also") { type = androidx.navigation.NavType.StringType; nullable = true; defaultValue = null })) {
+                    de.bs002.tunebridge.ui.screens.DiscoverArtistScreen(Uri.decode(it.arguments?.getString("id").orEmpty()),
+                        Uri.decode(it.arguments?.getString("also").orEmpty()).split(",").filter { a -> a.isNotBlank() }, dnav, back = { nav.popBackStack() })
                 }
                 composable("discover/album/{id}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
-                    de.bs002.tunebridge.ui.screens.DiscoverAlbumScreen(it.arguments?.getString("id")?.toLongOrNull() ?: 0L, dnav, back = { nav.popBackStack() })
+                    de.bs002.tunebridge.ui.screens.DiscoverAlbumScreen(Uri.decode(it.arguments?.getString("id").orEmpty()), dnav, back = { nav.popBackStack() })
                 }
                 composable("discover/name/{name}", enterTransition = { slide() }, popExitTransition = { slideOut() }) {
                     de.bs002.tunebridge.ui.screens.DiscoverArtistByName(Uri.decode(it.arguments?.getString("name").orEmpty()), dnav, back = { nav.popBackStack() })

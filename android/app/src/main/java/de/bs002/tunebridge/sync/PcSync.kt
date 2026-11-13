@@ -409,7 +409,7 @@ class PcSync(private val repo: Repository) {
      * „Entdecken“ über den PC (discover.py): [what] = search/artist/album/charts/genres, [arg] = Suchbegriff bzw. Deezer-Kennung.
      * Antwort als JSON-Text (Felder wie am PC). null = kein PC erreichbar bzw. PC zu alt.
      */
-    suspend fun discover(what: String, arg: String?, kind: String? = null): String? =
+    suspend fun discover(what: String, arg: String?, kind: String? = null, source: String? = null, also: List<String> = emptyList()): String? =
         withContext(Dispatchers.IO) {
             if (!Nets.allowed()) return@withContext null
             val nets = Nets.current()
@@ -418,7 +418,8 @@ class PcSync(private val repo: Repository) {
                 val rid = UUID.randomUUID().toString()
                 val payload = buildJsonObject {
                     put("ts", System.currentTimeMillis()); put("rid", rid); put("what", what)
-                    arg?.let { put("arg", it) }; kind?.let { put("kind", it) }
+                    arg?.let { put("arg", it) }; kind?.let { put("kind", it) }; source?.let { put("source", it) }
+                    if (also.isNotEmpty()) put("also", kotlinx.serialization.json.JsonArray(also.map { kotlinx.serialization.json.JsonPrimitive(it) }))
                 }.toString()
                 val key = syncKey(link.secret)
                 val body = buildJsonObject { put("v", 1); put("id", link.deviceId); put("box", Crypto.seal(key, "discover:${link.deviceId}", payload)) }.toString()

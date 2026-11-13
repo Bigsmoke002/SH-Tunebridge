@@ -1014,19 +1014,19 @@ async def versions_get(id: int | None = None, key: str | None = None, artist: st
     return await asyncio.to_thread(_versions, t)
 
 
-# ------------------------------------------------------------------ Entdecken (Deezer-Katalog durchstöbern)
+# ------------------------------------------------------------------ Entdecken (Katalog mehrerer Quellen durchstöbern)
 def _discover(fn, *args):
     from .. import ratelimit, remixes
     try:
         d = fn(*args)
     except ratelimit.LimitReached as e:
         raise HTTPException(429, f"{e} – bitte gleich nochmal versuchen")
-    except (LookupError, ValueError) as e:
-        raise HTTPException(404 if isinstance(e, LookupError) else 400, str(e))
+    except (LookupError, ValueError, PermissionError) as e:
+        raise HTTPException(404 if isinstance(e, LookupError) else 403 if isinstance(e, PermissionError) else 400, str(e))
     except HTTPException:
         raise
     except Exception as e:  # noqa: BLE001
-        raise HTTPException(502, f"Deezer nicht erreichbar: {e}")
+        raise HTTPException(502, f"Quelle nicht erreichbar: {e}")
     import copy
     d = copy.deepcopy(d)                              # Zwischenspeicher nicht verändern
     lists = [d] if isinstance(d, list) else [v for v in d.values() if isinstance(v, list)] if isinstance(d, dict) else []
@@ -1046,9 +1046,9 @@ async def discover_search(q: str = "", kind: str = "all"):
 
 
 @app.get("/api/discover/artist/{aid}")
-async def discover_artist(aid: str):
+async def discover_artist(aid: str, also: str = ""):
     from .. import discover
-    return await asyncio.to_thread(_discover, discover.artist_page, aid)
+    return await asyncio.to_thread(_discover, discover.artist_page, aid, [x for x in also.split(",") if x][:5])
 
 
 @app.get("/api/discover/album/{alid}")
@@ -1058,20 +1058,41 @@ async def discover_album(alid: str):
 
 
 @app.get("/api/discover/charts")
-async def discover_charts(genre: str = "0"):
+async def discover_charts(source: str = "deezer", genre: str = ""):
     from .. import discover
-    return await asyncio.to_thread(_discover, discover.charts, genre)
+    return await asyncio.to_thread(_discover, discover.charts, source, genre)
 
 
 @app.get("/api/discover/genres")
-async def discover_genres():
+async def discover_genres(source: str = "deezer"):
     from .. import discover
-    return await asyncio.to_thread(_discover, discover.genres)
+    return await asyncio.to_thread(_discover, discover.genres, source)
+
+
+@app.get("/api/discover/sources")
+def discover_sources():
+    from .. import discover
+    return discover.settings()
+
+
+@app.post("/api/discover/sources")
+def discover_sources_set(data: dict):
+    from .. import discover
+    return discover.save_settings({k: v for k, v in (data or {}).items() if isinstance(v, bool)})
 
 
 class VersionAddReq(BaseModel):
     playlist: str
     track: dict
+
+
+_FOUND_IDS = {"deezer": r"\d{1,15}", "apple": r"\d{1,15}",
+              "musicbrainz": r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"}
+
+
+def _found_ids(ids) -> dict:
+    ids = ids if isinstance(ids, dict) else {}
+    return {k: str(ids[k]) for k, rx in _FOUND_IDS.items() if re.fullmatch(rx, str(ids.get(k) or ""))}
 
 
 def _found_track(v: dict) -> Track:
@@ -1084,7 +1105,7 @@ def _found_track(v: dict) -> Track:
          "album": str(v.get("album") or "")[:300] or None, "duration_ms": int(v.get("duration_ms") or 0) or None,
          "cover": v.get("cover") if str(v.get("cover") or "").startswith("https://") else None,
          "preview_url": v.get("preview_url") if str(v.get("preview_url") or "").startswith("https://") else None,
-         "ids": {"deezer": str((v.get("ids") or {}).get("deezer"))} if str((v.get("ids") or {}).get("deezer") or "").isdigit() else {}}
+         "ids": _found_ids(v.get("ids"))}
     t = remixes.to_track(v)
     if re.fullmatch(r"[A-Z]{2}[A-Z0-9]{3}\d{7}", isrc):
         t.isrc = isrc
@@ -1361,10 +1382,11 @@ SETTINGS = {
     "SOUNDCLOUD_CLIENT_ID": "SoundCloud-Login – Client-ID deiner App",
     "SOUNDCLOUD_CLIENT_SECRET": "SoundCloud-Login – Client-Secret",
     "LASTFM_SHARED_SECRET": "Last.fm-Login – Shared secret deines API-Kontos",
+    "DISCOGS_TOKEN": "Discogs – persönlicher Token (für „Entdecken“)",
 }
 _SECRET = {"LASTFM_API_KEY", "AUDD_API_TOKEN", "ACRCLOUD_ACCESS_KEY", "ACRCLOUD_ACCESS_SECRET", "YOUTUBE_API_KEY",
            "YOUTUBE_OAUTH_CLIENT_SECRET", "SOUNDCLOUD_CLIENT_SECRET",
-           "LASTFM_SHARED_SECRET"}
+           "LASTFM_SHARED_SECRET", "DISCOGS_TOKEN"}
 
 
 def _mask(k: str, v: str | None) -> str:

@@ -43,6 +43,7 @@ LIMITS: dict[str, _Limit] = {
     "deezer": _Limit("Deezer", 40, 5, pause=10),
     "itunes": _Limit("iTunes-Suche", 18, 60, gap=0.5, pause=120),
     "musicbrainz": _Limit("MusicBrainz", 1, 1.1, gap=1.1, pause=10),
+    "discogs": _Limit("Discogs", 50, 60, gap=0.3, pause=60),            # mit Token 60/min laut Discogs
     "audd": _Limit("AudD", 10, 60, gap=1.0, pause=120),
     "acrcloud": _Limit("ACRCloud", 10, 60, gap=1.0, pause=120),
 }

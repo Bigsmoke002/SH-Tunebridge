@@ -2497,12 +2497,44 @@ Views.dupes = async (main) => {
   }));
 };
 
-/* ---------- Entdecken: im Deezer-Katalog stöbern (Suche, Künstler, Alben, Charts nach Genre) und „Ähnlich zu einem Song“.
-   Quelle Deezer (ohne Login) – gesendet wird nur der Suchbegriff bzw. die angeklickte Kennung; nichts wird gespeichert. */
-const Disc = { tab: store.get("discTab", "browse"), genre: store.get("discGenre", 0), chart: store.get("discChart", "tracks"), genres: null };
-
+/* ---------- Entdecken: im Katalog mehrerer Quellen stöbern (Suche, Künstler, Alben, Charts, Genres/Tags) und
+   „Ähnlich zu einem Song“. Quellen: Deezer, Apple, MusicBrainz (ohne Login), Last.fm/Discogs mit eigenem Key –
+   einzeln abschaltbar (der Server prüft das). Gesendet wird nur der Suchbegriff bzw. die angeklickte Kennung. */
+const Disc = { tab: store.get("discTab", "browse"), csrc: store.get("discCSrc", "deezer"), gen: store.get("discGen", {}),
+  chart: store.get("discChart", "tracks"), genres: {}, src: null };
+const DSRC = { deezer: ["D", "Deezer"], apple: ["A", "Apple Music"], musicbrainz: ["MB", "MusicBrainz"], discogs: ["DG", "Discogs"], lastfm: ["LF", "Last.fm"] };
+const DSRC_INFO = {
+  deezer: "Hörproben, Charts nach Genre, ähnliche Künstler. Ohne Login.",
+  apple: "iTunes-Suche und Apple-Charts (Deutschland), eigene Hörproben. Ohne Login.",
+  musicbrainz: "Offene Musikdatenbank: vollständige Diskografien mit allen Mitwirkenden. Ohne Login; Cover vom Cover Art Archive (archive.org).",
+  discogs: "Vinyl-, Label- und Underground-Veröffentlichungen mit Genres & Styles. Mit deinem persönlichen Token.",
+  lastfm: "Hörer-Zahlen, ähnliche Künstler und Stöbern nach Genre-Tags. Mit deinem eigenen API-Key." };
+const discSrc = x => (x.sources || []).length ? `<span class="dc-src">${x.sources.map(s => `<i data-s="${esc(s)}" title="${esc(DSRC[s]?.[1] || s)}">${esc(DSRC[s]?.[0] || s)}</i>`).join("")}</span>` : "";
+const discArtistHref = (id, refs) => { const o = Object.values(refs || {}).filter(r => r && r !== id);
+  return `#/discover?artist=${encodeURIComponent(id)}${o.length ? `&also=${encodeURIComponent(o.join(","))}` : ""}`; };
+const discAlbumHref = id => `#/discover?album=${encodeURIComponent(id)}`;
 const discArtists = t => (t.artists || []).map((n, i) => { const id = (t.artist_ids || [])[i];
-  return id ? `<a class="dc-a" href="#/discover?artist=${id}">${esc(n)}</a>` : esc(n); }).join(", ");
+  return id ? `<a class="dc-a" href="${discArtistHref(id)}">${esc(n)}</a>` : esc(n); }).join(", ");
+const discFailed = d => Object.keys(d?.failed || {}).length ? `<div class="cell-sub dc-fail">${icon("info")}Nicht erreichbar: ${Object.entries(d.failed).map(([s, m]) => `${esc(DSRC[s]?.[1] || s)} (${esc(m)})`).join(" · ")}</div>` : "";
+function discImgs(box) {   // fehlende Cover (z. B. Cover Art Archive) still durch Platzhalter ersetzen
+  $$("img.thumb, img.dc-pic, img.dc-hero-pic", box).forEach(i => i.onerror = () => { const d = document.createElement("div"); d.className = i.className; i.replaceWith(d); });
+}
+async function discSources(force = false) {
+  if (!Disc.src || force) Disc.src = await api("/api/discover/sources").catch(() => null);
+  return Disc.src;
+}
+async function discSourcesDialog(after) {
+  const s = await discSources(true); if (!s) return;
+  modal({ title: "Quellen für Entdecken", text: "Eingeschaltete Quellen werden gleichzeitig gefragt und die Treffer zusammengeführt. Gesendet wird nur dein Suchbegriff bzw. was du antippst – jede Quelle sieht dabei deine IP-Adresse.",
+    body: `<div class="set-group">${s.sources.map(x => `<div class="set-row"><div><div class="lbl">${esc(x.name)}</div><div class="hint">${esc(DSRC_INFO[x.id] || "")}${x.available ? "" : ` <b>Braucht deinen ${esc(x.needs.replace(/^eigener /, ""))}</b> – <a href="#/settings" class="dc-a">Einstellungen › Musikdienste</a>.`}</div></div><div></div>
+      <label class="switch"><input type="checkbox" data-ds="${x.id}" ${x.on && x.available ? "checked" : ""} ${x.available ? "" : "disabled"}><span class="track"></span></label></div>`).join("")}</div>`,
+    confirm: "Speichern", wide: true,
+    onConfirm: async m => {
+      const body = {}; $$("[data-ds]", m).forEach(i => { if (!i.disabled) body[i.dataset.ds] = i.checked; });
+      Disc.src = await api("/api/discover/sources", { method: "POST", body }); Disc.genres = {};
+      toast("Quellen gespeichert"); after?.();
+    } });
+}
 
 function discRows(list, { num = false, album = true } = {}) {
   if (!list.length) return `<div class="cell-sub" style="padding:10px 2px">Nichts gefunden.</div>`;
@@ -2510,8 +2542,8 @@ function discRows(list, { num = false, album = true } = {}) {
       ${num ? `<div class="cell-muted num dc-num">${i + 1}</div>` : ""}
       <div class="thumb-wrap">${v.cover ? `<img class="thumb" src="${esc(v.cover)}" alt="" loading="lazy">` : `<div class="thumb" style="display:grid;place-items:center;color:var(--text-3)">${icon("disc")}</div>`}
         ${v.preview_url ? `<button class="thumb-play" ${playAttr(v)} aria-label="Hörprobe">${icon("play")}</button>` : ""}</div>
-      <div class="cell-main"><div class="cell-title">${esc(v.title)}${v.explicit ? ` <span class="dc-e" title="Expliziter Text">E</span>` : ""}</div><div class="cell-sub">${discArtists(v)}</div></div>
-      <div class="cell-sub dc-alb">${album ? (v.album_id ? `<a class="dc-a" href="#/discover?album=${v.album_id}">${esc(v.album || "")}</a>` : esc(v.album || "")) : ""}</div>
+      <div class="cell-main"><div class="cell-title">${esc(v.title)}${v.explicit ? ` <span class="dc-e" title="Expliziter Text">E</span>` : ""}</div><div class="cell-sub">${discArtists(v)} ${discSrc(v)}</div></div>
+      <div class="cell-sub dc-alb">${album ? (v.album_id ? `<a class="dc-a" href="${discAlbumHref(v.album_id)}">${esc(v.album || "")}</a>` : esc(v.album || "")) : ""}</div>
       <div class="cell-muted num">${v.duration_ms ? fmtDur(v.duration_ms) : ""}</div>
       <div class="row-act"><button class="icon-btn" data-dver="${i}" title="Remixe & Versionen" aria-label="Remixe & Versionen">${icon("layers")}</button><button class="icon-btn" data-dadd="${i}" title="In eine Playlist legen" aria-label="In Playlist">${icon("plus")}</button></div>
     </div>`).join("")}</div>`;
@@ -2520,14 +2552,22 @@ function bindDiscRows(box, list) {
   $$("[data-dadd]", box).forEach(b => b.onclick = () => addFoundToPlaylist(list[+b.dataset.dadd]));
   $$("[data-dver]", box).forEach(b => b.onclick = () => showVersionsOf(list[+b.dataset.dver]));
   bindSimilar(box, list, ".row--dc");
+  discImgs(box);
   Player.sync();
 }
 const discCards = (list, kind) => list.length ? `<div class="dc-grid">${list.map(x => kind === "artist"
-  ? `<a class="dc-card" href="#/discover?artist=${x.id}">${x.picture ? `<img class="dc-pic dc-pic--round" src="${esc(x.picture)}" alt="" loading="lazy">` : `<div class="dc-pic dc-pic--round"></div>`}
-      <b>${esc(x.name)}</b><span>${x.fans ? `${x.fans.toLocaleString("de-DE")} Fans` : "Künstler"}</span></a>`
-  : `<a class="dc-card" href="#/discover?album=${x.id}">${x.cover ? `<img class="dc-pic" src="${esc(x.cover)}" alt="" loading="lazy">` : `<div class="dc-pic"></div>`}
-      <b>${esc(x.title)}</b><span>${[x.artist, x.type, x.year].filter(Boolean).map(esc).join(" · ")}</span></a>`).join("")}</div>`
+  ? `<a class="dc-tile" href="${discArtistHref(x.id, x.refs)}">${x.picture ? `<img class="dc-pic dc-pic--round" src="${esc(x.picture)}" alt="" loading="lazy">` : `<div class="dc-pic dc-pic--round"></div>`}
+      <b>${esc(x.name)}</b><span>${x.fans ? `${x.fans.toLocaleString("de-DE")} ${x.sources?.[0] === "lastfm" ? "Hörer" : "Fans"}` : esc(x.note || "Künstler")}</span>${discSrc(x)}</a>`
+  : `<a class="dc-tile" href="${discAlbumHref(x.id)}">${x.cover ? `<img class="dc-pic" src="${esc(x.cover)}" alt="" loading="lazy">` : `<div class="dc-pic"></div>`}
+      <b>${esc(x.title)}</b><span>${[x.artist, x.type, x.year].filter(Boolean).map(esc).join(" · ")}</span>${discSrc(x)}</a>`).join("")}</div>`
   : `<div class="cell-sub" style="padding:10px 2px">Nichts gefunden.</div>`;
+// lange Listen (Diskografie) erst gekürzt zeigen
+function discCardsMore(list, kind, n = 18) {
+  return list.length > n ? `<div data-more-wrap>${discCards(list.slice(0, n), kind)}<button class="btn btn--sm btn--ghost dc-more" data-more>Alle ${list.length} zeigen</button></div>` : discCards(list, kind);
+}
+function bindCardsMore(box, lists) {
+  $$("[data-more]", box).forEach((b, i) => b.onclick = () => { const w = b.closest("[data-more-wrap]"); w.innerHTML = discCards(lists[i].list, lists[i].kind); discImgs(w); });
+}
 
 function addFoundToPlaylist(v) {
   modal({ title: "In welche Playlist?", text: `${esc(v.title)} – ${esc((v.artists || []).join(", "))}`, body: `<input class="input" id="verPl" list="plnames" placeholder="Name einer Playlist (neu oder vorhanden)" style="width:100%" autocomplete="off">`, confirm: "Hinzufügen",
@@ -2561,7 +2601,7 @@ Views.discover = async (main, _, params) => {
   const deep = p.get("artist") || p.get("album");
   if (deep) Disc.tab = "browse";
   main.innerHTML = `<div class="page view-enter dc-page">
-    <div class="page-head"><div><h1>Entdecken</h1><p>Stöbere im Katalog von Deezer: Songs, Künstler und Alben suchen, Charts nach Genre, reinhören und in Playlists legen.</p></div>
+    <div class="page-head"><div><h1>Entdecken</h1><p>Stöbere in den Katalogen von Deezer, Apple Music, MusicBrainz – und mit eigenem Key Last.fm und Discogs: Songs, Künstler und Alben suchen, Charts und Genres, reinhören und in Playlists legen.</p></div>
       <div class="segmented" id="dcTabs"><button data-t="browse" class="${Disc.tab === "browse" ? "on" : ""}">${icon("compass")}Stöbern</button><button data-t="similar" class="${Disc.tab === "similar" ? "on" : ""}">${icon("sparkle")}Ähnlich zu einem Song</button></div></div>
     <div id="dcBody"></div></div>`;
   hydrateIcons(main);
@@ -2571,12 +2611,21 @@ Views.discover = async (main, _, params) => {
   });
   const body = $("#dcBody");
   if (Disc.tab === "similar") return discSimilar(body);
-  if (p.get("artist")) return discArtist(body, p.get("artist"));
+  if (p.get("artist")) return discArtist(body, p.get("artist"), p.get("also") || "");
   if (p.get("album")) return discAlbum(body, p.get("album"));
-  body.innerHTML = `<div class="card discover-bar"><div class="input-icon" style="flex:1">${icon("search")}<input class="input" id="dcQ" placeholder="Song, Künstler oder Album suchen …" value="${esc(p.get("q") || "")}" autocomplete="off"></div></div>
+  body.innerHTML = `<div class="card discover-bar"><div class="input-icon" style="flex:1">${icon("search")}<input class="input" id="dcQ" placeholder="Song, Künstler oder Album suchen …" value="${esc(p.get("q") || "")}" autocomplete="off"></div>
+      <button class="btn" id="dcSrcBtn" title="Welche Kataloge gefragt werden">${icon("sliders")}Quellen</button></div>
     <div id="dcOut"></div>
-    <div class="cell-sub dc-foot">Quelle: Deezer (ohne Login) – gesendet wird nur dein Suchbegriff bzw. was du anklickst; Deezer sieht dabei deine IP-Adresse. Gespeichert wird nichts.</div>`;
+    <div class="cell-sub dc-foot" id="dcFoot"></div>`;
   hydrateIcons(body);
+  const foot = async () => {
+    const s = await discSources(); const f = $("#dcFoot"); if (!s || !f) return;
+    const on = s.sources.filter(x => x.on && x.available).map(x => x.name);
+    f.innerHTML = `Quellen: ${on.length ? esc(on.join(", ")) : "keine eingeschaltet"} – gesendet wird nur dein Suchbegriff bzw. was du anklickst; die Dienste sehen dabei deine IP-Adresse. Gespeichert wird nichts.
+      <button class="btn btn--sm btn--ghost" id="dcSrcFoot">Quellen wählen</button>${on.includes("Discogs") ? "<br>Daten teilweise von Discogs." : ""}`;
+    $("#dcSrcFoot").onclick = () => discSourcesDialog(() => { foot(); run(); });
+  };
+  $("#dcSrcBtn").onclick = () => discSourcesDialog(() => { foot(); run(); });
   const q = $("#dcQ"), out = $("#dcOut");
   let tmo, seq = 0;
   const run = async () => {
@@ -2587,86 +2636,119 @@ Views.discover = async (main, _, params) => {
     let d;
     try { d = await api(`/api/discover/search?q=${encodeURIComponent(term)}`); } catch (e) { if (my === seq) out.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
     if (my !== seq || !document.body.contains(out)) return;
-    out.innerHTML = `${d.artists.length ? `<div class="section-title">Künstler</div>${discCards(d.artists, "artist")}` : ""}
+    out.innerHTML = `${discFailed(d)}${d.artists.length ? `<div class="section-title">Künstler</div>${discCardsMore(d.artists, "artist", 8)}` : ""}
       <div class="section-title dc-st">Songs<button class="btn btn--sm btn--ghost" id="dcMore">Mehr Songs</button></div><div id="dcTr">${discRows(d.tracks)}</div>
-      ${d.albums.length ? `<div class="section-title">Alben</div>${discCards(d.albums, "album")}` : ""}`;
-    hydrateIcons(out); bindDiscRows($("#dcTr"), d.tracks);
+      ${d.albums.length ? `<div class="section-title">Alben</div>${discCardsMore(d.albums, "album", 12)}` : ""}`;
+    hydrateIcons(out); bindDiscRows($("#dcTr"), d.tracks); discImgs(out);
+    bindCardsMore(out, [d.artists.length > 8 && { list: d.artists, kind: "artist" }, d.albums.length > 12 && { list: d.albums, kind: "album" }].filter(Boolean));
     $("#dcMore").onclick = async e => {
       e.target.disabled = true;
       try { const m = await api(`/api/discover/search?kind=track&q=${encodeURIComponent(term)}`); $("#dcTr").innerHTML = discRows(m.items); bindDiscRows($("#dcTr"), m.items); e.target.remove(); }
       catch (err) { toast(err.message, "err"); e.target.disabled = false; }
     };
   };
-  q.oninput = () => { clearTimeout(tmo); tmo = setTimeout(run, 400); };
+  q.oninput = () => { clearTimeout(tmo); tmo = setTimeout(run, 450); };
   q.onkeydown = e => { if (e.key === "Enter") { clearTimeout(tmo); run(); } };
-  run();
+  foot(); run();
   if (!p.get("q")) q.focus();
 };
 
 async function discCharts(out) {
   out.innerHTML = skeletonRows(6);
-  if (!Disc.genres) Disc.genres = await api("/api/discover/genres").catch(() => [{ id: 0, name: "Alle" }]);
-  let d;
-  try { d = await api(`/api/discover/charts?genre=${Disc.genre}`); } catch (e) { out.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
+  const src = Disc.csrc;
+  if (!Disc.genres[src]) Disc.genres[src] = await api(`/api/discover/genres?source=${src}`).catch(() => null);
+  const g = Disc.genres[src];
   if (!document.body.contains(out)) return;
-  const g = Disc.genres.find(x => x.id === Disc.genre)?.name || "Alle";
-  out.innerHTML = `<div class="section-title dc-st">Charts${Disc.genre ? ` · ${esc(g)}` : ""}
-      <div class="segmented segmented--sm" id="dcCk">${[["tracks", "Songs"], ["artists", "Künstler"], ["albums", "Alben"]].map(([k, l]) => `<button data-k="${k}" class="${Disc.chart === k ? "on" : ""}">${l}</button>`).join("")}</div>
-      ${Disc.chart === "tracks" ? `<button class="btn btn--sm btn--ghost" id="dcSaveCh">${icon("plus")}Als Playlist</button>` : ""}</div>
-    <div class="ver-chips">${Disc.genres.map(x => `<button class="chip ${x.id === Disc.genre ? "chip--on" : ""}" data-g="${x.id}">${esc(x.name)}</button>`).join("")}</div>
-    <div id="dcCh">${Disc.chart === "tracks" ? discRows(d.tracks, { num: true }) : discCards(d[Disc.chart], Disc.chart === "artists" ? "artist" : "album")}</div>`;
-  hydrateIcons(out);
-  if (Disc.chart === "tracks") bindDiscRows($("#dcCh"), d.tracks);
-  $$("[data-g]", out).forEach(b => b.onclick = () => { Disc.genre = +b.dataset.g; store.set("discGenre", Disc.genre); discCharts(out); });
+  if (!g || !g.charts.length) { out.innerHTML = `<div class="empty">${icon("compass")}<h3>Keine Charts</h3><p>Schalte unter „Quellen“ Deezer, Apple Music oder Last.fm ein.</p></div>`; hydrateIcons(out); return; }
+  if (!g.charts.some(c => c.id === src)) { Disc.csrc = g.charts[0].id; store.set("discCSrc", Disc.csrc); return discCharts(out); }
+  const genre = Disc.gen[src] ?? "";
+  let d;
+  try { d = await api(`/api/discover/charts?source=${src}&genre=${encodeURIComponent(genre)}`); } catch (e) { out.innerHTML = `<div class="cell-sub">${esc(e.message)}</div>`; return; }
+  if (!document.body.contains(out)) return;
+  const isOn = x => String(x.id) === String(genre) || (!genre && (x.id === "0" || x.id === ""));
+  const gname = (g.genres.find(isOn)?.name) || genre || "";
+  const kinds = [["tracks", "Songs"], ["artists", "Künstler"], ["albums", "Alben"]].filter(([k]) => d[k]?.length);
+  const kind = kinds.some(([k]) => k === Disc.chart) ? Disc.chart : "tracks";
+  out.innerHTML = `<div class="section-title dc-st">Charts${gname && !isOn({ id: "" }) ? ` · ${esc(gname)}` : ""}
+      ${g.charts.length > 1 ? `<div class="segmented segmented--sm" id="dcCs">${g.charts.map(c => `<button data-c="${c.id}" class="${c.id === src ? "on" : ""}">${esc(c.name)}</button>`).join("")}</div>` : ""}
+      ${kinds.length > 1 ? `<div class="segmented segmented--sm" id="dcCk">${kinds.map(([k, l]) => `<button data-k="${k}" class="${kind === k ? "on" : ""}">${l}</button>`).join("")}</div>` : ""}
+      ${kind === "tracks" ? `<button class="btn btn--sm btn--ghost" id="dcSaveCh">${icon("plus")}Als Playlist</button>` : ""}</div>
+    ${g.genres.length ? `<div class="ver-chips">${g.genres.map(x => `<button class="chip ${isOn(x) ? "chip--on" : ""}" data-g="${esc(x.id)}">${esc(x.name)}</button>`).join("")}</div>` : ""}
+    ${src === "lastfm" ? `<div class="discover-bar dc-tagbar"><input class="input" id="dcTag" placeholder="Eigenes Genre-Tag, z. B. liquid funk, hardtekk, drift phonk" value="${esc(g.genres.some(isOn) ? "" : genre)}" autocomplete="off"><button class="btn btn--sm" id="dcTagGo">${icon("search")}Stöbern</button></div>` : ""}
+    <div id="dcCh">${kind === "tracks" ? discRows(d.tracks, { num: true }) : discCards(d[kind], kind === "artists" ? "artist" : "album")}</div>`;
+  hydrateIcons(out); discImgs(out);
+  if (kind === "tracks") bindDiscRows($("#dcCh"), d.tracks);
+  const setGenre = v => { Disc.gen = { ...Disc.gen, [src]: v }; store.set("discGen", Disc.gen); discCharts(out); };
+  $$("[data-g]", out).forEach(b => b.onclick = () => setGenre(b.dataset.g));
+  $$("#dcCs button", out).forEach(b => b.onclick = () => { Disc.csrc = b.dataset.c; store.set("discCSrc", Disc.csrc); discCharts(out); });
   $$("#dcCk button", out).forEach(b => b.onclick = () => { Disc.chart = b.dataset.k; store.set("discChart", Disc.chart); discCharts(out); });
-  const sv = $("#dcSaveCh", out); if (sv) sv.onclick = () => saveAllAsPlaylist(d.tracks, `Charts ${g} ${new Date().toLocaleDateString("de-DE")}`);
+  const tg = $("#dcTag", out);
+  if (tg) { const go = () => { const v = tg.value.trim(); if (v) setGenre(v.slice(0, 60)); }; $("#dcTagGo", out).onclick = go; tg.onkeydown = e => { if (e.key === "Enter") go(); }; }
+  const sv = $("#dcSaveCh", out); if (sv) sv.onclick = () => saveAllAsPlaylist(d.tracks, `Charts ${gname || DSRC[src]?.[1] || ""} ${new Date().toLocaleDateString("de-DE")}`.replace(/\s+/g, " "));
 }
 
-async function discArtist(body, aid) {
+const DLINK = { deezer: "Bei Deezer", apple: "Bei Apple Music", musicbrainz: "MusicBrainz", discogs: "Discogs", lastfm: "Last.fm" };
+const discLinks = links => Object.entries(links || {}).filter(([, u]) => /^https:\/\//.test(u || "")).map(([s, u]) =>
+  `<a class="btn btn--sm btn--ghost" href="${esc(u)}" target="_blank" rel="noopener">${icon("external")}${esc(DLINK[s] || s)}</a>`).join("");
+
+async function discArtist(body, aid, also = "") {
   body.innerHTML = skeletonRows(6);
   let d;
-  try { d = await api(`/api/discover/artist/${encodeURIComponent(aid)}`); } catch (e) { body.innerHTML = `<div class="empty">${icon("info")}<h3>Geht gerade nicht</h3><p>${esc(e.message)}</p></div>`; return; }
+  try { d = await api(`/api/discover/artist/${encodeURIComponent(aid)}${also ? `?also=${encodeURIComponent(also)}` : ""}`); }
+  catch (e) { body.innerHTML = `<div class="empty">${icon("info")}<h3>Geht gerade nicht</h3><p>${esc(e.message)}</p></div>`; hydrateIcons(body); return; }
   if (!document.body.contains(body)) return;
-  const a = d.artist;
+  const a = d.artist, dz = String(a.refs?.deezer || "").replace(/^dz:/, "");
+  const lf = (await discSources())?.sources.some(x => x.id === "lastfm" && x.on && x.available);
   let all = false;
   body.innerHTML = `<button class="btn btn--sm btn--ghost dc-back" id="dcBack">${icon("prev")}Zurück</button>
     <div class="card dc-hero">${a.picture_big || a.picture ? `<img class="dc-hero-pic dc-pic--round" src="${esc(a.picture_big || a.picture)}" alt="">` : ""}
-      <div class="dc-hero-txt"><span class="cell-sub">Künstler</span><h2>${esc(a.name)}</h2>
-        <div class="cell-sub">${[a.fans ? `${a.fans.toLocaleString("de-DE")} Fans bei Deezer` : "", a.albums ? `${a.albums} Veröffentlichungen` : ""].filter(Boolean).join(" · ")}</div>
+      <div class="dc-hero-txt"><span class="cell-sub">Künstler${a.note ? ` · ${esc(a.note)}` : ""}${a.life ? ` · ${esc(a.life)}` : ""}</span><h2>${esc(a.name)}</h2>
+        <div class="cell-sub">${[a.fans ? `${a.fans.toLocaleString("de-DE")} ${d.sources[0] === "lastfm" ? "Hörer" : "Fans"}` : "", a.plays ? `${a.plays.toLocaleString("de-DE")} Wiedergaben bei Last.fm` : "",
+          d.albums.length + d.singles.length ? `${d.albums.length + d.singles.length} Veröffentlichungen` : ""].filter(Boolean).join(" · ")}</div>
+        ${a.tags?.length ? `<div class="ver-chips dc-tags">${a.tags.map(t => `<button class="chip" data-tag="${esc(t)}" ${lf ? 'title="Nach diesem Tag stöbern (Last.fm)"' : "disabled"}>${esc(t)}</button>`).join("")}</div>` : ""}
         <div class="btn-row">${d.top.length ? `<button class="btn btn--primary btn--sm" id="dcPlay">${icon("play")}Reinhören</button>` : ""}
-          <button class="btn btn--sm" id="dcMix">${icon("shuffle")}Mix mit ${esc(a.name)}</button>
+          ${dz ? `<button class="btn btn--sm" id="dcMix">${icon("shuffle")}Mix mit ${esc(a.name)}</button>` : ""}
           ${d.top.length ? `<button class="btn btn--sm" id="dcSaveTop">${icon("plus")}Top-Songs als Playlist</button>` : ""}
-          ${a.link ? `<a class="btn btn--sm btn--ghost" href="${esc(a.link)}" target="_blank" rel="noopener">${icon("external")}Bei Deezer</a>` : ""}</div></div></div>
-    <div class="section-title dc-st">Beliebteste Songs${d.top.length > 10 ? `<button class="btn btn--sm btn--ghost" id="dcAll">Alle ${d.top.length} zeigen</button>` : ""}</div><div id="dcTop"></div>
-    ${d.albums.length ? `<div class="section-title">Alben</div>${discCards(d.albums, "album")}` : ""}
-    ${d.singles.length ? `<div class="section-title">Singles & EPs</div>${discCards(d.singles, "album")}` : ""}
+          ${discLinks(a.links)}</div>
+        <div class="cell-sub">Daten von ${d.sources.map(s => esc(DSRC[s]?.[1] || s)).join(", ")}</div></div></div>
+    ${discFailed(d)}
+    ${d.top.length ? `<div class="section-title dc-st">Beliebteste Songs${d.top.length > 10 ? `<button class="btn btn--sm btn--ghost" id="dcAll">Alle ${d.top.length} zeigen</button>` : ""}</div><div id="dcTop"></div>` : ""}
+    ${d.albums.length ? `<div class="section-title">Alben</div>${discCardsMore(d.albums, "album")}` : ""}
+    ${d.singles.length ? `<div class="section-title">Singles, EPs &amp; Remixe</div>${discCardsMore(d.singles, "album")}` : ""}
     ${d.related.length ? `<div class="section-title">Ähnliche Künstler</div>${discCards(d.related, "artist")}` : ""}`;
-  hydrateIcons(body);
+  hydrateIcons(body); discImgs(body);
+  bindCardsMore(body, [d.albums.length > 18 && { list: d.albums, kind: "album" }, d.singles.length > 18 && { list: d.singles, kind: "album" }].filter(Boolean));
   const drawTop = () => { const l = all ? d.top : d.top.slice(0, 10); $("#dcTop").innerHTML = discRows(l, { num: true }); bindDiscRows($("#dcTop"), l); };
-  drawTop();
+  if (d.top.length) drawTop();
   $("#dcBack").onclick = () => history.length > 1 ? history.back() : (location.hash = "#/discover");
   const al = $("#dcAll"); if (al) al.onclick = () => { all = true; al.remove(); drawTop(); };
   const pl = $("#dcPlay"); if (pl) pl.onclick = () => $("#dcTop .thumb-play")?.click();
   const st = $("#dcSaveTop"); if (st) st.onclick = () => saveAllAsPlaylist(d.top, `Best of ${a.name}`);
-  $("#dcMix").onclick = () => { mixAddSeed({ id: a.id, name: a.name, picture: a.picture }); Mix.mode = "artists"; store.set("mixMode", "artists"); location.hash = "#/mix"; };
+  const mx = $("#dcMix"); if (mx) mx.onclick = () => { mixAddSeed({ id: +dz, name: a.name, picture: a.picture }); Mix.mode = "artists"; store.set("mixMode", "artists"); location.hash = "#/mix"; };
+  if (lf) $$("[data-tag]", body).forEach(b => b.onclick = () => {
+    Disc.csrc = "lastfm"; store.set("discCSrc", "lastfm"); Disc.gen = { ...Disc.gen, lastfm: b.dataset.tag }; store.set("discGen", Disc.gen); location.hash = "#/discover";
+  });
 }
 
 async function discAlbum(body, alid) {
   body.innerHTML = skeletonRows(6);
   let d;
-  try { d = await api(`/api/discover/album/${encodeURIComponent(alid)}`); } catch (e) { body.innerHTML = `<div class="empty">${icon("info")}<h3>Geht gerade nicht</h3><p>${esc(e.message)}</p></div>`; return; }
+  try { d = await api(`/api/discover/album/${encodeURIComponent(alid)}`); }
+  catch (e) { body.innerHTML = `<div class="empty">${icon("info")}<h3>Geht gerade nicht</h3><p>${esc(e.message)}</p></div>`; hydrateIcons(body); return; }
   if (!document.body.contains(body)) return;
   const a = d.album;
-  const who = a.artist_id ? `<a class="dc-a" href="#/discover?artist=${a.artist_id}">${esc(a.artist || "")}</a>` : esc((a.artists || []).join(", "));
+  const who = a.artist_id ? `<a class="dc-a" href="${discArtistHref(a.artist_id)}">${esc(a.artist || "")}</a>` : esc((a.artists || []).join(", "));
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(a.date || "") ? new Date(a.date).toLocaleDateString("de-DE") : a.date || a.year;
   body.innerHTML = `<button class="btn btn--sm btn--ghost dc-back" id="dcBack">${icon("prev")}Zurück</button>
     <div class="card dc-hero">${a.cover_big || a.cover ? `<img class="dc-hero-pic" src="${esc(a.cover_big || a.cover)}" alt="">` : ""}
       <div class="dc-hero-txt"><span class="cell-sub">${esc(a.type || "Album")}</span><h2>${esc(a.title)}</h2><div>${who}</div>
-        <div class="cell-sub">${[a.date ? new Date(a.date).toLocaleDateString("de-DE") : a.year, d.tracks.length ? `${d.tracks.length} Songs` : "", a.duration_ms ? `${Math.round(a.duration_ms / 60000)} Min.` : "", a.label, (a.genres || []).join(", ")].filter(Boolean).map(esc).join(" · ")}</div>
+        <div class="cell-sub">${[date, d.tracks.length ? `${d.tracks.length} Songs` : "", a.duration_ms ? `${Math.round(a.duration_ms / 60000)} Min.` : "", a.label, (a.genres || []).join(", ")].filter(Boolean).map(esc).join(" · ")}</div>
         <div class="btn-row">${d.tracks.some(t => t.preview_url) ? `<button class="btn btn--primary btn--sm" id="dcPlay">${icon("play")}Reinhören</button>` : ""}
           ${d.tracks.length ? `<button class="btn btn--sm" id="dcSave">${icon("plus")}Als Playlist speichern</button>` : ""}
-          ${a.link ? `<a class="btn btn--sm btn--ghost" href="${esc(a.link)}" target="_blank" rel="noopener">${icon("external")}Bei Deezer</a>` : ""}</div></div></div>
-    <div class="section-title">Songs</div><div id="dcTr">${discRows(d.tracks, { num: true, album: false })}</div>`;
-  hydrateIcons(body); bindDiscRows($("#dcTr"), d.tracks);
+          ${discLinks(a.links)}</div>
+        <div class="cell-sub">Daten von ${(d.sources || []).map(s => esc(DSRC[s]?.[1] || s)).join(", ")}${(d.sources || []).some(s => s !== "deezer" && s !== "apple") ? " – Hörproben sucht der Player beim Abspielen bei Deezer" : ""}</div></div></div>
+    <div class="section-title">Songs</div><div id="dcTr">${d.tracks.length ? discRows(d.tracks, { num: true, album: false }) : `<div class="cell-sub" style="padding:10px 2px">Die Quelle liefert zu diesem Album keine Titelliste.</div>`}</div>`;
+  hydrateIcons(body); bindDiscRows($("#dcTr"), d.tracks); discImgs(body);
   $("#dcBack").onclick = () => history.length > 1 ? history.back() : (location.hash = "#/discover");
   const pl = $("#dcPlay"); if (pl) pl.onclick = () => $("#dcTr .thumb-play")?.click();
   const sv = $("#dcSave"); if (sv) sv.onclick = () => saveAllAsPlaylist(d.tracks, `${a.artist ? `${a.artist} – ` : ""}${a.title}`);
@@ -4914,7 +4996,8 @@ const Privacy = {
       ["Google (YouTube), SoundCloud", "Anmeldung über deine eigene App – Token bleibt auf diesem Rechner", "nur wenn du den Login einrichtest"],
       ["Deezer („Mehr vom Künstler“)", "Kennung des geprüften Songs und seines Künstlers", "beim Öffnen eines Songs"],
       ["YouTube / Spotify („Ersatz-Hörprobe“)", "beim Laden des offiziellen Players: IP-Adresse, Geräteinfos, ggf. Cookies; zum Finden: Titel + Künstler an die YouTube-Suche (eigener Zugang)", "nur nach Einwilligung je Anbieter und nur, wenn Deezer/Apple keine Hörprobe haben"],
-      ["Deezer („Entdecken“)", "Suchbegriff bzw. Deezer-Kennung des angetippten Künstlers, Albums oder Genres", "nur beim Suchen und Öffnen unter „Entdecken“; Ergebnis höchstens 1 Stunde im Arbeitsspeicher"],
+      ["Deezer, Apple (iTunes-Suche, Charts), MusicBrainz („Entdecken“)", "Suchbegriff bzw. Kennung oder Name des angetippten Künstlers, Albums oder Genres; MusicBrainz-Cover lädt das Cover Art Archive (archive.org)", "nur beim Suchen und Öffnen unter „Entdecken“, je Quelle abschaltbar; Ergebnis höchstens 1 Stunde im Arbeitsspeicher"],
+      ["Last.fm, Discogs („Entdecken“)", "dasselbe – mit deinem eigenen Last.fm-Key bzw. Discogs-Token; bei Last.fm auch das gewählte Genre-Tag", "nur wenn Key/Token eingetragen und die Quelle eingeschaltet ist"],
       ["Deezer („Remixe & Versionen“)", "Titel und Hauptkünstler des Songs", "nur nach Klick auf „Remixe & Versionen suchen“"],
       ["Deezer („Mix erstellen“)", "eingegebener Künstlername bzw. Kennungen der gewählten und ähnlicher Künstler", "nur beim Suchen und Erstellen eines Mixes"],
       ["MusicBrainz, Last.fm („Mix erstellen“ nach Genre)", "nur der Genre-Name als Tag (z. B. „liquid funk“); Last.fm nur mit eigenem Key", "nur beim Erstellen eines Genre-Mixes"],
@@ -4938,6 +5021,8 @@ const Privacy = {
       <div class="cell-sub" style="white-space:normal;margin-top:10px">Kein Tracking, keine Werbung, kein Konto bei SH-Tunebridge. Aufnahmen werden nie gespeichert. Alles andere liegt nur auf deinem Rechner.</div>
     </div>
     <div class="card set-group" style="margin-top:12px" id="embedConsents"></div>
+    <div class="card set-group" style="margin-top:12px"><div class="set-row"><div><div class="lbl">Entdecken – Quellen</div><div class="hint" data-ds-state>…</div></div><div></div>
+      <div class="row-actions"><button class="btn btn--sm" data-ds-edit>${icon("pencil")}Ändern</button></div></div></div>
     <div class="card set-group" style="margin-top:12px">
       <div class="set-row"><div><div class="lbl">Einwilligungen</div><div class="hint">Datenschutzerklärung bestätigt ${c.privacy_at ? "am " + new Date(c.privacy_at * 1000).toLocaleDateString("de-DE") : "– noch nicht"} ·
         Senden an ${esc(c.domain)}: ${allowed.length ? esc(allowed.join(", ")) : "aus"}${c.pending_errors ? ` · ${c.pending_errors} Fehlerbericht(e) warten` : ""}</div></div><div></div>
@@ -4976,6 +5061,11 @@ const Privacy = {
       if (rb) rb.onclick = () => { store.set("embedOk", {}); toast("Einwilligungen für Player widerrufen"); drawEmb(); };
     };
     drawEmb();
+    const dsState = () => discSources(true).then(s => { const el = $("[data-ds-state]", box); if (!el || !s) return;
+      const on = s.sources.filter(x => x.on && x.available).map(x => x.name);
+      el.textContent = `Eingeschaltet: ${on.length ? on.join(", ") : "keine"}. Gesendet wird nur, was du unter „Entdecken“ suchst oder antippst.`; });
+    dsState();
+    $("[data-ds-edit]", box).onclick = () => discSourcesDialog(dsState);
     hydrateIcons(box);
     $("[data-cons-edit]", box).onclick = () => Consent.dialog(false);
     const sendBtn = $("[data-cons-send]", box);
@@ -5551,7 +5641,7 @@ Views.settings = async (main) => {
       </dl></div>`,
     dienste: () => `${sec("Konten verbinden", "Du loggst dich im Fenster selbst ein – SH-Tunebridge liest danach nur den Key von der Seite ab, prüft ihn und speichert ihn. Dein Passwort sieht SH-Tunebridge nie.")}
       <div class="accounts" id="accounts">${accs.map(accountCard).join("")}</div>
-      ${sec("Musikdienste", "Spotify/TIDAL verbindest du unter <a href=\"#/services\">Dienste</a>. Hier die Schlüssel, die du selbst einträgst.")}${keys(["SPOTIFY_CLIENT_ID", "YOUTUBE_API_KEY", "LASTFM_API_KEY"])}`,
+      ${sec("Musikdienste", "Spotify/TIDAL verbindest du unter <a href=\"#/services\">Dienste</a>. Hier die Schlüssel, die du selbst einträgst.")}${keys(["SPOTIFY_CLIENT_ID", "YOUTUBE_API_KEY", "LASTFM_API_KEY", "DISCOGS_TOKEN"])}`,
     darstellung: () => `${sec("Darstellung", "Farben, Hell/Dunkel, eigenes Hintergrundbild und Größe – wird sofort angewendet und auf diesem Rechner gespeichert.")}<div id="lookBox"></div>`,
     ki: () => `${sec("KI-Anbieter", "Welche KI Songs, Genres und Playlists einschätzt und beim Sortieren mitprüft. Entweder eine KI, oder mehrere – nacheinander als Ersatz oder zusammen mit Abstimmung. Gefunden wird, was schon auf deinem Rechner läuft (Claude Code, Codex, Gemini CLI, llama.cpp, Ollama, LM Studio); Cloud-KIs gehen mit eigenem API-Key.")}
       <div id="aiBox"></div>

@@ -511,8 +511,8 @@ def handle_versions(body: dict, client: str | None = None) -> dict:
 
 
 def handle_discover(body: dict, client: str | None = None) -> dict:
-    """„Entdecken“ fürs Handy (discover.py): Suche, Künstler, Album, Charts, Genres im Deezer-Katalog.
-    Das Handy schickt nur Suchbegriff bzw. Deezer-Kennung; der PC fragt Deezer wie bei sich selbst."""
+    """„Entdecken“ fürs Handy (discover/): Suche, Künstler, Album, Charts, Genres – mit den am PC eingeschalteten
+    Quellen. Das Handy schickt nur Suchbegriff bzw. Kennung; der PC fragt die Quellen wie bei sich selbst."""
     dev_id = str(body.get("id") or "")[:32]
     d = _device(dev_id)
     key = _kdf(base64.b64decode(d["secret"]), "sync")
@@ -529,21 +529,24 @@ def handle_discover(body: dict, client: str | None = None) -> dict:
             kind = str(req.get("kind") or "all")
             res = discover.search_all(str(arg or "")) if kind == "all" else discover.search(str(arg or ""), kind)
         elif what == "artist":
-            res = discover.artist_page(arg)
+            also = req.get("also") if isinstance(req.get("also"), list) else []
+            res = discover.artist_page(arg, [str(x) for x in also][:5])
         elif what == "album":
             res = discover.album_page(arg)
         elif what == "charts":
-            res = discover.charts(arg if arg not in (None, "") else 0)
+            res = discover.charts(str(req.get("source") or "deezer"), "" if arg is None else str(arg))
         elif what == "genres":
-            res = {"genres": discover.genres()}
+            res = discover.genres(str(req.get("source") or "deezer"))
         else:
             raise PhoneError("Unbekannte Anfrage")
     except ratelimit.LimitReached as e:
         raise PhoneError(f"{e} – bitte gleich nochmal versuchen", 429) from None
     except LookupError as e:
         raise PhoneError(str(e), 404) from None
-    except ValueError as e:
+    except (ValueError, PermissionError) as e:
         raise PhoneError(str(e)) from None
+    except Exception as e:  # noqa: BLE001
+        raise PhoneError(f"Quelle nicht erreichbar: {e}", 502) from None
     return {"box": seal(key, f"discover-ok:{dev_id}:{rid}", res, limit=None)}
 
 

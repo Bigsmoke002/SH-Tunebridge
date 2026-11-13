@@ -51,6 +51,8 @@ class App : Application(), ImageLoaderFactory {
         val versionsSeed = kotlinx.coroutines.flow.MutableStateFlow<de.bs002.tunebridge.data.Track?>(null)
         /** Künstler (Deezer-ID, Name), den „Mix mit …“ auf der Künstlerseite vorwählt. */
         val mixSeed = kotlinx.coroutines.flow.MutableStateFlow<Pair<Int, String>?>(null)
+        /** Genre-Tag von einer Künstlerseite, das „Entdecken“ als Last.fm-Charts öffnet. */
+        val discoverTag = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
         /** Erkennen von außen angestoßen (Schnellkachel, Widget, App-Kurzbefehl): false = Mikrofon, true = Handy-Ton. */
         val listenRequest = kotlinx.coroutines.flow.MutableStateFlow<Boolean?>(null)

@@ -31,7 +31,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -47,6 +46,7 @@ import de.bs002.tunebridge.Player
 import de.bs002.tunebridge.data.Track
 import de.bs002.tunebridge.net.DAlbum
 import de.bs002.tunebridge.net.DArtist
+import de.bs002.tunebridge.net.DSOURCES
 import de.bs002.tunebridge.net.DTrack
 import de.bs002.tunebridge.net.Discover
 import de.bs002.tunebridge.net.DiscoverNeedsConsent
@@ -67,7 +67,8 @@ import kotlinx.coroutines.delay
 import java.util.Locale
 
 /** Wohin Tipps auf Künstler, Alben und „Remixe & Versionen“ führen. */
-class DiscoverNav(val openArtist: (Long) -> Unit, val openAlbum: (Long) -> Unit, val openVersions: (Track) -> Unit, val openMix: () -> Unit)
+class DiscoverNav(val openArtist: (String, List<String>) -> Unit, val openAlbum: (String) -> Unit, val openVersions: (Track) -> Unit,
+                  val openMix: () -> Unit, val openCharts: () -> Unit)
 
 private sealed interface DLoad<out T> {
     data object Busy : DLoad<Nothing>
@@ -104,8 +105,9 @@ private fun <T> LazyListScope.loadItems(s: DState<T>, content: LazyListScope.(Go
     when (val l = s.load) {
         DLoad.Busy -> item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Tb.accent) } }
         DLoad.NeedConsent -> item {
-            Notice("Kein PC erreichbar. Unterwegs kann die App direkt bei Deezer stöbern: Dafür gehen deine Suchbegriffe bzw. die " +
-                "angetippten Künstler und Alben an Deezer, Deezer sieht deine IP-Adresse. Ausschaltbar unter Mehr › Datenschutz.",
+            Notice("Kein PC erreichbar. Unterwegs kann die App direkt bei Deezer stöbern (die anderen Quellen gibt es nur über den PC): " +
+                "Dafür gehen deine Suchbegriffe bzw. die angetippten Künstler und Alben an Deezer, Deezer sieht deine IP-Adresse. " +
+                "Ausschaltbar unter Mehr › Datenschutz.",
                 icon = Ico.Info, color = Tb.accent, modifier = Modifier.padding(horizontal = 20.dp)) {
                 Row(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TbButton("Erlauben", { App.repo.updateSettings { it.copy(similarDirect = true) } }, kind = BtnKind.Primary, small = true)
@@ -124,23 +126,30 @@ private enum class ChartKind(val label: String) { Songs("Songs"), Artists("Küns
 fun DiscoverScreen(nav: DiscoverNav) {
     var q by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
-    var genre by rememberSaveable { mutableLongStateOf(0L) }
+    var source by rememberSaveable { mutableStateOf("deezer") }
+    var genre by rememberSaveable { mutableStateOf("") }
+    var tag by rememberSaveable { mutableStateOf("") }
     var kind by rememberSaveable { mutableStateOf(ChartKind.Songs) }
     var sheet by remember { mutableStateOf<Pair<DTrack, List<DTrack>>?>(null) }
     var pick by remember { mutableStateOf<List<Track>?>(null) }
     LaunchedEffect(q) { if (q.isNotBlank()) delay(450); query = q.trim() }
     val s = loader(query.ifEmpty { null }) { Discover.search(query) }
-    val gs = loader("genres") { Discover.genres() }
-    val cs = loader(genre) { Discover.charts(genre) }
+    // Tag von einer Künstlerseite („liquid funk“) -> Last.fm-Charts zu diesem Tag
+    val wanted by App.discoverTag.collectAsState()
+    LaunchedEffect(wanted) { wanted?.let { source = "lastfm"; genre = it; q = ""; App.discoverTag.value = null } }
+    val gs = loader("g:$source") { Discover.genres(source) }
+    val charts = (gs.load as? DLoad.Done)?.got?.value?.charts.orEmpty()
+    LaunchedEffect(charts) { if (charts.isNotEmpty() && charts.none { it.id == source }) { source = charts.first().id; genre = "" } }
+    val cs = loader("c:$source:$genre") { Discover.charts(source, genre) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item { ScreenHeader("Entdecken", "Im Deezer-Katalog stöbern – Songs, Künstler, Alben, Charts") }
+        item { ScreenHeader("Entdecken", "Deezer, Apple Music, MusicBrainz – mit Key auch Last.fm und Discogs") }
         item { SearchField(q, { q = it }, Modifier.padding(horizontal = 20.dp), placeholder = "Song, Künstler oder Album …") }
         if (query.isNotEmpty()) {
             loadItems(s) { got ->
                 val r = got.value
                 if (r.tracks.isEmpty() && r.artists.isEmpty() && r.albums.isEmpty()) {
-                    item { EmptyState(Ico.Search, "Nichts gefunden", "Zu „${r.q}“ hat Deezer nichts.") }
+                    item { EmptyState(Ico.Search, "Nichts gefunden", "Zu „${r.q}“ haben die Quellen nichts.") }
                     return@loadItems
                 }
                 if (r.artists.isNotEmpty()) {
@@ -149,24 +158,40 @@ fun DiscoverScreen(nav: DiscoverNav) {
                 }
                 if (r.tracks.isNotEmpty()) {
                     item {
-                        SectionLabel("Songs", Modifier.padding(horizontal = 20.dp)) { PlayButtons(r.tracks.map { it.toTrack() }, "Suche: ${r.q}") }
+                        SectionLabel("Songs", Modifier.padding(horizontal = 20.dp)) { PlayButtons(r.tracks.map { it.toPlayable() }, "Suche: ${r.q}") }
                     }
-                    items(r.tracks, key = { "t" + it.ids["deezer"] }) { t -> DRow(t) { sheet = t to r.tracks } }
+                    itemsIndexed0(r.tracks) { _, t -> DRow(t) { sheet = t to r.tracks } }
                 }
                 if (r.albums.isNotEmpty()) {
                     item { SectionLabel("Alben", Modifier.padding(horizontal = 20.dp)) }
                     item { AlbumRow(r.albums, nav) }
                 }
-                item { Source(got.from) }
+                item { Failed(r.failed) }
+                item { Source(got.from, sources = r.sources) }
             }
         } else {
             item { Spacer(Modifier.height(6.dp)) }
-            (gs.load as? DLoad.Done)?.got?.value?.genres?.let { list ->
+            if (charts.size > 1) item {
+                LazyRow(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentPadding = PaddingValues(horizontal = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    items(charts, key = { it.id }) { c -> FilterChip(c.name, source == c.id, Ico.Chart) { if (source != c.id) { source = c.id; genre = "" } } }
+                }
+            }
+            (gs.load as? DLoad.Done)?.got?.value?.genres?.takeIf { it.isNotEmpty() }?.let { list ->
                 item {
                     LazyRow(Modifier.fillMaxWidth().padding(vertical = 6.dp), contentPadding = PaddingValues(horizontal = 20.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(list, key = { it.id }) { g -> FilterChip(if (g.id == 0L) "Alle" else g.name, genre == g.id) { genre = g.id } }
+                        items(list, key = { "g" + it.id }) { g ->
+                            FilterChip(g.name, genre == g.id || (genre.isEmpty() && (g.id == "0" || g.id.isEmpty()))) { genre = g.id }
+                        }
                     }
+                }
+            }
+            if (source == "lastfm") item {
+                Row(Modifier.padding(horizontal = 20.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SearchField(tag, { tag = it.take(60) }, Modifier.weight(1f), placeholder = "Eigenes Genre-Tag, z. B. liquid funk")
+                    Spacer(Modifier.width(8.dp))
+                    TbButton("Los", { if (tag.isNotBlank()) genre = tag.trim() }, small = true)
                 }
             }
             item {
@@ -180,7 +205,7 @@ fun DiscoverScreen(nav: DiscoverNav) {
                     ChartKind.Songs -> {
                         item {
                             SectionLabel("Charts", Modifier.padding(horizontal = 20.dp)) {
-                                if (c.tracks.isNotEmpty()) PlayButtons(c.tracks.map { it.toTrack() }, "Charts")
+                                if (c.tracks.isNotEmpty()) PlayButtons(c.tracks.map { it.toPlayable() }, "Charts")
                             }
                         }
                         itemsIndexed0(c.tracks) { i, t -> DRow(t, num = i + 1) { sheet = t to c.tracks } }
@@ -189,8 +214,8 @@ fun DiscoverScreen(nav: DiscoverNav) {
                                 small = true, modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
                         }
                     }
-                    ChartKind.Artists -> items(c.artists, key = { "a" + it.id }) { a -> ArtistLine(a) { nav.openArtist(a.id) } }
-                    ChartKind.Albums -> items(c.albums, key = { "al" + it.id }) { a -> AlbumLine(a) { nav.openAlbum(a.id) } }
+                    ChartKind.Artists -> itemsIndexed0(c.artists) { _, a -> ArtistLine(a) { nav.openArtist(a.id, a.also) } }
+                    ChartKind.Albums -> itemsIndexed0(c.albums) { _, a -> AlbumLine(a) { nav.openAlbum(a.id) } }
                 }
                 item { Source(got.from) }
             }
@@ -206,8 +231,8 @@ private fun <T> LazyListScope.itemsIndexed0(list: List<T>, content: @Composable 
 // ------------------------------------------------------------------ Künstlerseite
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DiscoverArtistScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
-    val s = loader(id) { Discover.artist(id) }
+fun DiscoverArtistScreen(id: String, also: List<String>, nav: DiscoverNav, back: () -> Unit) {
+    val s = loader(id) { Discover.artist(id, also) }
     var all by rememberSaveable { mutableStateOf(false) }
     var sheet by remember { mutableStateOf<Pair<DTrack, List<DTrack>>?>(null) }
     var pick by remember { mutableStateOf<List<Track>?>(null) }
@@ -222,15 +247,21 @@ fun DiscoverArtistScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
                     Cover(a.pictureBig ?: a.picture, 168.dp, 84.dp)
                     Spacer(Modifier.height(14.dp))
                     Text(a.name, style = TbType.display, color = Tb.text)
-                    val meta = listOfNotNull(a.fans?.takeIf { it > 0 }?.let { "${String.format(Locale.GERMANY, "%,d", it)} Fans" },
-                        a.albums?.takeIf { it > 0 }?.let { "$it Veröffentlichungen" }).joinToString(" · ")
+                    val n = p.albums.size + p.singles.size
+                    val meta = listOfNotNull(a.note, a.life, a.fans?.takeIf { it > 0 }?.let { "${String.format(Locale.GERMANY, "%,d", it)} ${if (p.sources.firstOrNull() == "lastfm") "Hörer" else "Fans"}" },
+                        n.takeIf { it > 0 }?.let { "$it Veröffentlichungen" }).joinToString(" · ")
                     if (meta.isNotEmpty()) Text(meta, style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 4.dp))
+                    if (a.tags.isNotEmpty()) FlowRow(Modifier.padding(top = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        a.tags.forEach { t -> FilterChip(t, false) { App.discoverTag.value = t; nav.openCharts() } }
+                    }
                     FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (p.top.isNotEmpty()) TbButton("Reinhören", { Player.play(p.top.map { it.toTrack() }, 0, a.name) }, kind = BtnKind.Primary, icon = Ico.Play)
+                        if (p.top.isNotEmpty()) TbButton("Reinhören", { Player.play(p.top.map { it.toPlayable() }, 0, a.name) }, kind = BtnKind.Primary, icon = Ico.Play)
                         if (p.top.isNotEmpty()) TbButton("Top-Songs als Playlist", { pick = p.top.map { it.toTrack() } }, icon = Ico.Plus)
-                        if (canMix && a.id <= Int.MAX_VALUE) TbButton("Mix mit ${a.name}", {
-                            App.mixSeed.value = a.id.toInt() to a.name; nav.openMix()
+                        val dz = a.refs["deezer"]?.removePrefix("dz:")?.toIntOrNull()
+                        if (canMix && dz != null) TbButton("Mix mit ${a.name}", {
+                            App.mixSeed.value = dz to a.name; nav.openMix()
                         }, kind = BtnKind.Ghost, icon = Ico.Sparkle)
                     }
                 }
@@ -245,9 +276,10 @@ fun DiscoverArtistScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
                 }
             }
             if (p.albums.isNotEmpty()) { item { SectionLabel("Alben", Modifier.padding(horizontal = 20.dp)) }; item { AlbumRow(p.albums, nav) } }
-            if (p.singles.isNotEmpty()) { item { SectionLabel("Singles & EPs", Modifier.padding(horizontal = 20.dp)) }; item { AlbumRow(p.singles, nav) } }
+            if (p.singles.isNotEmpty()) { item { SectionLabel("Singles, EPs & Remixe", Modifier.padding(horizontal = 20.dp)) }; item { AlbumRow(p.singles, nav) } }
             if (p.related.isNotEmpty()) { item { SectionLabel("Ähnliche Künstler", Modifier.padding(horizontal = 20.dp)) }; item { ArtistRow(p.related, nav) } }
-            item { Source(got.from, a.link) }
+            item { Failed(p.failed) }
+            item { Source(got.from, a.links, p.sources) }
         }
     }
     sheet?.let { (t, list) -> TrackSheet(t, list, (s.load as? DLoad.Done)?.got?.value?.artist?.name ?: "Künstler", nav, { pick = listOf(it) }) { sheet = null } }
@@ -257,19 +289,19 @@ fun DiscoverArtistScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
 /** Künstler eines Songs per Name öffnen (Song-Seite): gleicher Name bevorzugt, sonst bester Treffer. */
 @Composable
 fun DiscoverArtistByName(name: String, nav: DiscoverNav, back: () -> Unit) {
-    val s = loader(name) { Got("", Discover.artistByName(name) ?: -1L) }
-    val id = ((s.load as? DLoad.Done)?.got?.value)?.takeIf { it > 0 }
-    if (id != null) { DiscoverArtistScreen(id, nav, back); return }
+    val s = loader(name) { Got("", Discover.artistByName(name)) }
+    val found = (s.load as? DLoad.Done)?.got?.value
+    if (found != null) { DiscoverArtistScreen(found.id, found.also, nav, back); return }
     LazyColumn(Modifier.fillMaxSize()) {
         item { TopBack(back) }
-        loadItems(s) { item { EmptyState(Ico.Search, "Nicht gefunden", "„$name“ gibt es bei Deezer nicht als Künstler.") } }
+        loadItems(s) { item { EmptyState(Ico.Search, "Nicht gefunden", "„$name“ haben die Quellen nicht als Künstler.") } }
     }
 }
 
 // ------------------------------------------------------------------ Albumseite
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun DiscoverAlbumScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
+fun DiscoverAlbumScreen(id: String, nav: DiscoverNav, back: () -> Unit) {
     val s = loader(id) { Discover.album(id) }
     var sheet by remember { mutableStateOf<Pair<DTrack, List<DTrack>>?>(null) }
     var pick by remember { mutableStateOf<List<Track>?>(null) }
@@ -285,14 +317,14 @@ fun DiscoverAlbumScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
                     Text(a.title, style = TbType.display, color = Tb.text)
                     val who = a.artists.ifEmpty { listOfNotNull(a.artist) }.joinToString(", ")
                     Text(who, style = TbType.heading.copy(fontWeight = TbType.body.fontWeight), color = Tb.accent,
-                        modifier = Modifier.padding(top = 2.dp).clickable(enabled = a.artistId != null) { a.artistId?.let(nav.openArtist) })
+                        modifier = Modifier.padding(top = 2.dp).clickable(enabled = a.artistId != null) { a.artistId?.let { nav.openArtist(it, emptyList()) } })
                     val meta = listOfNotNull(a.type.ifEmpty { null }, a.year, a.label, p.tracks.size.takeIf { it > 0 }?.let { Fmt.songs(it) },
                         a.durationMs?.let { "${it / 60000} Min." }).joinToString("  ·  ")
                     if (meta.isNotEmpty()) Text(meta, style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 8.dp))
                     if (a.genres.isNotEmpty()) Text(a.genres.joinToString(" · "), style = TbType.small, color = Tb.text3, modifier = Modifier.padding(top = 2.dp))
                     FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (p.tracks.isNotEmpty()) {
-                            TbButton("Abspielen", { Player.play(p.tracks.map { it.toTrack() }, 0, a.title) }, kind = BtnKind.Primary, icon = Ico.Play)
+                            TbButton("Abspielen", { Player.play(p.tracks.map { it.toPlayable() }, 0, a.title) }, kind = BtnKind.Primary, icon = Ico.Play)
                             TbButton("Als Playlist", { pick = p.tracks.map { it.toTrack() } }, icon = Ico.Plus)
                         }
                     }
@@ -300,8 +332,8 @@ fun DiscoverAlbumScreen(id: Long, nav: DiscoverNav, back: () -> Unit) {
             }
             item { SectionLabel("Titel", Modifier.padding(horizontal = 20.dp)) }
             itemsIndexed0(p.tracks) { i, t -> DRow(t, num = i + 1, showCover = false) { sheet = t to p.tracks } }
-            if (p.tracks.isEmpty()) item { Text("Deezer liefert zu diesem Album keine Titelliste.", style = TbType.small, color = Tb.text3, modifier = Modifier.padding(20.dp)) }
-            item { Source(got.from, a.link) }
+            if (p.tracks.isEmpty()) item { Text("Die Quelle liefert zu diesem Album keine Titelliste.", style = TbType.small, color = Tb.text3, modifier = Modifier.padding(20.dp)) }
+            item { Source(got.from, a.links, p.sources) }
         }
     }
     sheet?.let { (t, list) -> TrackSheet(t, list, (s.load as? DLoad.Done)?.got?.value?.album?.title ?: "Album", nav, { pick = listOf(it) }) { sheet = null } }
@@ -320,6 +352,7 @@ private fun DRow(t: DTrack, num: Int? = null, sub: String? = null, showCover: Bo
         if (showCover) { Cover(t.cover, 44.dp); Spacer(Modifier.width(12.dp)) }
         Column(Modifier.weight(1f)) {
             TrackLine(t.title, t.artists.joinToString(", "))
+            Badges(t.sources)
             if (sub != null) Text(sub, style = TbType.small, color = Tb.text3, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (t.explicit) Text("E", style = TbType.small, color = Tb.text3, modifier = Modifier.padding(horizontal = 6.dp))
@@ -331,10 +364,11 @@ private fun DRow(t: DTrack, num: Int? = null, sub: String? = null, showCover: Bo
 private fun ArtistRow(list: List<DArtist>, nav: DiscoverNav) {
     LazyRow(Modifier.fillMaxWidth(), contentPadding = PaddingValues(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         items(list, key = { it.id }) { a ->
-            Column(Modifier.width(96.dp).clip(RoundedCornerShape(Tb.radiusSm)).clickable { nav.openArtist(a.id) }.padding(vertical = 4.dp),
+            Column(Modifier.width(96.dp).clip(RoundedCornerShape(Tb.radiusSm)).clickable { nav.openArtist(a.id, a.also) }.padding(vertical = 4.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
                 Cover(a.picture, 88.dp, 44.dp)
                 Text(a.name, style = TbType.small, color = Tb.text, maxLines = 2, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
+                Badges(a.sources)
             }
         }
     }
@@ -349,6 +383,7 @@ private fun AlbumRow(list: List<DAlbum>, nav: DiscoverNav) {
                 Text(a.title, style = TbType.bodyStrong, color = Tb.text, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 6.dp))
                 Text(listOfNotNull(a.year, a.type.ifEmpty { null }, a.artist).joinToString(" · "), style = TbType.small, color = Tb.text3,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Badges(a.sources)
             }
         }
     }
@@ -360,7 +395,8 @@ private fun ArtistLine(a: DArtist, onClick: () -> Unit) {
         .padding(horizontal = 10.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Cover(a.picture, 48.dp, 24.dp)
         Spacer(Modifier.width(12.dp))
-        TrackLine(a.name, a.fans?.takeIf { it > 0 }?.let { "${String.format(Locale.GERMANY, "%,d", it)} Fans" } ?: "Künstler", Modifier.weight(1f))
+        TrackLine(a.name, a.fans?.takeIf { it > 0 }?.let { "${String.format(Locale.GERMANY, "%,d", it)} ${if (a.sources.firstOrNull() == "lastfm") "Hörer" else "Fans"}" }
+            ?: a.note ?: "Künstler", Modifier.weight(1f))
     }
 }
 
@@ -375,14 +411,33 @@ private fun AlbumLine(a: DAlbum, onClick: () -> Unit) {
 }
 
 @Composable
-private fun Source(from: String, link: String? = null) {
+private fun Source(from: String, links: Map<String, String> = emptyMap(), sources: List<String> = emptyList()) {
     val ctx = LocalContext.current
-    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("Daten von Deezer · $from", style = TbType.small, color = Tb.text3, modifier = Modifier.weight(1f))
-        if (link != null && link.startsWith("https://")) TbButton("Bei Deezer", {
-            runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link))) }
-        }, kind = BtnKind.Ghost, icon = Ico.External, small = true)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 14.dp)) {
+        val names = sources.mapNotNull { DSOURCES[it]?.second }.ifEmpty { listOf("Deezer") }
+        Text("Daten von ${names.joinToString(", ")} · $from", style = TbType.small, color = Tb.text3)
+        val ok = links.filterValues { it.startsWith("https://") }
+        if (ok.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            ok.forEach { (src, url) ->
+                TbButton(DSOURCES[src]?.second ?: src, { runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) } },
+                    kind = BtnKind.Ghost, icon = Ico.External, small = true)
+            }
+        }
     }
+}
+
+/** Kürzel der Quellen, die einen Treffer kennen (D = Deezer, A = Apple, MB, DG = Discogs, LF = Last.fm). */
+@Composable
+private fun Badges(sources: List<String>) {
+    if (sources.isEmpty()) return
+    Text(sources.joinToString(" · ") { DSOURCES[it]?.first ?: it }, style = TbType.label, color = Tb.text3, maxLines = 1)
+}
+
+@Composable
+private fun Failed(failed: Map<String, String>) {
+    if (failed.isEmpty()) return
+    Text("Nicht erreichbar: " + failed.entries.joinToString(" · ") { (k, m) -> "${DSOURCES[k]?.second ?: k} ($m)" },
+        style = TbType.small, color = Tb.warn, modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp))
 }
 
 /** Song antippen: Reinhören, Zur Playlist, Remixe & Versionen, Künstler/Album, Links. */
@@ -402,17 +457,18 @@ private fun TrackSheet(d: DTrack, list: List<DTrack>, title: String, nav: Discov
             }
             FlowRow(Modifier.padding(top = 14.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TbButton("Reinhören", {
-                    val tracks = list.map { it.toTrack() }
+                    val tracks = list.map { it.toPlayable() }
                     Player.play(tracks, list.indexOf(d).coerceAtLeast(0), title); close()
                 }, kind = BtnKind.Primary, icon = Ico.Play)
                 TbButton("Zur Playlist", { close(); pick(s) }, icon = Ico.Plus)
                 TbButton("Remixe & Versionen", { close(); nav.openVersions(s) }, kind = BtnKind.Ghost, icon = Ico.Disc)
             }
             val people = d.artists.mapIndexedNotNull { i, n -> d.artistIds.getOrNull(i)?.let { n to it } }
+            Badges(d.sources)
             if (people.isNotEmpty() || d.albumId != null) {
                 SectionLabel("Mehr davon")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    people.forEach { (n, id) -> FilterChip(n, false, Ico.Compass) { close(); nav.openArtist(id) } }
+                    people.forEach { (n, id) -> FilterChip(n, false, Ico.Compass) { close(); nav.openArtist(id, emptyList()) } }
                     d.albumId?.let { id -> FilterChip(d.album ?: "Album", false, Ico.Disc) { close(); nav.openAlbum(id) } }
                 }
             }

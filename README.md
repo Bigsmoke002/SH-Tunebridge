@@ -158,7 +158,9 @@ Keys lassen sich direkt unter *Einstellungen* eintragen.
 - *Song-Details*: Genre/Subgenre mit Quelle, Hörprobe, „Öffnen in …“, Kaufen ohne Provision, offizieller Player
   (erst nach Klick), Mehr vom Künstler, KI-Musik-Hinweis, Einsortieren, Ähnliche Songs, „Passt dazu“.
 - *Ähnliche Songs* zeigen BPM, Camelot-Tonart und Energie (lokal aus der Hörprobe gemessen) und „mixbar“.
-- *Entdecken*: ähnliche Songs zu Künstler + Titel; *Verlauf* und *Statistik* (mit Jahresrückblick) nur lokal.
+- *Entdecken*: in Deezer, Apple Music, MusicBrainz (und mit eigenem Key/Token Last.fm, Discogs) gleichzeitig stöbern –
+  Suche, Künstler- und Albumseiten, Charts und Genre-Tags; dazu „Ähnlich zu einem Song“. *Verlauf* und *Statistik*
+  (mit Jahresrückblick) nur lokal.
 - *Mix erstellen*: aus bis zu 5 Künstlern **oder einem Genre/Subgenre** (z. B. *Drum & Bass › Liquid*) eine neue
   Playlist bauen – Genre-Künstler aus deiner Bibliothek, der Gemeinschafts-DB, MusicBrainz und (mit Key) Last.fm. „Wie passend?“ von *Locker*
   (nur Ähnlichkeit) über *Passend* (±15 % Tempo) und *Mixbar* (±6 %, harmonische Übergänge, DJ-Reihenfolge) bis

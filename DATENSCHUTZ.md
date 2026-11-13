@@ -86,7 +86,9 @@ temporäre Datei vor und wird danach sofort gelöscht. Stille wird gar nicht ers
 | Deezer, iTunes-Suche, Last.fm, MusicBrainz | Künstler und Titel (ggf. ISRC); zur Genre-Prüfung die Kennung des schon gefundenen Künstlers | nach einer Erkennung, beim Link-Einfügen, Sortieren und automatischen Abgleich (Cover, Hörprobe, Genre, Mikro-Genre) |
 | Deezer („Mehr vom Künstler“) | Kennung des Songs bzw. Künstlers | beim Öffnen eines Songs |
 | YouTube (Google LLC, USA) / Spotify AB („Ersatz-Hörprobe“, Standard: aus) | Beim Laden des eingebetteten offiziellen Players: IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters. Zum Finden des Videos: Titel und Künstler an die offizielle YouTube-Suche (mit deinem eigenen YouTube-Schlüssel bzw. deiner YouTube-Verbindung) bzw. an die Spotify-Suche deiner verbundenen Spotify-App | nur wenn du es je Anbieter erlaubt hast (Einstellungen › Datenschutz) **und** Deezer/Apple keine Hörprobe haben; gefundene Kennungen höchstens 30 Tage lokal gemerkt, beim Widerruf gelöscht. Es gelten die [YouTube-Nutzungsbedingungen](https://www.youtube.com/t/terms), die [Datenschutzerklärung von Google](https://policies.google.com/privacy) bzw. die [Datenschutzhinweise von Spotify](https://www.spotify.com/de/legal/privacy-policy/) |
-| Deezer („Entdecken“) | dein Suchbegriff bzw. die Deezer-Kennung des angetippten Künstlers, Albums oder Genres | nur während du unter „Entdecken“ suchst oder etwas öffnest; Ergebnis höchstens 1 Stunde im Arbeitsspeicher, Suchbegriffe werden nicht gespeichert |
+| Deezer, Apple (iTunes-Suche, Charts-Feed), MusicBrainz („Entdecken“) | dein Suchbegriff bzw. die Kennung des angetippten Künstlers, Albums oder Genres; zum Zuordnen auf der Künstlerseite der Künstlername | nur während du unter „Entdecken“ suchst oder etwas öffnest, jede Quelle einzeln abschaltbar; Ergebnis höchstens 1 Stunde im Arbeitsspeicher, Suchbegriffe werden nicht gespeichert |
+| Last.fm, Discogs („Entdecken“) | dasselbe – mit deinem eigenen Last.fm-Key bzw. Discogs-Token; bei Last.fm auch das gewählte Genre-Tag | nur wenn Key/Token eingetragen und die Quelle eingeschaltet ist |
+| Internet Archive (Cover Art Archive) | deine IP-Adresse | beim Anzeigen von MusicBrainz-Covern unter „Entdecken“ |
 | Deezer („Remixe & Versionen“) | Titel (ohne Versions-Zusatz) und Hauptkünstler des Songs | nur nach Klick auf „Remixe & Versionen suchen“; Ergebnis 7 Tage im lokalen Zwischenspeicher |
 | YouTube, Spotify, Apple, TIDAL, SoundCloud, Deezer (offizielle Player) | IP-Adresse, Geräte-/Browserdaten, ggf. Cookies des Anbieters | **erst nach deinem Klick** auf „Player laden“ (siehe unten) |
 | Webseiten, die du über „Öffnen“ oder „Kaufen“ aufrufst | IP-Adresse (dein Standard-Browser) | erst beim Klick |
@@ -221,11 +223,24 @@ immer direkt vom Anbieter.
 
 ## Entdecken
 
-Unter *Entdecken* kannst du im Deezer-Katalog stöbern: Songs, Künstler und Alben suchen, Künstler- und Albumseiten,
-Charts und Genres. Dafür geht an **Deezers öffentliche Schnittstelle** (`api.deezer.com`, ohne Login) nur, was du
-suchst bzw. antippst – der Suchbegriff oder die Deezer-Kennung des Künstlers, Albums oder Genres. Deezer sieht dabei
-wie bei jeder Abfrage deine IP-Adresse. Die Ergebnisse bleiben höchstens eine Stunde im Arbeitsspeicher; Suchbegriffe
-werden nirgends gespeichert oder protokolliert. Erst wenn du einen Song in eine Playlist legst, wird er wie jeder andere
+Unter *Entdecken* kannst du in mehreren Musik-Katalogen gleichzeitig stöbern: Songs, Künstler und Alben suchen,
+Künstler- und Albumseiten, Charts und Genres. Die eingeschalteten Quellen werden gleichzeitig gefragt, gleiche Treffer
+zusammengeführt; jeder Treffer zeigt, aus welcher Quelle er stammt. Jede Quelle lässt sich einzeln abschalten
+(*Entdecken › Quellen* bzw. *Einstellungen › Datenschutz*) – die App prüft das am Rechner selbst, eine abgeschaltete
+Quelle wird nie gefragt.
+
+| Quelle | Zugang | was hingeht |
+|---|---|---|
+| **Deezer** (`api.deezer.com`) | öffentlich, ohne Login | Suchbegriff bzw. Deezer-Kennung |
+| **Apple** (`itunes.apple.com`, Charts-Feed `rss.marketingtools.apple.com`) | öffentlich, ohne Login, Shop Deutschland | Suchbegriff bzw. Apple-Kennung |
+| **MusicBrainz** (`musicbrainz.org`, Daten CC0) | öffentlich, ohne Login, höchstens 1 Anfrage/s | Suchbegriff bzw. MusicBrainz-Kennung; Cover lädt dein Rechner beim Cover Art Archive (Internet Archive) |
+| **Last.fm** | nur mit deinem eigenen API-Key | Suchbegriff, Künstler-/Albumname bzw. Genre-Tag |
+| **Discogs** | nur mit deinem eigenen persönlichen Token | Suchbegriff bzw. Discogs-Kennung; Daten von Discogs |
+
+Auf einer Künstlerseite ordnet die App die anderen Quellen über die Kennungen aus der Suche oder über den exakt
+gleichen Künstlernamen zu (gibt es mehrere gleichnamige Künstler, lässt sie die Quelle lieber weg); dafür geht der
+Künstlername an die jeweilige Quelle. Jede Quelle sieht wie bei jeder Abfrage deine IP-Adresse. Die Ergebnisse
+bleiben höchstens eine Stunde im Arbeitsspeicher; Suchbegriffe werden nirgends gespeichert oder protokolliert. Erst wenn du einen Song in eine Playlist legst, wird er wie jeder andere
 Playlist-Eintrag lokal gespeichert. Hörproben kommen wie immer direkt vom Anbieter (siehe oben). Ganze Songs gibt es
 nicht – zum Anhören ganzer Titel führen die Links zu den offiziellen Diensten.
 
@@ -376,9 +391,9 @@ Die übernommenen Songs werden wie eigene Erkennungen mit gekoppelten PCs abgegl
   schickt nur Titel, Künstler und Länge des Songs, der PC sucht bei Deezer). Ohne erreichbaren PC nur mit derselben
   Erlaubnis („Ähnliche Songs, Versionen & Entdecken ohne PC“) direkt bei Deezer – mit Titel und Künstler; Deezer sieht deine IP-Adresse.
 - **Entdecken:** Suche, Künstler-/Albumseiten und Charts kommen vom gekoppelten PC (verschlüsselt, `/phone/v1/discover`;
-  das Handy schickt nur den Suchbegriff bzw. die Deezer-Kennung, der PC fragt Deezer). Ohne erreichbaren PC nur mit
-  derselben Erlaubnis („Ähnliche Songs, Versionen & Entdecken ohne PC“) direkt bei Deezer; Deezer sieht deine IP-Adresse.
-  Ergebnisse bleiben nur im Arbeitsspeicher (1 Stunde).
+  das Handy schickt nur den Suchbegriff bzw. die Kennung, der PC fragt die dort eingeschalteten Quellen – siehe
+  „Entdecken“ oben). Ohne erreichbaren PC nur mit derselben Erlaubnis („Ähnliche Songs, Versionen & Entdecken ohne PC“)
+  und nur Deezer direkt; Deezer sieht deine IP-Adresse. Ergebnisse bleiben nur im Arbeitsspeicher (1 Stunde).
 - **Cover:** Nur wenn du „Cover anzeigen“ einschaltest (beim ersten Start Standard: aus), lädt die App die Bilder
   direkt bei Apple/Deezer – die sehen dabei deine IP-Adresse.
 - **Dein PC:** siehe unten – im eigenen Netz direkt, unterwegs nur wenn du es einschaltest verschlüsselt über
