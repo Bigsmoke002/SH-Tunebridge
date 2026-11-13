@@ -298,3 +298,27 @@ def test_save_many_to_playlist(fake):
     assert saved[2].preview_url.startswith("https://audio-ssl")
     assert c.post("/api/discover/save", json={"playlist": "x", "tracks": []}).status_code == 400
     assert c.post("/api/discover/save", json={"playlist": "x", "tracks": [{"title": "", "artists": []}]}).status_code == 400
+
+
+def test_player_song_open_and_links(monkeypatch):
+    """Player: laufender Song lässt sich öffnen – aus der Bibliothek (volle Song-Seite) oder nur als Song-Karte
+    mit Such-Links, ohne Anfrage nach außen."""
+    from fastapi.testclient import TestClient
+
+    from tunebridge import links, store
+    from tunebridge.models import Track
+    from tunebridge.web.app import app
+
+    c = TestClient(app, base_url="http://127.0.0.1:8765")
+    loose = {"title": "Afterglow", "artists": ["Wilkinson"], "ids": {"deezer": "123", "evil": "x"},
+             "cover": "http://unsicher/x.jpg", "preview_url": "https://p/x.mp3"}
+    assert c.post("/api/track", json={"track": loose}).status_code == 404
+    monkeypatch.setattr(links, "_itunes", lambda t: (_ for _ in ()).throw(AssertionError("keine Anfrage nach außen")))
+    got = c.post("/api/links/track", json={"track": loose}).json()
+    dz = next(x for x in got if x["id"] == "deezer")
+    assert dz["direct"] and dz["url"].endswith("/track/123")
+    assert any(not x["direct"] and "Wilkinson" in x["url"] for x in got)
+    store.add_to_playlist("Test", Track(title="Afterglow", artists=["Wilkinson"]))
+    r = c.post("/api/track", json={"track": loose})
+    assert r.status_code == 200 and r.json()["track"]["title"] == "Afterglow" and "Test" in r.json()["in_playlists"]
+    assert c.post("/api/track", json={"track": {"title": ""}}).status_code == 400

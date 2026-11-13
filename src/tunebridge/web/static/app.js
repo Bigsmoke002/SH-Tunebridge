@@ -262,6 +262,21 @@ const Player = {
     this.audio.volume = vol; $("#pVol").value = vol;
     $("#pVol").oninput = e => { this.audio.volume = +e.target.value; store.set("volume", +e.target.value); };
     $("#pPlay").onclick = () => this.toggle();
+    // Laufender Song: Cover/Titel öffnen ihn, Kopier-Knopf für „Interpret – Titel“, Rechtsklick für mehr
+    ["#pCover", "#pTitle"].forEach(sel => $(sel).onclick = () => this.openSong());
+    $("#pCopy").onclick = () => this.copy("both");
+    $(".player-track").addEventListener("contextmenu", e => {
+      if (!this.track) return;
+      e.preventDefault(); e.stopPropagation();
+      const sel = String(getSelection() || "").trim();
+      CtxMenu.open(e.clientX, e.clientY, [
+        { label: "Song öffnen", icon: "external", run: () => this.openSong() }, "-",
+        ...(sel ? [{ label: "Markierung kopieren", icon: "copy", run: () => this.copy(null, sel) }] : []),
+        { label: "Interpret – Titel kopieren", icon: "copy", run: () => this.copy("both") },
+        { label: "Nur Titel kopieren", icon: "copy", run: () => this.copy("title") },
+        { label: (this.track.artists || []).length > 1 ? "Nur Interpreten kopieren" : "Nur Interpret kopieren", icon: "copy", run: () => this.copy("artist") },
+      ]);
+    });
     $("#pPrev").onclick = () => this.prev();
     $("#pNext").onclick = () => this.skip();
     $("#pBar").onclick = e => {
@@ -286,6 +301,24 @@ const Player = {
       toast("Für diesen Song gibt es gerade keine Hörprobe", "err");
       $("#pTitle").textContent = this.track.title;
     };
+  },
+  songText(t, kind = "both") {
+    const a = (t?.artists || []).join(", "), ti = t?.title || "";
+    return kind === "title" ? ti : kind === "artist" ? a : [a, ti].filter(Boolean).join(" – ");
+  },
+  async copy(kind, text = null) {
+    const v = text ?? this.songText(this.track, kind);
+    if (!v) return;
+    const ok = await Clip.write(v);
+    ok ? toast(`Kopiert: ${v}`) : toast("Kopieren ging nicht", "err");
+  },
+  // Song aus der Bibliothek -> volle Song-Seite; sonst (z. B. aus Entdecken) eine kleine Song-Karte
+  async openSong() {
+    const t = this.track;
+    if (!t) return;
+    let r = null;
+    try { r = await api("/api/track", { method: "POST", body: { track: t } }); } catch { /* nicht in der Bibliothek */ }
+    if (r) openDrawer(async () => r); else songCard(t);
   },
   // Hörproben nacheinander (Playlist „Abspielen“/„Zufall“) – jede wird einzeln frisch vom Anbieter gestreamt
   playList(list, shuffle = false) {
@@ -349,6 +382,7 @@ const Player = {
     this.audio.addEventListener("playing", () => { $("#pTitle").textContent = t.title; }, { once: true });
     $("#pArtist").textContent = (t.artists || []).join(", ");
     $("#pCover").style.backgroundImage = t.cover ? `url("${t.cover}")` : "";
+    $("#pCopy").classList.remove("hidden"); $("#player").classList.add("has-track");
     $("#pPlay").disabled = false;
     this.nav();
   },
@@ -422,7 +456,8 @@ document.addEventListener("click", e => {
   Player.play(JSON.parse(b.dataset.play), false, ctx);
 });
 const playAttr = t => t.preview_url
-  ? `data-play="${esc(JSON.stringify({ title: t.title, artists: t.artists, cover: t.cover, preview_url: t.preview_url, isrc: t.isrc || null, ids: t.ids || {} }))}" data-play-url="${esc(t.preview_url)}"`
+  ? `data-play="${esc(JSON.stringify({ title: t.title, artists: t.artists, cover: t.cover, preview_url: t.preview_url, isrc: t.isrc || null, ids: t.ids || {},
+      ...(t.album ? { album: t.album } : {}), ...(t.artist_ids?.some(Boolean) ? { artist_ids: t.artist_ids } : {}) }))}" data-play-url="${esc(t.preview_url)}"`
   : "disabled";
 
 /* ================================================================= Sidebar */
@@ -2594,6 +2629,38 @@ function saveAllAsPlaylist(list, name) {
 function showVersionsOf(v) {
   modal({ title: "Remixe & Versionen", text: `${esc(v.title)} – ${esc((v.artists || []).join(", "))}`, body: `<div id="dcVer"></div>`, confirm: "Schließen", cancel: null, wide: true });
   loadVersions($("#dcVer"), { track: { title: v.title, artists: v.artists || [] } });
+}
+
+/* Song-Karte für einen Song außerhalb der Bibliothek (z. B. im Player, aus Entdecken): Namen kopieren,
+   auf Diensten öffnen, Remixe & Versionen, in eine Playlist legen */
+function songCard(t) {
+  const artists = (t.artists || []).map((n, i) => { const id = (t.artist_ids || [])[i];
+    return `<a class="dc-a" href="${id ? discArtistHref(id) : `#/discover?q=${encodeURIComponent(n)}`}" data-close>${esc(n)}</a>`; }).join(", ");
+  const copyRow = (kind, label) => { const v = Player.songText(t, kind);
+    return v ? `<div class="sc-copy"><span class="sc-lbl">${label}</span><span class="sc-val">${esc(v)}</span>
+      <button class="btn btn--sm btn--ghost" data-copy="${kind}">${icon("copy")}Kopieren</button></div>` : ""; };
+  modal({ title: "Song", cancel: null, confirm: "Schließen", wide: true,
+    body: `<div class="sc-head">${t.cover ? `<img class="sc-cover" src="${esc(t.cover)}" alt="">` : `<div class="sc-cover"></div>`}
+        <div class="sc-meta"><div class="sc-title">${esc(t.title || "")}</div><div class="cell-sub">${artists}${t.album ? ` · ${esc(t.album)}` : ""}</div></div></div>
+      ${copyRow("both", "Interpret – Titel")}${copyRow("title", "Titel")}${copyRow("artist", (t.artists || []).length > 1 ? "Interpreten" : "Interpret")}
+      <div class="open-on sc-links" data-role="sclinks"><span class="open-lbl">Öffnen in</span><span class="cell-sub">lädt …</span></div>
+      <div class="sc-act"><button class="btn btn--sm" data-sc="ver">${icon("layers")}Remixe & Versionen</button>
+        <button class="btn btn--sm" data-sc="add">${icon("plus")}In eine Playlist</button></div>` });
+  const box = $("#modalBox");
+  hydrateIcons(box);
+  $$("[data-copy]", box).forEach(b => b.onclick = async () => {
+    const v = Player.songText(t, b.dataset.copy);
+    (await Clip.write(v)) ? toast(`Kopiert: ${v}`) : toast("Kopieren ging nicht", "err");
+  });
+  $$("[data-close]", box).forEach(a => a.addEventListener("click", () => $("#modal").classList.remove("open")));
+  $("[data-sc=ver]", box).onclick = () => showVersionsOf(t);
+  $("[data-sc=add]", box).onclick = () => addFoundToPlaylist(t);
+  api("/api/links/track", { method: "POST", body: { track: t } }).then(list => {
+    const el = $("[data-role=sclinks]", box);
+    if (el) el.innerHTML = `<span class="open-lbl">Öffnen in</span>` + list.map(l => `<a class="plat ${l.direct ? "" : "plat--search"}" style="--pc:${PLATFORM_COLORS[l.id] || "#888"}"
+      href="${esc(l.url)}" target="_blank" rel="noopener" title="${l.direct ? `Direkt in ${esc(l.name)} öffnen` : `Auf ${esc(l.name)} suchen`}"><span class="plat-dot"></span>${esc(l.name)}${l.direct ? "" : icon("search")}</a>`).join("");
+    if (el) hydrateIcons(el);
+  }).catch(() => { const el = $("[data-role=sclinks]", box); if (el) el.remove(); });
 }
 
 Views.discover = async (main, _, params) => {

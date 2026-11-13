@@ -703,11 +703,34 @@ class KeyReq(BaseModel):
     key: str
 
 
+class TrackReq(BaseModel):
+    key: str = ""
+    track: dict | None = None      # z. B. der Song im Player (ohne Bibliotheks-Schlüssel)
+
+
+def _loose_track(d: dict) -> Track:
+    """Song aus der Oberfläche (Player, Entdecken) – nur bekannte Felder, Längen begrenzt."""
+    if not isinstance(d, dict):
+        raise HTTPException(400, "Ungültiger Song")
+    title = str(d.get("title") or "").strip()[:300]
+    artists = [str(a).strip()[:200] for a in (d.get("artists") or []) if str(a).strip()][:20]
+    if not title:
+        raise HTTPException(400, "Song ohne Titel")
+    ids = {str(k)[:20]: str(v)[:100] for k, v in (d.get("ids") or {}).items()
+           if k in ("deezer", "spotify", "youtube", "apple", "tidal", "soundcloud", "musicbrainz") and v}
+    cover = d.get("cover") if isinstance(d.get("cover"), str) and d["cover"].startswith("https://") else None
+    isrc = str(d.get("isrc") or "").strip().upper()[:15] or None
+    album = str(d.get("album") or "").strip()[:300] or None
+    return Track(title=title, artists=artists, album=album, isrc=isrc, ids=ids, cover=cover)
+
+
 @app.post("/api/track")
-def track_detail(req: KeyReq):
-    t = store.find_track(req.key)
+def track_detail(req: TrackReq):
+    t = store.find_track(req.key) if req.key else None
+    if not t and req.track:
+        t = store.find_track(store.track_key(_loose_track(req.track)))   # Player: Song steht evtl. in der Bibliothek
     if not t:
-        raise HTTPException(404, "Song nicht gefunden")
+        raise HTTPException(404, "Song nicht in deiner Bibliothek")
     return {"id": None, "extra": {}, **_track_payload(t)}
 
 
@@ -1759,6 +1782,15 @@ async def track_links(id: int | None = None, key: str | None = None):
     else:
         raise HTTPException(400)
     return await asyncio.to_thread(links.links, track, known)
+
+
+@app.post("/api/links/track")
+def track_links_loose(req: TrackReq):
+    """„Öffnen in“ für einen Song außerhalb der Bibliothek (Player) – nur vorhandene IDs + Such-Links, keine Anfrage."""
+    from .. import links
+    if not req.track:
+        raise HTTPException(400)
+    return links.links(_loose_track(req.track), lookup=False)
 
 
 # ------------------------------------------------------------------ Datenschutz

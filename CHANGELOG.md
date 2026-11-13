@@ -4,6 +4,11 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.14.0)
+- **Player unten: laufenden Song öffnen und Namen kopieren.** Klick auf Cover oder Titel öffnet den Song – aus der
+  Bibliothek mit der vollen Song-Seite, sonst (z. B. aus „Entdecken“) als Song-Karte mit „Öffnen in“ Spotify, Apple
+  Music & Co., „Remixe & Versionen“ und „In eine Playlist“. Neuer Kopier-Knopf neben dem Titel kopiert
+  „Interpret – Titel“ mit einem Klick, z. B. zum Eintippen in den eigenen Player; Rechtsklick bietet auch nur Titel
+  oder nur Interpret(en). Titel und Interpret lassen sich jetzt auch markieren. Es wird dabei nichts nach außen gesendet.
 - **Behoben (Windows): Update-Meldung kam immer wieder.** Wurde die App per Doppelklick oder Startmenü gestartet,
   scheiterte der Austausch der Programmdateien („Element wird gerade verwendet“) – die alte Version startete wieder
   und meldete erneut dasselbe Update (z. B. 0.10.2 → 0.13.0). Das Austausch-Skript arbeitet jetzt außerhalb des

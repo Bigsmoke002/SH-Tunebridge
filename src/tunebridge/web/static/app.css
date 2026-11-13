@@ -2054,3 +2054,22 @@ input[type=range].mx-range::-webkit-slider-thumb { width: 16px !important; heigh
   .dc-hero { flex-direction: column; text-align: center; } .dc-hero-txt .btn-row { justify-content: center; }
 }
 div.dc-hero-pic { background: var(--bg-2); }
+
+/* Player: laufenden Song öffnen & Namen kopieren */
+.player-title, .player-artist { user-select: text; }
+.player.has-track #pCover, .player.has-track #pTitle { cursor: pointer; }
+.player.has-track #pTitle:hover { text-decoration: underline; text-underline-offset: 3px; }
+.player.has-track #pCover:hover { box-shadow: 0 0 0 2px var(--accent); }
+.player-copy { flex: none; opacity: .65; }
+.player-copy:hover, .player-copy:focus-visible { opacity: 1; }
+/* Song-Karte (Song außerhalb der Bibliothek) */
+.sc-head { display: flex; gap: 14px; align-items: center; margin-bottom: 14px; }
+.sc-cover { width: 72px; height: 72px; border-radius: 9px; object-fit: cover; background: var(--bg-3); flex: none; }
+.sc-meta { min-width: 0; }
+.sc-title { font-size: 17px; font-weight: 600; overflow-wrap: anywhere; }
+.sc-copy { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line-soft); }
+.sc-lbl { flex: 0 0 120px; color: var(--text-3); font-size: 12px; }
+.sc-val { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: all; }
+.sc-links { margin: 14px 0 6px; flex-wrap: wrap; }
+.sc-act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+@media (max-width: 560px) { .sc-copy { flex-wrap: wrap; } .sc-lbl { flex-basis: 100%; } }
