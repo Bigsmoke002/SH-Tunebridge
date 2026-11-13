@@ -73,10 +73,10 @@ private val PLATFORMS = listOf(
     Triple("tidal", "TIDAL", "https://listen.tidal.com/search?q=%s"),
     Triple("bandcamp", "Bandcamp", "https://bandcamp.com/search?q=%s&item_type=t"),
 )
+// Dienste nur mit Name + Farbe, nie mit Logo/Buchstaben-Kürzel – Abzeichen ist ein eigenes neutrales Symbol (wie am PC)
 private val STYLE = mapOf(
-    "spotify" to ("S" to 0xFF1ED760), "applemusic" to ("A" to 0xFFFA6A86), "youtubemusic" to ("YM" to 0xFFFF5A50),
-    "youtube" to ("YT" to 0xFFFF5A50), "deezer" to ("D" to 0xFFA238FF), "soundcloud" to ("SC" to 0xFFFF8A3D),
-    "tidal" to ("T" to 0xFFD6DBE2), "bandcamp" to ("BC" to 0xFF5FA8C9), "shazam" to ("Sh" to 0xFF0A8CFF),
+    "spotify" to 0xFF1ED760, "applemusic" to 0xFFFA6A86, "youtubemusic" to 0xFFFF5A50, "youtube" to 0xFFFF5A50,
+    "deezer" to 0xFFA238FF, "soundcloud" to 0xFFFF8A3D, "tidal" to 0xFFD6DBE2, "bandcamp" to 0xFF5FA8C9, "shazam" to 0xFF0A8CFF,
 )
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -206,7 +206,7 @@ fun LinkGrid(t: Track, direct: Map<String, String>) {
     FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp), maxItemsInEachRow = 2) {
         tiles.forEach { (id, name, link) ->
             val (url, isDirect) = link
-            val (mark, color) = STYLE[id] ?: ("?" to 0xFF888888)
+            val color = STYLE[id] ?: 0xFF888888
             val c = androidx.compose.ui.graphics.Color(color)
             val shape = RoundedCornerShape(Tb.radiusSm)
             Row(
@@ -215,7 +215,7 @@ fun LinkGrid(t: Track, direct: Map<String, String>) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Box(Modifier.size(30.dp).clip(RoundedCornerShape(8.dp)).border(1.dp, c.copy(alpha = 0.6f), RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                    Text(mark, style = TbType.label, color = c, textAlign = TextAlign.Center)
+                    TbIcon(if (isDirect) Ico.Listen else Ico.Search, tint = c, size = 17.dp)
                 }
                 Spacer(Modifier.width(10.dp))
                 Column(Modifier.weight(1f)) {

@@ -9,7 +9,7 @@ Der Updater installiert nur signierte Versionen.
   bewusster Klick auf „Player laden“ (oder die Ersatz-Hörprobe mit automatischem Start) die Musik an.
 - **Neue, eigene Symbole (PC + Handy):** Alle Symbole neu gezeichnet im kräftigen, gefüllten „Glyph“-Stil – am PC
   und am Handy aus einer gemeinsamen Quelle (`scripts/gen-icons.py`), daher überall gleich. Neu: eigenes Symbol für
-  „Anhören“ (Kopfhörer) und „Öffnen“. Die Kacheln der Musikdienste zeigen keine Buchstaben-Kürzel oder logoähnlichen
+  „Anhören“ (Kopfhörer) und „Öffnen“. Die Kacheln der Musikdienste zeigen (PC + Handy) keine Buchstaben-Kürzel oder logoähnlichen
   Zeichen mehr, sondern nur den Namen, die Farbe und ein neutrales Symbol (direkt zum Song bzw. Suche).
 - **Player unten: laufenden Song öffnen und Namen kopieren.** Klick auf Cover oder Titel öffnet den Song – aus der
   Bibliothek mit der vollen Song-Seite, sonst (z. B. aus „Entdecken“) als Song-Karte mit „Öffnen in“ Spotify, Apple
