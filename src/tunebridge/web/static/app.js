@@ -32,60 +32,74 @@ const store = {
 };
 
 /* ================================================================= Icons */
-const P = (...d) => d.map(x => `<path d="${x}"/>`).join("");
+/* ICONS:BEGIN – erzeugt von scripts/gen-icons.py, nicht von Hand ändern */
 const ICONS = {
-  chart: P("M4 20V11", "M10 20V5", "M16 20v-8", "M21 20H3"),
-  dupe: `<rect x="8" y="8" width="12" height="12" rx="2"/>` + P("M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"),
-  wave: P("M3 10v4", "M7 6v12", "M11 3v18", "M15 8v8", "M19 5v14"),
-  inbox: P("M3 13h5l1.5 3h5l1.5-3h5", "M5.5 5h13L21 13v6H3v-6Z"),
-  clock: `<circle cx="12" cy="12" r="9"/>` + P("M12 7v5l3 2"),
-  stack: P("M21 15V6", "M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z", "M12 12H3", "M16 6H3", "M12 18H3"),
-  compass: `<circle cx="12" cy="12" r="9"/>` + P("m16.2 7.8-2.1 6.3-6.3 2.1 2.1-6.3z"),
-  globe: `<circle cx="12" cy="12" r="9"/>` + P("M3 12h18", "M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"),
-  flag: P("M5 21V4", "M5 4h11l-2 4 2 4H5"),
-  prev: P("M6 5v14", "M19 5 9 12l10 7Z"),
-  sort: P("M7 4v16", "m3 8 4-4 4 4", "M17 20V4", "m13 16 4 4 4-4"),
-  dot: "",
-  next: P("M18 5v14", "M5 5l10 7-10 7Z"),
-  split: P("M16 3h5v5", "M8 3H3v5", "M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3", "m15 9 6-6"),
-  transfer: P("M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"),
-  panel: P("M3 4h18v16H3z", "M9 4v16"),
-  palette: P("M12 3a9 9 0 1 0 0 18c1.4 0 1.9-1.3 1.1-2.3-.9-1.1-.2-2.7 1.2-2.7H17a4 4 0 0 0 4-4c0-5-4-9-9-9z") + `<circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="8" r="1.2"/>`,
-  grid: P("M3 3h7v7H3z", "M14 3h7v7h-7z", "M14 14h7v7h-7z", "M3 14h7v7H3z"),
-  layers: P("m12 2 10 5-10 5L2 7z", "m2 17 10 5 10-5", "m2 12 10 5 10-5"),
-  sliders: P("M4 21v-7", "M4 10V3", "M12 21v-9", "M12 8V3", "M20 21v-5", "M20 12V3", "M2 14h4", "M10 8h4", "M18 16h4"),
-  play: `<path d="M7 4.6v14.8a1 1 0 0 0 1.52.85l12-7.4a1 1 0 0 0 0-1.7l-12-7.4A1 1 0 0 0 7 4.6Z" fill="currentColor" stroke="none"/>`,
-  pause: `<rect x="6" y="4" width="4" height="16" rx="1.2" fill="currentColor" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1.2" fill="currentColor" stroke="none"/>`,
-  plus: P("M12 5v14", "M5 12h14"),
-  check: P("M20 6 9 17l-5-5"),
-  x: P("M18 6 6 18", "m6 6 12 12"),
-  trash: P("M3 6h18", "M8 6V4.5A1.5 1.5 0 0 1 9.5 3h5A1.5 1.5 0 0 1 16 4.5V6", "m19 6-.8 13.2a2 2 0 0 1-2 1.8H7.8a2 2 0 0 1-2-1.8L5 6"),
-  pencil: P("M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"),
-  external: P("M15 3h6v6", "M10 14 21 3", "M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"),
-  search: `<circle cx="11" cy="11" r="7"/>` + P("m20 20-3.5-3.5"),
-  monitor: `<rect x="2" y="3" width="20" height="14" rx="2"/>` + P("M8 21h8", "M12 17v4"),
-  phone: `<rect x="6" y="2" width="12" height="20" rx="2.5"/>` + P("M11 18h2"),
-  mic: `<rect x="9" y="2" width="6" height="12" rx="3"/>` + P("M19 10v1a7 7 0 0 1-14 0v-1", "M12 18v4"),
-  volume: P("M11 5 6 9H2v6h4l5 4z", "M15.5 8.5a5 5 0 0 1 0 7", "M19 5a10 10 0 0 1 0 14"),
-  disc: `<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/>`,
-  info: `<circle cx="12" cy="12" r="9"/>` + P("M12 8v4", "M12 16h.01"),
-  arrow: P("M5 12h14", "m13 6 6 6-6 6"),
-  sparkle: P("M12 3v4", "M12 17v4", "M3 12h4", "M17 12h4", "m6 6 2 2", "m16 16 2 2", "m6 18 2-2", "m16 8 2-2"),
-  archive: `<rect x="3" y="4" width="18" height="5" rx="1.5"/>` + P("M5 9v9a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V9", "M10 13h4"),
-  download: P("M12 4v12", "m7 11 5 5 5-5", "M5 20h14"),
-  upload: P("M12 20V8", "m7 13 5-5 5 5", "M5 4h14"),
-  folder: P("M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"),
-  restore: P("M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5", "M12 8v4l3 2"),
-  key: `<circle cx="8" cy="15" r="4"/>` + P("m10.8 12.2 9.2-9.2", "m17 6 3 3", "m14 9 2 2"),
-  chevron: P("m9 6 6 6-6 6"),
-  chat: P("M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12Z", "M8.5 12h.01", "M12 12h.01", "M15.5 12h.01"),
-  shuffle: P("m18 14 4 4-4 4", "m18 2 4 4-4 4", "M2 18h1.4a4 4 0 0 0 3.3-1.7l6.6-9.6A4 4 0 0 1 16.6 5H22", "M2 6h1.4a4 4 0 0 1 3.1 1.5", "M22 19h-5.4a4 4 0 0 1-3.1-1.5"),
-  repeat: P("m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"),
-  tag: P("M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9Z", "M7.5 7.5h.01"),
-  copy: P("M9 9h11v11H9z", "M5 15H4V4h11v1"),
-  share: P("M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z", "m8.6 13.5 6.8 4", "m15.4 6.5-6.8 4"),
+  wave: {"f":["M4 9.5h0a1.3 1.3 0 0 1 1.3 1.3v2.4a1.3 1.3 0 0 1 -1.3 1.3h0a1.3 1.3 0 0 1 -1.3 -1.3v-2.4a1.3 1.3 0 0 1 1.3 -1.3ZM8 6.5h0a1.3 1.3 0 0 1 1.3 1.3v8.4a1.3 1.3 0 0 1 -1.3 1.3h0a1.3 1.3 0 0 1 -1.3 -1.3v-8.4a1.3 1.3 0 0 1 1.3 -1.3ZM12 3.5h0a1.3 1.3 0 0 1 1.3 1.3v14.4a1.3 1.3 0 0 1 -1.3 1.3h0a1.3 1.3 0 0 1 -1.3 -1.3v-14.4a1.3 1.3 0 0 1 1.3 -1.3ZM16 7.5h0a1.3 1.3 0 0 1 1.3 1.3v6.4a1.3 1.3 0 0 1 -1.3 1.3h0a1.3 1.3 0 0 1 -1.3 -1.3v-6.4a1.3 1.3 0 0 1 1.3 -1.3ZM20 9.5h0a1.3 1.3 0 0 1 1.3 1.3v2.4a1.3 1.3 0 0 1 -1.3 1.3h0a1.3 1.3 0 0 1 -1.3 -1.3v-2.4a1.3 1.3 0 0 1 1.3 -1.3Z"]},
+  clock: {"f":["M2.5 12a9.5 9.5 0 1 0 19 0a9.5 9.5 0 1 0 -19 0ZM11 7.5a1 1 0 0 1 2 0v3.97l2.55 1.7a1 1 0 1 1-1.1 1.66l-3-2A1 1 0 0 1 11 12Z"]},
+  stack: {"f":["M4.2 5h9.6a1.2 1.2 0 0 1 1.2 1.2v0a1.2 1.2 0 0 1 -1.2 1.2h-9.6a1.2 1.2 0 0 1 -1.2 -1.2v0a1.2 1.2 0 0 1 1.2 -1.2ZM4.2 10h9.6a1.2 1.2 0 0 1 1.2 1.2v0a1.2 1.2 0 0 1 -1.2 1.2h-9.6a1.2 1.2 0 0 1 -1.2 -1.2v0a1.2 1.2 0 0 1 1.2 -1.2ZM4.2 15h5.1a1.2 1.2 0 0 1 1.2 1.2v0a1.2 1.2 0 0 1 -1.2 1.2h-5.1a1.2 1.2 0 0 1 -1.2 -1.2v0a1.2 1.2 0 0 1 1.2 -1.2Z","M13.8 17.4a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z","M18.7 5h0a1.1 1.1 0 0 1 1.1 1.1v10.3a1.1 1.1 0 0 1 -1.1 1.1h0a1.1 1.1 0 0 1 -1.1 -1.1v-10.3a1.1 1.1 0 0 1 1.1 -1.1Z"]},
+  compass: {"f":["M2.5 12a9.5 9.5 0 1 0 19 0a9.5 9.5 0 1 0 -19 0ZM15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1Z"]},
+  globe: {"s":["M3 12a9 9 0 1 0 18 0a9 9 0 1 0 -18 0Z","M3 12h18","M12 3c2.5 2.7 3.8 5.7 3.8 9s-1.3 6.3-3.8 9c-2.5-2.7-3.8-5.7-3.8-9S9.5 5.7 12 3Z"]},
+  inbox: {"f":["M5.6 4.5h12.8a1.5 1.5 0 0 1 1.38.9L22 11v7.5a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V11l2.22-5.6a1.5 1.5 0 0 1 1.38-.9ZM4.4 11.4h4.3l1.4 2.6h3.8l1.4-2.6h4.3L17.5 6.7h-11Z"]},
+  chart: {"f":["M4.8 11h0.8a1.3 1.3 0 0 1 1.3 1.3v6.9a1.3 1.3 0 0 1 -1.3 1.3h-0.8a1.3 1.3 0 0 1 -1.3 -1.3v-6.9a1.3 1.3 0 0 1 1.3 -1.3ZM11.6 3.5h0.8a1.3 1.3 0 0 1 1.3 1.3v14.4a1.3 1.3 0 0 1 -1.3 1.3h-0.8a1.3 1.3 0 0 1 -1.3 -1.3v-14.4a1.3 1.3 0 0 1 1.3 -1.3ZM18.4 7.5h0.8a1.3 1.3 0 0 1 1.3 1.3v10.4a1.3 1.3 0 0 1 -1.3 1.3h-0.8a1.3 1.3 0 0 1 -1.3 -1.3v-10.4a1.3 1.3 0 0 1 1.3 -1.3Z"]},
+  grid: {"f":["M5.7 3.5h3.1a2.2 2.2 0 0 1 2.2 2.2v3.1a2.2 2.2 0 0 1 -2.2 2.2h-3.1a2.2 2.2 0 0 1 -2.2 -2.2v-3.1a2.2 2.2 0 0 1 2.2 -2.2ZM15.2 3.5h3.1a2.2 2.2 0 0 1 2.2 2.2v3.1a2.2 2.2 0 0 1 -2.2 2.2h-3.1a2.2 2.2 0 0 1 -2.2 -2.2v-3.1a2.2 2.2 0 0 1 2.2 -2.2ZM5.7 13h3.1a2.2 2.2 0 0 1 2.2 2.2v3.1a2.2 2.2 0 0 1 -2.2 2.2h-3.1a2.2 2.2 0 0 1 -2.2 -2.2v-3.1a2.2 2.2 0 0 1 2.2 -2.2ZM15.2 13h3.1a2.2 2.2 0 0 1 2.2 2.2v3.1a2.2 2.2 0 0 1 -2.2 2.2h-3.1a2.2 2.2 0 0 1 -2.2 -2.2v-3.1a2.2 2.2 0 0 1 2.2 -2.2Z"]},
+  tag: {"f":["M3.5 11.3V5A1.5 1.5 0 0 1 5 3.5h6.3a1.5 1.5 0 0 1 1.06.44l7.7 7.7a1.5 1.5 0 0 1 0 2.12l-6.3 6.3a1.5 1.5 0 0 1-2.12 0l-7.7-7.7A1.5 1.5 0 0 1 3.5 11.3ZM6.6 8.2a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0Z"]},
+  share: {"f":["M15 5.5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0ZM3 12a3 3 0 1 0 6 0a3 3 0 1 0 -6 0ZM15 18.5a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z"],"s":["m8.6 10.6 6.8-3.7","m8.6 13.4 6.8 3.7"]},
+  transfer: {"s":["M8 3 4 7l4 4","M4 7h16","m16 21 4-4-4-4","M20 17H4"]},
+  split: {"s":["M16 3h5v5","M8 3H3v5","M12 22v-8.3a4 4 0 0 0-1.17-2.87L3 3","m15 9 6-6"]},
+  layers: {"f":["M12 2.5l9.2 4.6a.6.6 0 0 1 0 1.08L12 12.8 2.8 8.18a.6.6 0 0 1 0-1.08Z"],"s":["m3 12.4 9 4.5 9-4.5","m3 16.9 9 4.5 9-4.5"]},
+  palette: {"f":["M12 3a9 9 0 1 0 0 18c1.4 0 1.9-1.3 1.1-2.3-.9-1.1-.2-2.7 1.2-2.7H17a4 4 0 0 0 4-4c0-5-4-9-9-9ZM6 11a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0ZM9 7a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0ZM13.5 8a1.5 1.5 0 1 0 3 0a1.5 1.5 0 1 0 -3 0Z"]},
+  panel: {"f":["M5.1 4h13.8a2.6 2.6 0 0 1 2.6 2.6v10.8a2.6 2.6 0 0 1 -2.6 2.6h-13.8a2.6 2.6 0 0 1 -2.6 -2.6v-10.8a2.6 2.6 0 0 1 2.6 -2.6ZM11 6.2h7.3a1 1 0 0 1 1 1v9.6a1 1 0 0 1 -1 1h-7.3a1 1 0 0 1 -1 -1v-9.6a1 1 0 0 1 1 -1Z"]},
+  sliders: {"f":["M11.5 7a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z","M6.5 17a3 3 0 1 0 6 0a3 3 0 1 0 -6 0Z"],"s":["M4 7h7","M18 7h2","M4 17h2","M13 17h7"]},
+  flag: {"f":["M5 4.5h11.2a.8.8 0 0 1 .7 1.2L15 9l1.9 3.3a.8.8 0 0 1-.7 1.2H5Z"],"s":["M5 21V3.5"]},
+  play: {"f":["M7.5 5.6v12.8a1.3 1.3 0 0 0 2 1.1l10.2-6.4a1.3 1.3 0 0 0 0-2.2L9.5 4.5a1.3 1.3 0 0 0-2 1.1Z"]},
+  pause: {"f":["M7.4 4h1.4a1.4 1.4 0 0 1 1.4 1.4v13.2a1.4 1.4 0 0 1 -1.4 1.4h-1.4a1.4 1.4 0 0 1 -1.4 -1.4v-13.2a1.4 1.4 0 0 1 1.4 -1.4ZM15.2 4h1.4a1.4 1.4 0 0 1 1.4 1.4v13.2a1.4 1.4 0 0 1 -1.4 1.4h-1.4a1.4 1.4 0 0 1 -1.4 -1.4v-13.2a1.4 1.4 0 0 1 1.4 -1.4Z"]},
+  next: {"f":["M18.2 5h0a1.2 1.2 0 0 1 1.2 1.2v11.6a1.2 1.2 0 0 1 -1.2 1.2h0a1.2 1.2 0 0 1 -1.2 -1.2v-11.6a1.2 1.2 0 0 1 1.2 -1.2Z","M5 6.2v11.6a1 1 0 0 0 1.55.83l8.6-5.8a1 1 0 0 0 0-1.66l-8.6-5.8A1 1 0 0 0 5 6.2Z"]},
+  prev: {"f":["M5.8 5h0a1.2 1.2 0 0 1 1.2 1.2v11.6a1.2 1.2 0 0 1 -1.2 1.2h0a1.2 1.2 0 0 1 -1.2 -1.2v-11.6a1.2 1.2 0 0 1 1.2 -1.2Z","M19 6.2v11.6a1 1 0 0 1-1.55.83l-8.6-5.8a1 1 0 0 1 0-1.66l8.6-5.8A1 1 0 0 1 19 6.2Z"]},
+  shuffle: {"s":["m18 14 3.5 3.5L18 21","m18 3 3.5 3.5L18 10","M2.5 17.5h1.4a4 4 0 0 0 3.3-1.7l6.1-8.6a4 4 0 0 1 3.3-1.7h4.9","M2.5 6.5h1.4a4 4 0 0 1 3.1 1.5","M21.5 17.5h-4.9a4 4 0 0 1-3.1-1.5"]},
+  repeat: {"s":["m17 2.5 3.5 3.5L17 9.5","M3.5 11v-1a4 4 0 0 1 4-4h13","m7 21.5-3.5-3.5L7 14.5","M20.5 13v1a4 4 0 0 1-4 4h-13"]},
+  volume: {"f":["M3 9.2A1.2 1.2 0 0 1 4.2 8H7l4.3-3.6A1 1 0 0 1 13 5.2v13.6a1 1 0 0 1-1.7.77L7 16H4.2A1.2 1.2 0 0 1 3 14.8Z"],"s":["M16.5 8.8a4.5 4.5 0 0 1 0 6.4","M19.4 6a8.5 8.5 0 0 1 0 12"]},
+  disc: {"f":["M2.5 12a9.5 9.5 0 1 0 19 0a9.5 9.5 0 1 0 -19 0ZM9.4 12a2.6 2.6 0 1 0 5.2 0a2.6 2.6 0 1 0 -5.2 0Z"]},
+  mic: {"f":["M12 2h0a3.5 3.5 0 0 1 3.5 3.5v5.5a3.5 3.5 0 0 1 -3.5 3.5h0a3.5 3.5 0 0 1 -3.5 -3.5v-5.5a3.5 3.5 0 0 1 3.5 -3.5Z"],"s":["M19 10.5a7 7 0 0 1-14 0","M12 17.5v4"]},
+  listen: {"f":["M5 12.5h0.8a2.2 2.2 0 0 1 2.2 2.2v4.1a2.2 2.2 0 0 1 -2.2 2.2h-0.8a2.2 2.2 0 0 1 -2.2 -2.2v-4.1a2.2 2.2 0 0 1 2.2 -2.2Z","M18.2 12.5h0.8a2.2 2.2 0 0 1 2.2 2.2v4.1a2.2 2.2 0 0 1 -2.2 2.2h-0.8a2.2 2.2 0 0 1 -2.2 -2.2v-4.1a2.2 2.2 0 0 1 2.2 -2.2Z"],"s":["M4.2 14v-2a7.8 7.8 0 0 1 15.6 0v2"]},
+  plus: {"f":["M2.5 12a9.5 9.5 0 1 0 19 0a9.5 9.5 0 1 0 -19 0ZM11 7.5h2v3.5h3.5v2H13v3.5h-2V13H7.5v-2H11Z"]},
+  check: {"s":["M20 6 9 17l-5-5"]},
+  x: {"s":["M18 6 6 18","m6 6 12 12"]},
+  trash: {"f":["M4.2 4.6h15.6a1.2 1.2 0 0 1 1.2 1.2v0a1.2 1.2 0 0 1 -1.2 1.2h-15.6a1.2 1.2 0 0 1 -1.2 -1.2v0a1.2 1.2 0 0 1 1.2 -1.2Z","M9 4.8V3.8A1.3 1.3 0 0 1 10.3 2.5h3.4A1.3 1.3 0 0 1 15 3.8v1Z","M5.2 8.2h13.6l-.83 11.4a2 2 0 0 1-2 1.86H8.03a2 2 0 0 1-2-1.86ZM10.8 17.5L10.74 17.81L10.57 18.07L10.31 18.24L10 18.3L9.69 18.24L9.43 18.07L9.26 17.81L9.2 17.5L9.2 11L9.26 10.69L9.43 10.43L9.69 10.26L10 10.2L10.31 10.26L10.57 10.43L10.74 10.69L10.8 11ZM14.8 17.5L14.74 17.81L14.57 18.07L14.31 18.24L14 18.3L13.69 18.24L13.43 18.07L13.26 17.81L13.2 17.5L13.2 11L13.26 10.69L13.43 10.43L13.69 10.26L14 10.2L14.31 10.26L14.57 10.43L14.74 10.69L14.8 11Z"]},
+  pencil: {"f":["M16.3 3.3a2.4 2.4 0 0 1 3.4 0l1 1a2.4 2.4 0 0 1 0 3.4L8.4 20 3 21l1-5.4Z"]},
+  edit: {"f":["M16.3 3.3a2.4 2.4 0 0 1 3.4 0l1 1a2.4 2.4 0 0 1 0 3.4L8.4 20 3 21l1-5.4Z"],"s":["M13.5 21h7"]},
+  external: {"f":["M14.5 2.5h6a1 1 0 0 1 1 1v6a.8.8 0 0 1-1.37.57L13.93 3.87A.8.8 0 0 1 14.5 2.5Z"],"s":["M18.5 5.5 11 13","M11 4.5H6.3A3.3 3.3 0 0 0 3 7.8v9.9A3.3 3.3 0 0 0 6.3 21h9.9a3.3 3.3 0 0 0 3.3-3.3V13"]},
+  search: {"s":["M4.2 10.8a6.6 6.6 0 1 0 13.2 0a6.6 6.6 0 1 0 -13.2 0Z","m15.8 15.8 4.7 4.7"]},
+  copy: {"f":["M11.1 8.5h6.8a2.6 2.6 0 0 1 2.6 2.6v6.8a2.6 2.6 0 0 1 -2.6 2.6h-6.8a2.6 2.6 0 0 1 -2.6 -2.6v-6.8a2.6 2.6 0 0 1 2.6 -2.6Z"],"s":["M15.5 5.6v-.3A2.3 2.3 0 0 0 13.2 3H5.3A2.3 2.3 0 0 0 3 5.3v7.9a2.3 2.3 0 0 0 2.3 2.3h.3"]},
+  dupe: {"f":["M11.1 8.5h6.8a2.6 2.6 0 0 1 2.6 2.6v6.8a2.6 2.6 0 0 1 -2.6 2.6h-6.8a2.6 2.6 0 0 1 -2.6 -2.6v-6.8a2.6 2.6 0 0 1 2.6 -2.6Z"],"s":["M15.5 5.6v-.3A2.3 2.3 0 0 0 13.2 3H5.3A2.3 2.3 0 0 0 3 5.3v7.9a2.3 2.3 0 0 0 2.3 2.3h.3"]},
+  download: {"f":["M5.2 18.8h13.6a1.2 1.2 0 0 1 1.2 1.2v0a1.2 1.2 0 0 1 -1.2 1.2h-13.6a1.2 1.2 0 0 1 -1.2 -1.2v0a1.2 1.2 0 0 1 1.2 -1.2Z"],"s":["M12 3.5v11","m7 10 5 5 5-5"]},
+  upload: {"f":["M5.2 2.8h13.6a1.2 1.2 0 0 1 1.2 1.2v0a1.2 1.2 0 0 1 -1.2 1.2h-13.6a1.2 1.2 0 0 1 -1.2 -1.2v0a1.2 1.2 0 0 1 1.2 -1.2Z"],"s":["M12 20.5v-11","m7 14 5-5 5 5"]},
+  archive: {"f":["M4.5 3.5h15a1.5 1.5 0 0 1 1.5 1.5v2a1.5 1.5 0 0 1 -1.5 1.5h-15a1.5 1.5 0 0 1 -1.5 -1.5v-2a1.5 1.5 0 0 1 1.5 -1.5Z","M4.5 10h15v8.5a2.5 2.5 0 0 1-2.5 2.5H7a2.5 2.5 0 0 1-2.5-2.5ZM14 12.7L14.34 12.77L14.64 12.96L14.83 13.26L14.9 13.6L14.83 13.94L14.64 14.24L14.34 14.43L14 14.5L10 14.5L9.66 14.43L9.36 14.24L9.17 13.94L9.1 13.6L9.17 13.26L9.36 12.96L9.66 12.77L10 12.7Z"]},
+  folder: {"f":["M2.5 6.5a2 2 0 0 1 2-2h4.3a1.5 1.5 0 0 1 1.1.45l1.7 1.75h7.9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-15a2 2 0 0 1-2-2Z"]},
+  restore: {"s":["M3.5 12a8.5 8.5 0 1 0 2.8-6.3L3.5 8.2","M3.5 3.5v4.7h4.7","M12 8v4l2.8 1.9"]},
+  sync: {"s":["M20.5 12a8.5 8.5 0 0 1-14.7 5.8L3.5 15.5","M3.5 12A8.5 8.5 0 0 1 18.2 6.2l2.3 2.3","M20.5 3.5v5h-5","M3.5 20.5v-5h5"]},
+  sort: {"s":["M7 4v16","m3 8 4-4 4 4","M17 20V4","m13 16 4 4 4-4"]},
+  select: {"s":["m9 11 3 3L22 4","M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"]},
+  key: {"f":["M3 15.5a5 5 0 1 0 10 0a5 5 0 1 0 -10 0ZM6.2 15.5a1.8 1.8 0 1 0 3.6 0a1.8 1.8 0 1 0 -3.6 0Z"],"s":["m11.6 11.9 8.4-8.4","m17 6.5 3 3","m14.3 9.2 2 2"]},
+  sparkle: {"f":["M10.5 3c.6 5 2.5 7 7.5 7.5-5 .5-6.9 2.5-7.5 7.5-.6-5-2.5-7-7.5-7.5 5-.5 6.9-2.5 7.5-7.5Z","M18.5 14c.3 2.1 1.2 3.1 3.5 3.5-2.3.4-3.2 1.4-3.5 3.5-.3-2.1-1.2-3.1-3.5-3.5 2.3-.4 3.2-1.4 3.5-3.5Z"]},
+  chat: {"f":["M21 12a8.5 8.5 0 0 1-12.4 7.55L3.6 20.6a.6.6 0 0 1-.72-.72l1.05-5A8.5 8.5 0 1 1 21 12ZM7.65 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0ZM11.25 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0ZM14.85 12a1.25 1.25 0 1 0 2.5 0a1.25 1.25 0 1 0 -2.5 0Z"]},
+  info: {"f":["M2.5 12a9.5 9.5 0 1 0 19 0a9.5 9.5 0 1 0 -19 0ZM13 16.5L12.92 16.88L12.71 17.21L12.38 17.42L12 17.5L11.62 17.42L11.29 17.21L11.08 16.88L11 16.5L11 11L11.08 10.62L11.29 10.29L11.62 10.08L12 10L12.38 10.08L12.71 10.29L12.92 10.62L13 11ZM10.7 7.6a1.3 1.3 0 1 0 2.6 0a1.3 1.3 0 1 0 -2.6 0Z"]},
+  heart: {"s":["M19.2 13.9c1.5-1.5 2.8-3.2 2.8-5.4A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.2 1.3 3.9 2.8 5.4l6.5 6.5a1 1 0 0 0 1.4 0Z"]},
+  heartFill: {"f":["M19.2 13.9c1.5-1.5 2.8-3.2 2.8-5.4A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.2 1.3 3.9 2.8 5.4l6.5 6.5a1 1 0 0 0 1.4 0Z"]},
+  shield: {"f":["M12 2.5 4 5.7v5.8c0 4.9 3.4 8.9 8 10 4.6-1.1 8-5.1 8-10V5.7ZM8.1 12.4l1.4-1.4 1.8 1.8 3.9-3.9 1.4 1.4-5.3 5.3Z"]},
+  qr: {"f":["M4.6 3h4.3a1.6 1.6 0 0 1 1.6 1.6v4.3a1.6 1.6 0 0 1 -1.6 1.6h-4.3a1.6 1.6 0 0 1 -1.6 -1.6v-4.3a1.6 1.6 0 0 1 1.6 -1.6ZM5.8 5.3h1.9a0.5 0.5 0 0 1 0.5 0.5v1.9a0.5 0.5 0 0 1 -0.5 0.5h-1.9a0.5 0.5 0 0 1 -0.5 -0.5v-1.9a0.5 0.5 0 0 1 0.5 -0.5Z","M15.1 3h4.3a1.6 1.6 0 0 1 1.6 1.6v4.3a1.6 1.6 0 0 1 -1.6 1.6h-4.3a1.6 1.6 0 0 1 -1.6 -1.6v-4.3a1.6 1.6 0 0 1 1.6 -1.6ZM16.3 5.3h1.9a0.5 0.5 0 0 1 0.5 0.5v1.9a0.5 0.5 0 0 1 -0.5 0.5h-1.9a0.5 0.5 0 0 1 -0.5 -0.5v-1.9a0.5 0.5 0 0 1 0.5 -0.5Z","M4.6 13.5h4.3a1.6 1.6 0 0 1 1.6 1.6v4.3a1.6 1.6 0 0 1 -1.6 1.6h-4.3a1.6 1.6 0 0 1 -1.6 -1.6v-4.3a1.6 1.6 0 0 1 1.6 -1.6ZM5.8 15.8h1.9a0.5 0.5 0 0 1 0.5 0.5v1.9a0.5 0.5 0 0 1 -0.5 0.5h-1.9a0.5 0.5 0 0 1 -0.5 -0.5v-1.9a0.5 0.5 0 0 1 0.5 -0.5Z","M14.2 13.5h1.6a0.7 0.7 0 0 1 0.7 0.7v1.6a0.7 0.7 0 0 1 -0.7 0.7h-1.6a0.7 0.7 0 0 1 -0.7 -0.7v-1.6a0.7 0.7 0 0 1 0.7 -0.7ZM18.7 13.5h1.6a0.7 0.7 0 0 1 0.7 0.7v1.6a0.7 0.7 0 0 1 -0.7 0.7h-1.6a0.7 0.7 0 0 1 -0.7 -0.7v-1.6a0.7 0.7 0 0 1 0.7 -0.7ZM14.2 18h1.6a0.7 0.7 0 0 1 0.7 0.7v1.6a0.7 0.7 0 0 1 -0.7 0.7h-1.6a0.7 0.7 0 0 1 -0.7 -0.7v-1.6a0.7 0.7 0 0 1 0.7 -0.7ZM18.7 18h1.6a0.7 0.7 0 0 1 0.7 0.7v1.6a0.7 0.7 0 0 1 -0.7 0.7h-1.6a0.7 0.7 0 0 1 -0.7 -0.7v-1.6a0.7 0.7 0 0 1 0.7 -0.7Z"]},
+  monitor: {"f":["M4.5 3h15a2.5 2.5 0 0 1 2.5 2.5v8.5a2.5 2.5 0 0 1 -2.5 2.5h-15a2.5 2.5 0 0 1 -2.5 -2.5v-8.5a2.5 2.5 0 0 1 2.5 -2.5Z","M8.6 19h6.8a1.1 1.1 0 0 1 1.1 1.1v0a1.1 1.1 0 0 1 -1.1 1.1h-6.8a1.1 1.1 0 0 1 -1.1 -1.1v0a1.1 1.1 0 0 1 1.1 -1.1Z","M10.9 15h2.2a0 0 0 0 1 0 0v5a0 0 0 0 1 0 0h-2.2a0 0 0 0 1 0 0v-5a0 0 0 0 1 0 0Z"]},
+  phone: {"f":["M9 2h6a3 3 0 0 1 3 3v14a3 3 0 0 1 -3 3h-6a3 3 0 0 1 -3 -3v-14a3 3 0 0 1 3 -3ZM13.4 17.7L13.71 17.76L13.97 17.93L14.14 18.19L14.2 18.5L14.14 18.81L13.97 19.07L13.71 19.24L13.4 19.3L10.6 19.3L10.29 19.24L10.03 19.07L9.86 18.81L9.8 18.5L9.86 18.19L10.03 17.93L10.29 17.76L10.6 17.7Z"]},
+  more: {"f":["M10.1 5a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0ZM10.1 12a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0ZM10.1 19a1.9 1.9 0 1 0 3.8 0a1.9 1.9 0 1 0 -3.8 0Z"]},
+  arrow: {"s":["M5 12h14","m13 6 6 6-6 6"]},
+  back: {"s":["M19 12H5","m11 18-6-6 6-6"]},
+  chevron: {"s":["m9 6 6 6-6 6"]},
+  dot: {},
 };
-const icon = (n, cls = "") => `<i data-icon="${n}" class="${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[n] || ""}</svg></i>`;
+/* ICONS:END */
+// Glyph-Symbole: f = gefüllte Flächen (innere Teilpfade stanzen Löcher aus), s = kräftige Linien
+const icon = (n, cls = "") => { const g = ICONS[n] || {};
+  return `<i data-icon="${n}" class="${cls}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${
+    (g.f || []).map(d => `<path d="${d}" fill="currentColor" fill-rule="evenodd" stroke="none"/>`).join("")}${(g.s || []).map(d => `<path d="${d}"/>`).join("")}</svg></i>`; };
 function hydrateIcons(root = document) {
   $$("i[data-icon]:not(:has(svg))", root).forEach(el => { el.outerHTML = icon(el.dataset.icon, el.className); });
 }
@@ -590,7 +604,7 @@ document.addEventListener("focusout", e => { if (e.target.closest?.(".tip")) Tip
 
 /* Song-Ansicht (Erkennen & Song-Details): Reihenfolge der Bereiche und ausgeblendete Bereiche – gemerkt pro Rechner */
 const SongLayout = {
-  SECS: [["links", "Anhören & öffnen", "external"], ["buy", "Kaufen", "download"], ["player", "Offizieller Player", "play"],
+  SECS: [["links", "Anhören & öffnen", "listen"], ["buy", "Kaufen", "download"], ["player", "Offizieller Player", "play"],
     ["artist", "Mehr vom Künstler", "disc"], ["ai", "KI-Musik-Hinweis", "sparkle"], ["sort", "Einsortieren", "stack"],
     ["similar", "Ähnliche Songs", "compass"], ["versions", "Remixe & Versionen", "disc"], ["mix", "Passt dazu – zum Mixen", "shuffle"]],
   get() {
@@ -677,7 +691,7 @@ function detailHtml(r) {
   </div>
   ${SongLayout.render({
     links: `<section class="det-card">
-      <div class="det-h">${icon("external")}<b>Anhören & öffnen</b><span class="det-legend">${tip("Ausgefüllter Punkt: direkter Link zum Song · Ring: Suche beim Dienst")}</span></div>
+      <div class="det-h">${icon("listen")}<b>Anhören & öffnen</b><span class="det-legend">${tip("Ausgefüllter Punkt: direkter Link zum Song · Ring: Suche beim Dienst")}</span></div>
       <div class="open-grid" data-role="links">${PLATFORM_IDS.map(() => `<span class="otile otile--sk"></span>`).join("")}</div>
     </section>`,
     buy: `<details class="det-card det-fold" ${store.get("buyOpen", false) ? "open" : ""}>
@@ -732,7 +746,8 @@ function guessGenreFromName(name) {
 const PLATFORM_IDS = ["spotify", "applemusic", "youtubemusic", "youtube", "tidal", "soundcloud", "deezer", "beatport", "bandcamp"];
 const PLATFORM_COLORS = { spotify: "#1ed760", applemusic: "#fa5a6e", youtubemusic: "#ff4e45", youtube: "#ff4e45", tidal: "#e8e8e8",
   soundcloud: "#ff7a2f", deezer: "#a238ff", beatport: "#01ff95", bandcamp: "#41a6c3" };
-const PLATFORM_BADGE = { spotify: "S", applemusic: "♪", youtubemusic: "YM", youtube: "YT", tidal: "T", soundcloud: "SC", deezer: "D", beatport: "BP", bandcamp: "BC" };
+// Dienste nur mit Namen + Farbpunkt, nie mit Logo/Markenzeichen: Abzeichen = eigenes neutrales Symbol (direkt: anhören, sonst suchen)
+const platformBadge = l => icon(l.direct === false ? "search" : "listen");
 const _linkCache = new Map();
 async function loadLinks(root, r) {
   const box = $("[data-role=links]", root);
@@ -749,7 +764,7 @@ async function loadLinks(root, r) {
     const sorted = [...list].sort((a, b) => (b.direct ? 1 : 0) - (a.direct ? 1 : 0));
     box.innerHTML = sorted.map(l => `<a class="otile ${l.direct ? "" : "otile--search"}" style="--pc:${PLATFORM_COLORS[l.id] || "#888"}"
       href="${esc(l.url)}" target="_blank" rel="noopener" title="${l.direct ? `Direkt in ${esc(l.name)} öffnen` : `Auf ${esc(l.name)} suchen – kein direkter Link bekannt`}">
-      <span class="otile-badge">${PLATFORM_BADGE[l.id] || esc(l.name[0])}</span>
+      <span class="otile-badge">${platformBadge(l)}</span>
       <span class="otile-txt"><span class="otile-name">${esc(l.name)}</span><span class="otile-kind">${l.direct ? "Direkt zum Song" : "Suche"}</span></span>
       ${icon(l.direct ? "external" : "search", "otile-ico")}</a>`).join("");
     Embeds.setup(root, list);
@@ -809,7 +824,7 @@ const Embeds = {
       if (this.ok()[e.id]) return this.load(box, e);
       const n = this.NAMES[e.id];
       box.innerHTML = `<div class="emb-gate">
-        <div class="emb-gate-ico" style="--pc:${PLATFORM_COLORS[e.id] || "#888"}">${PLATFORM_BADGE[e.id] || "▶"}</div>
+        <div class="emb-gate-ico" style="--pc:${PLATFORM_COLORS[e.id] || "#888"}">${icon("listen")}</div>
         <div><b>Offiziellen ${esc(n)}-Player laden?</b>
           <p>Erst nach deinem Klick lädt das Fenster den Player direkt von ${esc(this.WHO[e.id] || n)}. Dabei werden u. a. deine IP-Adresse und Geräteinfos übertragen; ${esc(n)} kann Cookies setzen${["applemusic", "youtube"].includes(e.id) ? " und Daten in die USA übermitteln" : ""}. Es gelten die <a href="${this.PRIVACY[e.id]}" target="_blank" rel="noopener">Datenschutzhinweise von ${esc(n)}</a>.${e.id === "spotify" ? " Ohne Spotify-Login spielt der Player nur eine Vorschau." : ""}</p>
           <div class="btn-row"><button class="btn btn--sm btn--primary" data-load>${icon("play")}Player laden</button>
@@ -907,7 +922,7 @@ const Fallback = {
   gate(box, then) {
     if (store.get("fbNoAsk", false)) { box.innerHTML = `<div class="cell-sub" style="padding:10px 2px">Keine Hörprobe bei Deezer/Apple. Ersatz-Player kannst du unter Einstellungen › Datenschutz erlauben.</div>`; return; }
     box.innerHTML = `<div class="emb-gate">
-      <div class="emb-gate-ico" style="--pc:${PLATFORM_COLORS.youtube}">▶</div>
+      <div class="emb-gate-ico" style="--pc:var(--accent)">${icon("listen")}</div>
       <div><b>Keine Hörprobe bei Deezer oder Apple</b>
         <p>Als Ersatz kann die App den offiziellen YouTube- oder Spotify-Player einbetten – sichtbar, direkt beim Anbieter. Das musst du einmal ausdrücklich erlauben.</p>
         <div class="btn-row"><button class="btn btn--sm btn--primary" data-fb-ok>${icon("play")}Ersatz-Player einrichten …</button>
@@ -2206,7 +2221,7 @@ function spRender() {
       <button class="btn btn--sm btn--ghost" data-exp="m3u8">${icon("download")}M3U8</button>
       <button class="btn btn--sm btn--ghost" data-exp="csv">${icon("download")}CSV (BPM, Tonart)</button>
       <button class="btn btn--sm btn--ghost" id="spCopy">${icon("copy")}Tracklist kopieren</button>
-      <button class="btn btn--sm btn--ghost" id="spPlay">${icon("play")}Alles anhören</button></div>
+      <button class="btn btn--sm btn--ghost" id="spPlay">${icon("listen")}Alles anhören</button></div>
     <div class="card sp-list">${d.steps.map((s, k) => { const t = it[s.i]; const pv = withPreview({ ...t });
       return `${k ? `<div class="sp-step">${chip(s)}</div>` : ""}<div class="sp-row" data-k="${k}"><span class="sp-n num">${k + 1}</span>
         <button class="icon-btn" ${playAttr(pv)} title="Reinhören">${icon("play")}</button>
@@ -2448,7 +2463,7 @@ async function mixRender() {
   const pct = n => Math.max(0, Math.min(100, Math.round(n * 100)));
   out.innerHTML = `<div class="card mx-res">
     <div class="mx-res-head"><div><div class="mx-kicker">${icon("shuffle")}Dein Mix · ${esc(lv)}${ordered ? " · DJ-Reihenfolge" : ""}</div><h2>${esc(title)}</h2></div>
-      <div class="mx-res-act"><button class="btn btn--primary" id="mxPlay">${icon("play")}Alles anhören</button>
+      <div class="mx-res-act"><button class="btn btn--primary" id="mxPlay">${icon("listen")}Alles anhören</button>
         <button class="btn" id="mxSave">${icon("plus")}Als Playlist speichern</button>
         <button class="btn btn--ghost" id="mxAgain" title="Mit denselben Einstellungen neu erstellen">${icon("repeat")}Neu</button></div></div>
     <div class="mx-stats">${tile(Mix.order.length, "Songs")}${st?.minuten ? tile(`~${st.minuten}`, "Minuten") : ""}
@@ -6396,7 +6411,7 @@ function sortCard(g, gi) {
       <span class="dot" style="background:${genreColor(first.genre, first.subgenre)}"></span>
       <input class="sort-name" data-rename="${gi}" value="${esc(g.name)}" spellcheck="false">
       ${!g.nomusic && g.items.length && g.items.every(n => !it[n].genre) ? `<button class="btn btn--xs btn--ghost" data-aiuns title="Die eingestellte KI ordnet nur Songs ein, die sie wirklich kennt">${icon("sparkle")}Mit KI prüfen</button>` : ""}
-      <button class="btn btn--xs btn--ghost" data-listen="${gi}" title="Alle Songs dieser Playlist nacheinander anhören (je 30 s Hörprobe)">${icon("play")}Anhören</button></div>
+      <button class="btn btn--xs btn--ghost" data-listen="${gi}" title="Alle Songs dieser Playlist nacheinander anhören (je 30 s Hörprobe)">${icon("listen")}Anhören</button></div>
     ${!g.nomusic && g.items.length && g.items.every(n => !it[n].genre) ? `<div class="cell-sub sort-hint">Song anklicken → „Genre selbst festlegen“. Was du festlegst, merkt sich die App für die Zukunft.</div>` : ""}
     <div class="sort-card-act"><span class="cnt">${esc(meta)}</span>
       ${g.done ? `<span class="chip chip--ok" title="Schon angelegt">${icon("check")}angelegt</span>` : ""}

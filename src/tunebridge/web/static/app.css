@@ -2073,3 +2073,6 @@ div.dc-hero-pic { background: var(--bg-2); }
 .sc-links { margin: 14px 0 6px; flex-wrap: wrap; }
 .sc-act { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
 @media (max-width: 560px) { .sc-copy { flex-wrap: wrap; } .sc-lbl { flex-basis: 100%; } }
+/* Dienst-Abzeichen: eigenes neutrales Symbol statt Buchstaben/Logo */
+.otile-badge i[data-icon] { width: 17px; height: 17px; }
+.emb-gate-ico i[data-icon] { width: 24px; height: 24px; }
