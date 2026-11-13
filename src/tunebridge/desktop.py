@@ -62,8 +62,7 @@ def run() -> None:
     if osutil.WINDOWS:
         from . import winapp
         try:
-            from importlib.metadata import version
-            winapp.register_version(version("tunebridge"))
+            winapp.register_version(__import__("tunebridge").__version__)
         except Exception:  # noqa: BLE001
             pass
         if webview is None:

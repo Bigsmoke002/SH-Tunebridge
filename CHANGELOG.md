@@ -4,6 +4,16 @@ Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/r
 Der Updater installiert nur signierte Versionen.
 
 ## Unveröffentlicht (0.14.0)
+- **Behoben (Windows): Update-Meldung kam immer wieder.** Wurde die App per Doppelklick oder Startmenü gestartet,
+  scheiterte der Austausch der Programmdateien („Element wird gerade verwendet“) – die alte Version startete wieder
+  und meldete erneut dasselbe Update (z. B. 0.10.2 → 0.13.0). Das Austausch-Skript arbeitet jetzt außerhalb des
+  Programmordners, beendet Reste der App darin und versucht es mehrmals. Klappt es trotzdem nicht (Ordner von einem
+  anderen Programm gesperrt), sagt das Update-Fenster das jetzt mit Grund, statt still von vorn anzufangen.
+  **Wer noch eine ältere Version hat, installiert einmal das Setup von der Release-Seite** – der alte Updater hat den
+  Fehler noch selbst.
+- **Behoben: zwei Versionsnummern in derselben App.** Bei Installationen aus dem Quellordner meldeten Status,
+  Fehlerbericht und Sicherungen die beim ersten Installieren gespeicherte Version (z. B. 0.10.2), die Update-Prüfung
+  die richtige (0.13.0). Jetzt gibt es nur noch eine Quelle für die Versionsnummer.
 - **Entdecken – in mehreren Katalogen stöbern:** Neue Seite „Entdecken“ am PC (Seitenleiste) und am Handy (eigener
   Tab): Songs, Künstler und Alben suchen, Charts (Deezer nach Genre, Apple Music Deutschland, Last.fm nach Land oder
   Genre-Tag – auch eigene Tags wie „liquid funk“), Künstlerseiten mit beliebtesten Songs, Alben, Singles/EPs/Remixen,

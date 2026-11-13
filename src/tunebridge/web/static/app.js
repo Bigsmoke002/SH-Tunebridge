@@ -3950,7 +3950,9 @@ const Update = {
     modal({
       title: "Update verfügbar",
       text: `SH-Tunebridge <b>${esc(tag)}</b> ist da – du hast ${esc(u.current)}.`,
-      body: `<div id="updBody"><div class="notes" id="updNotes">${skeletonRows(2)}</div></div>
+      body: `${u.swap_failed ? `<div class="notice">${icon("info")}<div>Der letzte Update-Versuch konnte die Programmdateien nicht austauschen – es läuft noch ${esc(u.current)}.
+          Grund: <span class="path">${esc(u.swap_failed)}</span><br>Einfach erneut versuchen; klappt es wieder nicht, das Setup von der
+          <a href="https://github.com/Bigsmoke002/SH-Tunebridge/releases/latest" target="_blank" rel="noopener">Release-Seite</a> laden und ausführen – deine Daten bleiben erhalten.</div></div>` : ""}<div id="updBody"><div class="notes" id="updNotes">${skeletonRows(2)}</div></div>
         <div class="upd-steps hidden" id="updSteps">${steps.map(([k, l]) => `<div class="upd-step" data-step="${k}"><span class="upd-dot"></span>${l}</div>`).join("")}</div>
         <div class="upd-prog hidden" id="updProg" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt des Updates"><div class="upd-bar"><b></b></div><div class="upd-ptext"></div></div>`,
       confirm: manual ? "Herunterladen" : "Jetzt aktualisieren", cancel: "Später", sticky: true,

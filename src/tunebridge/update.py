@@ -24,7 +24,7 @@ import subprocess
 import tempfile
 import threading
 import time
-from importlib import metadata, resources
+from importlib import resources
 from pathlib import Path
 
 from . import config, store
@@ -43,17 +43,9 @@ def repo() -> str:
 
 
 def current() -> str:
-    # Entwickler-/editable-Installation: die Paket-Metadaten stammen vom ersten Installieren und veralten –
-    # maßgeblich ist dann pyproject.toml im Quellordner (sonst meldet die App ewig ein „Update“).
-    py = Path(__file__).resolve().parents[2] / "pyproject.toml"
-    if py.exists():
-        m = re.search(r'^version\s*=\s*"([^"]+)"', py.read_text(encoding="utf-8"), re.M)
-        if m:
-            return m.group(1)
-    try:
-        return metadata.version("tunebridge")
-    except metadata.PackageNotFoundError:
-        return "0.0.0"
+    # eine Quelle für alle: tunebridge.__version__ (berücksichtigt Entwickler-/editable-Installationen)
+    from . import __version__
+    return __version__
 
 
 class Incompatible(RuntimeError):
@@ -425,7 +417,7 @@ def check(force: bool = False) -> dict:
     kind = ("appimage" if is_appimage() else ("frozen" if frozen_writable() else "download") if is_frozen()
             else "dev" if is_dev_install() else "uv")
     info = {"current": current(), "repo": repo(), "dev": is_dev_install(), "configured": bool(repo()),
-            "kind": kind, "system": f"{platform.system()} {machine()}"}
+            "kind": kind, "system": f"{platform.system()} {machine()}", "swap_failed": swap_failed()}
     if not repo():
         return {**info, "available": False, "latest": None, "error": None}
     cached = store.cache_get("update", "latest", max_age=None if force else CHECK_EVERY)
@@ -448,6 +440,9 @@ def check(force: bool = False) -> dict:
         store.cache_set("update", "latest", {"tag": tag, "checked": checked, "error": err, "skipped": skipped,
                                              "for": current()})
     available = bool(tag) and _v(tag) > _v(current())
+    if info["swap_failed"] and not available:      # inzwischen aktuell (z. B. per Setup) -> Merkzettel erledigt
+        swap_failed_path().unlink(missing_ok=True)
+        info["swap_failed"] = None
     return {**info, "latest": tag, "available": available, "checked": checked, "error": err,
             "skipped": skipped}
 
@@ -587,6 +582,21 @@ def _install_frozen() -> dict:
     return {"installed": info["tag"], "safety_backup": safety.name}
 
 
+def swap_failed_path() -> Path:
+    """Merkzettel des Tausch-Skripts: Tausch gescheitert, alte Version läuft weiter (Grund steht drin)."""
+    return config.DATA / "update-tausch-fehler.txt"
+
+
+def swap_failed() -> str | None:
+    p = swap_failed_path()
+    try:
+        if not p.is_file():
+            return None
+        return p.read_text(encoding="utf-8-sig").strip()[:300] or "Austausch fehlgeschlagen"
+    except OSError:
+        return None
+
+
 def _swap_and_restart() -> None:
     """Hilfsskript starten: wartet, bis diese App beendet ist, tauscht alt gegen neu und startet neu.
     Klappt der Tausch nicht, wird die alte Version wiederhergestellt."""
@@ -601,36 +611,54 @@ def _swap_and_restart() -> None:
         web.companion_stop()
     except Exception:  # noqa: BLE001
         pass
+    fail = swap_failed_path()
+    fail.unlink(missing_ok=True)
+    tmpdir = tempfile.gettempdir()
     if osutil.WINDOWS:
         q = lambda x: "'" + x.replace("'", "''") + "'"  # noqa: E731 – PowerShell-String
         script = Path(w) / "tausch.ps1"
-        log = Path(tempfile.gettempdir()) / "sh-tunebridge-tausch.log"   # zur Fehlersuche, wird jedes Mal überschrieben
+        log = Path(tmpdir) / "sh-tunebridge-tausch.log"   # zur Fehlersuche, wird jedes Mal überschrieben
+        # Arbeitsverzeichnis NICHT im Programmordner: per Doppelklick/Startmenü gestartet „steht“ die App darin, das
+        # Skript erbte das – und Windows verschiebt keinen Ordner, in dem ein Prozess steht (bis 0.13.0 schlug der
+        # Tausch deshalb fehl, die alte Version startete wieder und meldete erneut dasselbe Update).
         script.write_text(f"""$ErrorActionPreference = 'Stop'
+Set-Location -LiteralPath {q(tmpdir)}
 Start-Transcript -Path {q(str(log))} -Force | Out-Null
 while (Get-Process -Id {pid} -ErrorAction SilentlyContinue) {{ Start-Sleep -Milliseconds 300 }}
 Start-Sleep -Milliseconds 500
-$t = {q(t)}; $n = {q(n)}; $b = $t + '.alt'
-if (Test-Path $b) {{ Remove-Item -Recurse -Force $b }}
-try {{ Move-Item $t $b; Move-Item $n $t; 'Ausgetauscht' }}
-catch {{ "Austausch fehlgeschlagen: $_"; if ((Test-Path $b) -and -not (Test-Path $t)) {{ Move-Item $b $t }} }}
-Start-Process (Join-Path $t 'SH-Tunebridge.exe')
+$t = {q(t)}; $n = {q(n)}; $b = $t + '.alt'; $ok = $false; $err = ''
+# Reste dieser App aus dem Programmordner (z. B. Begleiter einer älteren Sitzung) beenden – sonst bleibt er gesperrt
+Get-Process -ErrorAction SilentlyContinue | Where-Object {{ $_.Path -and $_.Path.StartsWith($t + '\', 'OrdinalIgnoreCase') }} |
+  ForEach-Object {{ "Beende $($_.ProcessName) ($($_.Id))"; Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue }}
+if (Test-Path -LiteralPath $b) {{ Remove-Item -LiteralPath $b -Recurse -Force -ErrorAction SilentlyContinue }}
+for ($i = 1; $i -le 20 -and -not $ok; $i++) {{     # Virenscanner/Indexer halten Dateien oft kurz fest
+  try {{ Move-Item -LiteralPath $t $b; $ok = $true }}
+  catch {{ $err = "$_"; "Versuch $i`: $err"; Start-Sleep -Milliseconds 750 }}
+}}
+if ($ok) {{
+  try {{ Move-Item -LiteralPath $n $t; 'Ausgetauscht' }}
+  catch {{ $ok = $false; $err = "$_"; "Austausch fehlgeschlagen: $err"; if ((Test-Path -LiteralPath $b) -and -not (Test-Path -LiteralPath $t)) {{ Move-Item -LiteralPath $b $t }} }}
+}}
+if (-not $ok) {{ Set-Content -LiteralPath {q(str(fail))} -Value $err -Encoding UTF8 }}
+Start-Process -FilePath (Join-Path $t 'SH-Tunebridge.exe') -WorkingDirectory {q(tmpdir)}
 Start-Sleep -Seconds 3
-Remove-Item -Recurse -Force $b -ErrorAction SilentlyContinue
-Remove-Item -Recurse -Force {q(w)} -ErrorAction SilentlyContinue
+if ($ok) {{ Remove-Item -LiteralPath $b -Recurse -Force -ErrorAction SilentlyContinue }}
+Remove-Item -LiteralPath {q(w)} -Recurse -Force -ErrorAction SilentlyContinue
 """, encoding="utf-8-sig")
         # NICHT DETACHED_PROCESS: PowerShell ohne Konsole startet aus der fensterlosen App gar nicht (bis 0.9.1 blieb
         # das Update deshalb liegen). Unsichtbare eigene Konsole + gültige Ein-/Ausgabe statt der ungültigen der App.
         flags = 0x00000200 | 0x08000000                    # CREATE_NEW_PROCESS_GROUP | CREATE_NO_WINDOW
         subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden",
-                          "-File", str(script)], creationflags=flags, close_fds=True,
+                          "-File", str(script)], creationflags=flags, close_fds=True, cwd=tmpdir,
                          stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     else:
         import shlex
-        T, N, W = shlex.quote(t), shlex.quote(n), shlex.quote(w)
-        cmd = (f"while kill -0 {pid} 2>/dev/null; do sleep 0.3; done; sleep 0.5; "
+        T, N, W, F = shlex.quote(t), shlex.quote(n), shlex.quote(w), shlex.quote(str(fail))
+        cmd = (f"cd /; while kill -0 {pid} 2>/dev/null; do sleep 0.3; done; sleep 0.5; "
                f"rm -rf {T}.alt; if mv {T} {T}.alt && mv {N} {T}; then rm -rf {T}.alt; "
-               f"else [ -d {T}.alt ] && [ ! -d {T} ] && mv {T}.alt {T}; fi; open {T}; rm -rf {W}")
-        subprocess.Popen(["/bin/sh", "-c", cmd], start_new_session=True,
+               f"else [ -d {T}.alt ] && [ ! -d {T} ] && mv {T}.alt {T}; echo 'Austausch fehlgeschlagen' > {F}; fi; "
+               f"open {T}; rm -rf {W}")
+        subprocess.Popen(["/bin/sh", "-c", cmd], start_new_session=True, cwd="/",
                          stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     threading.Timer(0.6, lambda: os._exit(0)).start()
 
