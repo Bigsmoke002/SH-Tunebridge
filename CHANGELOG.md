@@ -3,7 +3,7 @@
 Alle Versionen sind mit dem Release-Schlüssel signiert (siehe `src/tunebridge/release_signers`).
 Der Updater installiert nur signierte Versionen.
 
-## Unveröffentlicht (0.14.0)
+## 0.14.0 – 2026-11-13
 - **Behoben: Klick auf einen Song stoppte die Musik.** War bei „Offizieller Player“ „immer laden“ angehakt, lud jede
   geöffnete Song-Seite den Player des Anbieters und hielt dabei die laufende Hörprobe an. Jetzt hält nur noch ein
   bewusster Klick auf „Player laden“ (oder die Ersatz-Hörprobe mit automatischem Start) die Musik an.
